@@ -27,6 +27,7 @@
     "packages/*/src",
     "packages/*/test",
     "gates",
+    "scripts",
     "examples/*/src",
     "examples/*/test",
     "examples/*/evals",
