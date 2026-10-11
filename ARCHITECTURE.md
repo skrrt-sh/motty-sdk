@@ -1119,6 +1119,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   handler and stops no listener. `serve` is for a serve file, whose default export Bun starts: it
   also drains on a stop signal, stops the listener and ends the process. Cause: with one function
   for both, a host that mounted two motties lost its own shutdown to ours.
+- **`mount` runs wherever the web-standard APIs and the async context do; `serve` stays Bun's.**
+  A host on a runtime with no environment to read states its options from what it holds. On
+  the Workers runtime the host turns the request signal flag on: without it a caller who left
+  is never seen, and the request runs to its end. Cause: `mount` read the environment by Bun's
+  own name, so on any other runtime it threw before a request arrived.
 - **In development a serve file is reloaded by Bun's own `--watch`,** which starts the process
   again when the motty or a file it imports changes; the SDK adds nothing for it. Rejected:
   `--hot`, which evaluates the file again in the same process, so the handlers of earlier
