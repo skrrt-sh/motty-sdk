@@ -2,12 +2,22 @@
 
 ## What a motty is
 
-A motty is an L2 LLM: a gateway with real logic between LLMs and agents. To its caller it is just
-another model: a chat request in, an answer out. Inside, it is a small program that decides which
-model to call, in what order, with what changes. It has no weights: it is routing and policy. The
-SDK is the open-source toolkit for building motties; the Hub is a service that hosts and sells them.
+A motty is a layer-2 model. LLMs are layer 1, and a motty is a model made of code on top of them,
+between them and agents. To its caller it is just another model, a chat request in and an answer
+out. Inside, it decides which models answer, in what order, with what changes, and what is
+remembered. It has no weights, only routing and policy. The SDK is the open-source toolkit for
+building motties; the Hub is a service that hosts and sells them.
 
-- **Not a backend framework.** It serves one kind of endpoint, a model: no general routes, no ORM.
+- **It takes what surrounds a model call, and the agent keeps its loop and its tools.** That is
+  the choice of model, several models answering as one, what outlives a request, and what is
+  changed on the way in and out. Rejected: running the caller's tools, which makes a motty a
+  second agent.
+- **A gateway is one thing a motty can be.** Served with the host's auth, limits and record it
+  is one; it also goes behind a gateway as a model, or in front of one as its upstream. What
+  differs from a gateway product is that the logic is the code itself, not config with code as a
+  plugin, and that the code is built apart from whatever runs it.
+- **Not a backend framework.** It serves one kind of endpoint, a model, with no general routes
+  and no ORM.
 - **Not an agent framework.** No agent loop, tool runner or retrieval pipeline. A motty is plain
   code with `store`, `fetch` and the caller's identity, so retrieval is a hook, not a framework.
 

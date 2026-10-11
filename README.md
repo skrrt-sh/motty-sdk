@@ -1,19 +1,54 @@
 # Motty SDK
 
-A motty is a gateway with real logic between LLMs and agents. To its caller it is just another
-model: a chat request in, an answer out. Inside, it is a small program that decides which model
-to call, in what order, with what changes. It has no weights: it is routing and policy.
+A motty is a model made of code, not weights. An agent calls it like any other LLM, sending a
+chat request and getting an answer back. Inside, your TypeScript code decides which real models
+answer, in what order, with what changes, and what is remembered.
 
-The SDK is the open-source toolkit for building motties. A caller changes the URL and the model
-name, and keeps its format: a motty is served over the Chat Completions, Responses and Messages
-APIs. The logic is plain TypeScript, the same code self-hosted and on the Hub, a service that hosts
-motties. It is not a backend framework and not an agent framework.
+LLMs are layer 1. A motty is layer 2, a model built on top of them that sits between them and
+agents. It takes over what an agent would otherwise carry around every model call, and the agent
+keeps its loop and its tools. The SDK is the open-source toolkit for building motties. It is
+fast, and as high or as low level as you need.
+
+## What a motty does
+
+- **Chooses which model answers** by plain rules, by a decision model such as Jev or Laya, or by
+  reading an answer before it is sent and asking a stronger model.
+- **Makes many models answer as one** in a race, a fallback, a plan written by one model and
+  carried out by another, or a panel of providers whose answers another model merges.
+- **Keeps what outlives a request**, such as the tier a conversation reached or a caller's spend
+  today, behind the endpoint and for every app that calls it.
+- **Changes what goes in and what comes out**, with a policy placed first, a long thread
+  summarised, or card numbers removed from the stream.
+
+## How it is built
+
+- **Any client can call it.** A caller changes the URL and the model name and keeps its format,
+  whether that is the Chat Completions, Responses or Messages API.
+- **The logic is plain code.** Other gateways are set up in config and take code as a plugin, and
+  an auto-router picks by rules of its own. A motty is all code. It is typed, yours to change,
+  and tested with scripted models and no wire.
+- **It is one file and never holds a provider key.** A motty builds apart from whatever runs it.
+  The server, the provider adapters and the keys stay with the host, so the same file runs
+  self-hosted and on the Hub, a service that hosts motties.
+
+## Where it fits
+
+- **As your gateway.** Served with the host's auth, limits and a record of every request, a motty
+  is the gateway, one endpoint in front of every provider.
+- **Beside a gateway you have.** Behind it as one of its models, or in front of it with the
+  gateway as the upstream.
+- **Inside your own server.** `mount` gives a motty as a `fetch` handler, so your own HTTP routes
+  and the motty share one server.
+- **As deep as you need.** Start with `fallback` and `race`. Go down to a provider's own options
+  on one call, or write your own adapter, auth or plugin.
+
+A motty is not an agent framework. It has no agent loop and runs no tools.
 
 ## Status
 
-Pre-release. Every package is at version `0.0.0` and none is published to npm yet. Bun only:
-`serve`, the adapters, the bundler and the test runner are Bun's. A motty's own code uses
-web-standard APIs and the async context. No other runtime is promised.
+Pre-release. Every package is at version `0.0.0` and none is published to npm yet. It runs
+on Bun only, since `serve`, the adapters, the bundler and the test runner are Bun's. A motty's
+own code uses web-standard APIs and the async context. No other runtime is promised.
 
 ## Quick start
 
@@ -88,62 +123,6 @@ test("a short question without tools goes to the quick tier", async () => {
 });
 ```
 
-## Speed
-
-The same calls are made through Motty and through four other SDKs: the Vercel AI SDK, Mastra,
-LangChain JS and TanStack AI. The upstream is a stub that answers inside the process, so a
-figure is what an SDK adds to a call, never a model's own latency. A gate runs the comparison
-on every change and fails when a rival does not take more than 1.1 times Motty's time, or when
-its program is not larger. One entry is listed as a known loss and is held to the opposite: it
-fails once Motty is ahead there, so the list cannot go stale.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/benchmark-time-dark.svg">
-  <img alt="Time per call through Motty and four other SDKs, in five scenarios. The figures are in the table below." src=".github/assets/benchmark-time-light.svg">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/benchmark-start-dark.svg">
-  <img alt="Cold start and minified program size of Motty and four other SDKs. The figures are in the table below." src=".github/assets/benchmark-start-light.svg">
-</picture>
-
-Each rival's cost as a multiple of Motty's, the median over the rounds. Above one, Motty is
-ahead:
-
-| | Motty | AI SDK | Mastra | LangChain | TanStack AI |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Text, 20 chunks | 38.6 µs | 1.42× | 6.67× | 0.53× | 3.03× |
-| Stream, 20 chunks | 40.4 µs | 8.60× | 11.63× | 2.91× | 3.11× |
-| Stream, 200 chunks | 259 µs | 9.26× | 7.83× | 3.79× | 3.71× |
-| Structured output stream, 20 chunks | 52.9 µs | 10.05× | 13.64× | 3.40× | 2.86× |
-| Served over HTTP, 200 chunks | 460 µs | 4.51× | 3.48× | 2.93× | 2.30× |
-| Cold start, import to first streamed answer | 21.5 ms | 1.94× | 8.56× | 3.09× | 2.33× |
-| Minified program size | 237 KB | 2.61× | 23.89× | 4.87× | 3.02× |
-
-- **Motty is behind in one place:** a non-streamed text call against LangChain. Motty always
-  reads a stream upstream, and that is the entry the gate lists as a known loss.
-- **Measured on 2026-10-11** on an Apple M4 Max with Bun 1.4.2, against `ai` 7.0.137,
-  `@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0: 15 rounds of
-  20,000 chunks after one discarded, the SDKs taking turns in one process.
-- **To measure it yourself:** `bun gates/bench/rivals/compare.ts` prints the same figures with
-  each call's 99th percentile.
-
-## Packages
-
-| Package | Kind | Holds |
-| --- | --- | --- |
-| [`@mottyjs/core`](packages/core) | Core | The builder, model calls, `fallback`, `race`, `retry`, `timeout`, answers, error classes, types |
-| [`@mottyjs/store`](packages/store) | Plugin | Key-value storage that outlives a request |
-| [`@mottyjs/decision`](packages/decision) | Plugin | Decision models and their questions |
-| [`@mottyjs/auth`](packages/auth) | Plugin | A part that requires an identified caller |
-| [`@mottyjs/settings`](packages/settings) | Plugin | Typed settings a host may override |
-| [`@mottyjs/test`](packages/test) | Test kit | Scripted models, in-memory storage, `run` |
-| [`@mottyjs/serve`](packages/serve) | Host side | `serve`, `mount` and the three wire APIs. Never in a bundle |
-| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, and auth: `jwt`, `bearer`, or the host's own object with a `verify` function |
-
-Only the core has no dependencies. Plugins compile into the motty's bundle; the host side never
-does.
-
 ## Examples
 
 Three motties, each with a README that follows one request through it:
@@ -156,6 +135,64 @@ Three motties, each with a README that follows one request through it:
 
 The reasons behind the design, and what was rejected, are in [ARCHITECTURE.md](ARCHITECTURE.md).
 The core's own plan is in [CORE.md](CORE.md).
+
+## Packages
+
+| Package | Kind | Holds |
+| --- | --- | --- |
+| [`@mottyjs/core`](packages/core) | Core | The builder, model calls, `fallback`, `race`, `retry`, `timeout`, answers, error classes, types |
+| [`@mottyjs/store`](packages/store) | Plugin | Key-value storage that outlives a request |
+| [`@mottyjs/decision`](packages/decision) | Plugin | Decision models and their questions |
+| [`@mottyjs/auth`](packages/auth) | Plugin | A part that requires an identified caller |
+| [`@mottyjs/settings`](packages/settings) | Plugin | Typed settings a host may override |
+| [`@mottyjs/test`](packages/test) | Test kit | Scripted models, in-memory storage, `run` |
+| [`@mottyjs/serve`](packages/serve) | Host side | `serve`, `mount` and the three wire APIs. Never in a bundle |
+| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, and auth by `jwt`, `bearer` or the host's own object with a `verify` function |
+
+Only the core has no dependencies. Plugins compile into the motty's bundle; the host side never
+does.
+
+## Speed
+
+A motty is one more step in every call, so what the SDK adds to one is measured. The same calls
+are made through Motty and through four other SDKs, the Vercel AI SDK, Mastra, LangChain JS and
+TanStack AI. The upstream is a stub that answers inside the process, so a figure is what an SDK
+adds to a call, never a model's own latency. A gate runs the comparison on every change and
+fails when a rival does not take more than 1.1 times Motty's time, or when its program is not
+larger. One entry is listed as a known loss and is held to the opposite: it
+fails once Motty is ahead there, so the list cannot go stale.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/benchmark-time-dark.svg">
+  <img alt="Time per call through Motty and four other SDKs, in five scenarios. The figures are in the table below." src=".github/assets/benchmark-time-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/benchmark-start-dark.svg">
+  <img alt="Cold start and minified program size of Motty and four other SDKs. The figures are in the table below." src=".github/assets/benchmark-start-light.svg">
+</picture>
+
+The table gives each rival's cost as a multiple of Motty's, the median over the rounds. Above
+one, Motty is ahead.
+
+| | Motty | AI SDK | Mastra | LangChain | TanStack AI |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Text, 20 chunks | 38.6 µs | 1.42× | 6.67× | 0.53× | 3.03× |
+| Stream, 20 chunks | 40.4 µs | 8.60× | 11.63× | 2.91× | 3.11× |
+| Stream, 200 chunks | 259 µs | 9.26× | 7.83× | 3.79× | 3.71× |
+| Structured output stream, 20 chunks | 52.9 µs | 10.05× | 13.64× | 3.40× | 2.86× |
+| Served over HTTP, 200 chunks | 460 µs | 4.51× | 3.48× | 2.93× | 2.30× |
+| Cold start, import to first streamed answer | 21.5 ms | 1.94× | 8.56× | 3.09× | 2.33× |
+| Minified program size | 237 KB | 2.61× | 23.89× | 4.87× | 3.02× |
+
+Motty is behind in one place, a non-streamed text call against LangChain. Motty always reads a
+stream upstream, and that is the entry the gate lists as a known loss.
+
+The figures were measured on 2026-10-11 on an Apple M4 Max with Bun 1.4.2, against `ai` 7.0.137,
+`@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0. They come from 15
+rounds of 20,000 chunks after one discarded, with the SDKs taking turns in one process. To
+measure it yourself, run `bun gates/bench/rivals/compare.ts`, which prints the same figures with
+each call's 99th percentile.
 
 ## Running the checks
 
@@ -174,13 +211,15 @@ bun test
 
 ## Provider adapters
 
-How far each model provider's adapter is proven differs, and the difference is stated here:
+How far each model provider's adapter is proven differs.
 
-- **Against the live API:** `openai`, `anthropic`, `openrouter`, `typesafe`.
-- **A live test is written and runs when that provider's key is set:** `mistral`, `together`,
-  `fireworks`.
-- **Only against stubs built from the vendor's reference so far:** `deepseek`, `moonshot`, `zai`,
-  `dashscope`, `minimax`, `groq`, `ollama`, `local`.
+- `openai`, `anthropic`, `openrouter` and `typesafe` are proven against the live API.
+- `mistral`, `together` and `fireworks` have a live test that runs when that provider's key is
+  set.
+- `deepseek`, `moonshot`, `zai`, `dashscope`, `minimax`, `groq`, `ollama` and `local` are so far
+  proven only against stubs built from the vendor's reference.
+- No gateway is tested yet, neither calling a motty nor called by one. The nearest proven is
+  `openrouter`, a router, as an upstream.
 
 ## Security
 
