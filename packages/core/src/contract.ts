@@ -44,20 +44,33 @@ export type Storage = {
   set: (
     key: string,
     value: ReadonlyJson,
-    options?: { ttl?: number },
+    options?: { ttlMs?: number },
   ) => Promise<void>;
   delete: (key: string) => Promise<void>;
   // Absent on a host that cannot add in one step of its database.
   increment?: (
     key: string,
     by: number,
-    options?: { ttl?: number },
+    options?: { ttlMs?: number },
   ) => Promise<number>;
 };
 
 export type Caller = { id: string };
 
-export type Limits = { calls?: number; afterResponse?: number };
+export type Limits = { calls?: number; afterResponseMs?: number };
+
+// A bound that is no number would refuse nothing, with no word of it.
+export function bound(
+  name: string,
+  given: number | undefined,
+  kind: 'finite' | 'whole' = 'finite',
+): number | undefined {
+  const counts = kind === 'whole' ? Number.isInteger : Number.isFinite;
+  if (given !== undefined && !(counts(given) && given >= 0)) {
+    throw new Error(`${name} must be a ${kind} number of zero or more`);
+  }
+  return given;
+}
 
 export type Host = {
   models: ModelCall;

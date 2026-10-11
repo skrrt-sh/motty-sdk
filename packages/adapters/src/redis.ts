@@ -4,14 +4,13 @@ import { parsed } from './json.ts';
 
 // The server counts whole milliseconds and refuses none. A time that is no
 // count is the caller's mistake, so it is named before any call.
-function milliseconds(ttl: number): number {
-  const ms = Math.ceil(ttl * 1000);
-  if (!(ms >= 1) || !Number.isSafeInteger(ms)) {
+function milliseconds(ttlMs: number): number {
+  if (!(ttlMs >= 1) || !Number.isSafeInteger(ttlMs)) {
     throw new Error(
-      `A time to live is a positive, finite number of seconds, and ${ttl} is not`,
+      `A time to live is a positive, whole number of milliseconds, and ${ttlMs} is not`,
     );
   }
-  return ms;
+  return ttlMs;
 }
 
 // Run by the server as one step, so no other command comes between the read
@@ -48,20 +47,22 @@ end
 return text
 `;
 
-export function redis(options: { url: string | undefined }): Storage {
-  const { url } = options;
-  if (url === undefined || url === '') {
-    throw new Error('The redis adapter was given no url');
+export function redis(options: { address: string | undefined }): Storage {
+  const { address } = options;
+  if (address === undefined || address === '') {
+    throw new Error('The redis adapter was given no address');
   }
   // The client takes text that is no address and fails on the first call.
-  // The url is not quoted: it may hold a password.
-  if (!URL.canParse(url)) {
-    throw new Error('The redis adapter was given a url that cannot be parsed');
+  // The address is not quoted: it may hold a password.
+  if (!URL.canParse(address)) {
+    throw new Error(
+      'The redis adapter was given an address that cannot be parsed',
+    );
   }
   // The client's own reconnecting holds a call for half a minute while the
   // server is down and never recovers after; connecting again on the next
   // call fails at once and recovers. Pipelining is off: one call, one command.
-  const client = new RedisClient(url, {
+  const client = new RedisClient(address, {
     autoReconnect: false,
     enableAutoPipelining: false,
   });
@@ -82,11 +83,11 @@ export function redis(options: { url: string | undefined }): Storage {
     },
     set: async (key, value, options) => {
       const text = JSON.stringify(value);
-      if (options?.ttl === undefined) {
+      if (options?.ttlMs === undefined) {
         await (await linked()).set(key, text);
         return;
       }
-      const ms = milliseconds(options.ttl);
+      const ms = milliseconds(options.ttlMs);
       await (await linked()).set(key, text, 'PX', ms);
     },
     delete: async (key) => {
@@ -97,7 +98,7 @@ export function redis(options: { url: string | undefined }): Storage {
         throw new Error(`An increment is a finite number, and ${by} is not`);
       }
       const ms =
-        options?.ttl === undefined ? '' : `${milliseconds(options.ttl)}`;
+        options?.ttlMs === undefined ? '' : `${milliseconds(options.ttlMs)}`;
       const text: unknown = await (await linked()).send('EVAL', [
         adding,
         '1',

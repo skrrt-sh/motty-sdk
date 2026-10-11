@@ -85,7 +85,7 @@ test('a slow motty: the stream opens and is kept alive before anything is said',
       return answer('Use a mutex.');
     }),
     () => ({}),
-    { keepAlive: 20 },
+    { keepAliveMs: 20 },
   );
   using server = Bun.serve({ port: 0, fetch: served.fetch });
 
@@ -110,7 +110,7 @@ test('a slow motty that then fails: the status was sent, so the error ends the s
       throw new Error('The index is being rebuilt');
     }),
     () => ({}),
-    { keepAlive: 20 },
+    { keepAliveMs: 20 },
   );
   using server = Bun.serve({ port: 0, fetch: served.fetch });
 
@@ -134,7 +134,7 @@ test('a motty that fails within the first silence still answers with its status'
       throw new Error('The index is being rebuilt');
     }),
     () => ({}),
-    { keepAlive: 2_000 },
+    { keepAliveMs: 2_000 },
   );
   using server = Bun.serve({ port: 0, fetch: served.fetch });
 
@@ -148,7 +148,7 @@ test('a motty that fails within the first silence still answers with its status'
 test('silence in the middle of an answer is kept alive, and a busy stream is left alone', async () => {
   const release = Promise.withResolvers<void>();
   const served = mount(coder, () => ({ models: [halting(release.promise)] }), {
-    keepAlive: 20,
+    keepAliveMs: 20,
   });
   using server = Bun.serve({ port: 0, fetch: served.fetch });
 
@@ -179,7 +179,7 @@ test('a stream that is never silent for as long as the keep-alive is sent no kee
     },
   };
   const served = mount(coder, () => ({ models: [talking] }), {
-    keepAlive: 100,
+    keepAliveMs: 100,
   });
   using server = Bun.serve({ port: 0, fetch: served.fetch });
 
@@ -255,7 +255,7 @@ test('the time limit: a caller waiting for a whole answer gets a 504, and the re
   const reported = Promise.withResolvers<Report>();
   const served = mount(coder, () => ({
     models: [halting(Promise.withResolvers<void>().promise, stopped.resolve)],
-    limits: { duration: 40 },
+    limits: { durationMs: 40 },
     report: reported.resolve,
   }));
   using server = Bun.serve({ port: 0, fetch: served.fetch });
@@ -279,7 +279,7 @@ test('the time limit: a stream that had begun is ended with the error', async ()
   const reported = Promise.withResolvers<Report>();
   const served = mount(coder, () => ({
     models: [halting(Promise.withResolvers<void>().promise)],
-    limits: { duration: 40 },
+    limits: { durationMs: 40 },
     report: reported.resolve,
   }));
   using server = Bun.serve({ port: 0, fetch: served.fetch });
@@ -307,7 +307,7 @@ test('the time limit: a stream nothing was said in yet is a 504', async () => {
       await Promise.withResolvers<void>().promise;
       return answer('Use a mutex.');
     }),
-    () => ({ limits: { duration: 40 } }),
+    () => ({ limits: { durationMs: 40 } }),
   );
   using server = Bun.serve({ port: 0, fetch: served.fetch });
 
@@ -367,7 +367,7 @@ test('shutdown is bounded: what outlasts the wait is stopped, and its record say
       models: [halting(Promise.withResolvers<void>().promise)],
       report: (report) => reports.push(report),
     }),
-    { drain: 40 },
+    { drainMs: 40 },
   );
   using server = Bun.serve({ port: 0, fetch: served.fetch });
   const reply = await ask(server.port, true);

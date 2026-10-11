@@ -1,5 +1,6 @@
 import type { Motty } from './chain/builder.ts';
 import {
+  bound,
   type Caller,
   type DecisionCall,
   type EventStream,
@@ -83,9 +84,8 @@ export type HostOptions<Settings = AnyOverrides> = {
       ) => readonly ModelAdapter[] | Promise<readonly ModelAdapter[]>);
   storage?: Storage;
   auth?: AuthAdapter;
-  // The duration is in milliseconds and is the host's to enforce. The body
-  // is in bytes and is the edge's.
-  limits?: Limits & { duration?: number; body?: number };
+  // The duration is the host's to enforce, the body the edge's.
+  limits?: Limits & { durationMs?: number; bodyBytes?: number };
   settings?: Settings;
   // In the host's own unit. Nothing returned leaves the upstream's cost.
   price?: (model: string, usage: Readonly<Usage>) => number | undefined;
@@ -367,7 +367,11 @@ export function hosting(motty: Marked, options: HostOptions) {
   const fixed = adapted(typeof models === 'function' ? [] : models);
   // A name may hold a colon: escaped, the first colon of a key ends the name.
   const prefix = `${description.name.replace(/[%:]/g, encodeURIComponent)}:`;
-  const { duration, body, ...rest } = options.limits ?? {};
+  const { durationMs, bodyBytes, ...rest } = options.limits ?? {};
+  bound('limits.durationMs', durationMs);
+  bound('limits.bodyBytes', bodyBytes, 'whole');
+  bound('limits.calls', rest.calls, 'whole');
+  bound('limits.afterResponseMs', rest.afterResponseMs);
   const limits = Object.freeze(rest);
   const settings =
     options.settings === undefined ? unset : copied(options.settings);
@@ -443,7 +447,9 @@ export function hosting(motty: Marked, options: HostOptions) {
     // time limit's own reason ends it as timed out.
     const signals = [stop.signal];
     if (asked.signal !== undefined) signals.push(asked.signal);
-    if (duration !== undefined) signals.push(AbortSignal.timeout(duration));
+    if (durationMs !== undefined) {
+      signals.push(AbortSignal.timeout(durationMs));
+    }
     signal = AbortSignal.any(signals);
     // A price that throws leaves the call as the upstream told it: what was
     // spent is counted, and the host reads of its price on the report.

@@ -422,7 +422,7 @@ test('the record survives a JSON round trip', async () => {
       .afterResponse(() => {}),
     stubHost(
       { 'acme/small': says('Hi', 4, 1) },
-      { limits: { afterResponse: 1_000 }, record: over.resolve },
+      { limits: { afterResponseMs: 1_000 }, record: over.resolve },
     ),
   );
   const made = await over.promise;

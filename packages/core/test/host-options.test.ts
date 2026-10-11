@@ -426,7 +426,7 @@ test("the storage is handed over with the motty's name ahead of every key", asyn
         return 4;
       },
       set: async (key, value, options) => {
-        keys.push(`set ${key} ${value} ${options?.ttl}`);
+        keys.push(`set ${key} ${value} ${options?.ttlMs}`);
       },
       delete: async (key) => {
         keys.push(`delete ${key}`);
@@ -435,12 +435,12 @@ test("the storage is handed over with the motty's name ahead of every key", asyn
   })(asked());
 
   expect(await host.storage?.get('seen')).toBe(4);
-  await host.storage?.set('seen', 5, { ttl: 60 });
+  await host.storage?.set('seen', 5, { ttlMs: 60_000 });
   await host.storage?.delete('seen');
 
   expect(keys).toEqual([
     'get coder:seen',
-    'set coder:seen 5 60',
+    'set coder:seen 5 60000',
     'delete coder:seen',
   ]);
   expect((await hosting(echo(), {})(asked())).host.storage).toBeUndefined();
@@ -483,8 +483,10 @@ test("an increment is handed over with the motty's name ahead of its key, and it
     },
   })(asked());
 
-  expect(await host.storage?.increment?.('spent', 2, { ttl: 60 })).toBe(7);
-  expect(added).toEqual([['coder:spent', 2, { ttl: 60 }]]);
+  expect(await host.storage?.increment?.('spent', 2, { ttlMs: 60_000 })).toBe(
+    7,
+  );
+  expect(added).toEqual([['coder:spent', 2, { ttlMs: 60_000 }]]);
 });
 
 test('a storage that is an instance of a class is asked to increment as its own method', async () => {
@@ -895,10 +897,10 @@ test('with no price the calls are the adapters own, cost and all', async () => {
 
 test('the duration is kept by the host as a stop that says timed out, and the rest of the limits go to the motty', async () => {
   const { host } = await hosting(echo(), {
-    limits: { duration: 10, calls: 3, afterResponse: 20 },
+    limits: { durationMs: 10, calls: 3, afterResponseMs: 20 },
   })(asked());
 
-  expect(host.limits).toEqual({ calls: 3, afterResponse: 20 });
+  expect(host.limits).toEqual({ calls: 3, afterResponseMs: 20 });
   expect(host.signal.aborted).toBe(false);
   await Bun.sleep(30);
   expect(host.signal.reason).toMatchObject({ name: 'TimeoutError' });
@@ -906,10 +908,47 @@ test('the duration is kept by the host as a stop that says timed out, and the re
 
 test("the edge's body limit is kept out of the limits the motty reads, as the duration is", async () => {
   const { host } = await hosting(echo(), {
-    limits: { body: 1024, calls: 3 },
+    limits: { bodyBytes: 1024, calls: 3 },
   })(asked());
 
   expect(host.limits).toEqual({ calls: 3 });
+});
+
+test.each([
+  [{ calls: 1.5 }, 'limits.calls must be a whole number'],
+  [{ calls: -1 }, 'limits.calls must be a whole number'],
+  [{ calls: Number.NaN }, 'limits.calls must be a whole number'],
+  [{ bodyBytes: 0.5 }, 'limits.bodyBytes must be a whole number'],
+  [
+    { bodyBytes: Number.POSITIVE_INFINITY },
+    'limits.bodyBytes must be a whole number',
+  ],
+  [{ durationMs: -1 }, 'limits.durationMs must be a finite number'],
+  [{ durationMs: Number.NaN }, 'limits.durationMs must be a finite number'],
+  [
+    { durationMs: Number.POSITIVE_INFINITY },
+    'limits.durationMs must be a finite number',
+  ],
+  [{ afterResponseMs: -1 }, 'limits.afterResponseMs must be a finite number'],
+  [
+    { afterResponseMs: Number.NaN },
+    'limits.afterResponseMs must be a finite number',
+  ],
+])(
+  'a limit that is no number of zero or more is refused when the host is made, by its name: %o',
+  (limits, said) => {
+    expect(() => hosting(echo(), { limits })).toThrow(
+      `${said} of zero or more`,
+    );
+  },
+);
+
+test('a limit of zero, and a time limit of part of a millisecond, are taken when the host is made', async () => {
+  const { host } = await hosting(echo(), {
+    limits: { calls: 0, bodyBytes: 0, durationMs: 0.5, afterResponseMs: 0.5 },
+  })(asked());
+
+  expect(host.limits).toEqual({ calls: 0, afterResponseMs: 0.5 });
 });
 
 test("the stop follows the caller's own signal, and is fired with the host's reason", async () => {
@@ -1816,7 +1855,7 @@ test('given the headers and no request, the host says only who the caller is: no
       models += 1;
       return [];
     },
-    limits: { duration: 10 },
+    limits: { durationMs: 10 },
     report: (report) => reports.push(report),
   });
 

@@ -4,6 +4,7 @@ import * as host from '../src/host.ts';
 test('the host entry exports exactly the held values', () => {
   expect(Object.keys(host).sort()).toEqual([
     'adapted',
+    'bound',
     'buffered',
     'counted',
     'disclosed',

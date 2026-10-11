@@ -160,7 +160,7 @@ test('afterResponse work does not follow the stop signal', async () => {
   expect(await done.promise).toEqual(['aborted', false, 'Remembered']);
 });
 
-test('an afterResponse hook that never returns is given up at limits.afterResponse and recorded as timed out', async () => {
+test('an afterResponse hook that never returns is given up at limits.afterResponseMs and recorded as timed out', async () => {
   const over = Promise.withResolvers<RequestRecord>();
   const fired: boolean[] = [];
 
@@ -171,7 +171,7 @@ test('an afterResponse hook that never returns is given up at limits.afterRespon
         signal.addEventListener('abort', () => fired.push(signal.aborted));
         return new Promise(() => {});
       }),
-    stubHost({}, { limits: { afterResponse: 5 }, record: over.resolve }),
+    stubHost({}, { limits: { afterResponseMs: 5 }, record: over.resolve }),
   );
 
   expect((await over.promise).afterResponse.failed).toStrictEqual([
@@ -203,7 +203,7 @@ test('no afterResponse hook starts once the limit has passed, and each is record
       .afterResponse(() => {
         ran.push('last');
       }),
-    stubHost({}, { limits: { afterResponse: 5 }, record: over.resolve }),
+    stubHost({}, { limits: { afterResponseMs: 5 }, record: over.resolve }),
   );
   const { afterResponse } = await over.promise;
   await Bun.sleep(25);
@@ -225,7 +225,7 @@ test('a model call made in afterResponse is cancelled at the limit and fails wit
         await model('acme/slow').complete(prompt).catch(caught.resolve);
       }),
     {
-      ...stubHost({}, { limits: { afterResponse: 5 } }),
+      ...stubHost({}, { limits: { afterResponseMs: 5 } }),
       models: (_model, _prompt, signal) => silent(signal),
     },
   );
@@ -247,14 +247,14 @@ test('no afterResponse hook starts after one that blocked past the limit', async
       .afterResponse(() => {
         ran.push('second');
       }),
-    stubHost({}, { limits: { afterResponse: 5 } }),
+    stubHost({}, { limits: { afterResponseMs: 5 } }),
   );
   await Bun.sleep(30);
 
   expect(ran).toEqual(['first']);
 });
 
-test('with limits.afterResponse of zero no afterResponse hook starts and none is recorded as failed', async () => {
+test('with limits.afterResponseMs of zero no afterResponse hook starts and none is recorded as failed', async () => {
   const over = Promise.withResolvers<RequestRecord>();
   const ran: string[] = [];
 
@@ -264,7 +264,7 @@ test('with limits.afterResponse of zero no afterResponse hook starts and none is
       .afterResponse(() => {
         ran.push('response');
       }),
-    stubHost({}, { limits: { afterResponse: 0 }, record: over.resolve }),
+    stubHost({}, { limits: { afterResponseMs: 0 }, record: over.resolve }),
   );
 
   expect((await over.promise).afterResponse).toStrictEqual({
@@ -308,7 +308,7 @@ test('an afterResponse hook that ends by itself when its signal fires is not rec
           signal.addEventListener('abort', resolve),
         );
       }),
-    stubHost({}, { limits: { afterResponse: 5 }, record: over.resolve }),
+    stubHost({}, { limits: { afterResponseMs: 5 }, record: over.resolve }),
   );
 
   expect((await over.promise).afterResponse).toStrictEqual({
@@ -330,7 +330,7 @@ test('an afterResponse hook that throws its own error when its signal fires is r
         );
         throw new UpstreamFailed('The tier store gave up half way');
       }),
-    stubHost({}, { limits: { afterResponse: 5 }, record: over.resolve }),
+    stubHost({}, { limits: { afterResponseMs: 5 }, record: over.resolve }),
   );
 
   expect(
@@ -363,7 +363,7 @@ test('a host limit replaces the thirty seconds', async () => {
     motty({ name: 'coder' })
       .handle(() => answer('Hi'))
       .afterResponse(() => {}),
-    stubHost({}, { limits: { afterResponse: 45_000 }, record: over.resolve }),
+    stubHost({}, { limits: { afterResponseMs: 45_000 }, record: over.resolve }),
   );
   await over.promise;
   const delays = timers.mock.calls.map(([, delay]) => delay);
@@ -448,7 +448,7 @@ test('a host function that never answers in after-response work is given up at t
     stubHost(
       {},
       {
-        limits: { afterResponse: 5 },
+        limits: { afterResponseMs: 5 },
         record: over.resolve,
         storage: {
           get: () => new Promise(() => {}),

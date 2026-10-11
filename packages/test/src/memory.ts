@@ -2,14 +2,13 @@ import type { Json, ReadonlyJson, Storage } from '@mottyjs/core/host';
 
 // Refused as a real store refuses it, in the same words, so a motty that
 // passes here does not fail there.
-function milliseconds(ttl: number | undefined): number | undefined {
-  const ms = ttl === undefined ? undefined : Math.ceil(ttl * 1000);
-  if (ms !== undefined && (!(ms >= 1) || !Number.isSafeInteger(ms))) {
+function milliseconds(ttlMs: number | undefined): number | undefined {
+  if (ttlMs !== undefined && (!(ttlMs >= 1) || !Number.isSafeInteger(ttlMs))) {
     throw new Error(
-      `A time to live is a positive, finite number of seconds, and ${ttl} is not`,
+      `A time to live is a positive, whole number of milliseconds, and ${ttlMs} is not`,
     );
   }
-  return ms;
+  return ttlMs;
 }
 
 function isList(value: ReadonlyJson): value is readonly ReadonlyJson[] {
@@ -42,7 +41,7 @@ export function memory(): Storage {
       return undefined;
     },
     set: async (key, value, options) => {
-      const ms = milliseconds(options?.ttl);
+      const ms = milliseconds(options?.ttlMs);
       held.set(key, {
         value: kept(value),
         until: ms === undefined ? Number.POSITIVE_INFINITY : Date.now() + ms,
@@ -57,7 +56,7 @@ export function memory(): Storage {
       if (!Number.isFinite(by)) {
         throw new Error(`An increment is a finite number, and ${by} is not`);
       }
-      const ms = milliseconds(options?.ttl);
+      const ms = milliseconds(options?.ttlMs);
       const found = held.get(key);
       const live =
         found !== undefined && found.until > Date.now() ? found : undefined;

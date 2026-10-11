@@ -553,7 +553,7 @@ test('the duration limit stops the request as the host would', async () => {
     return answer('late reply');
   });
 
-  const asked = run(waiting, { text: 'hi' }, { limits: { duration: 5 } });
+  const asked = run(waiting, { text: 'hi' }, { limits: { durationMs: 5 } });
 
   await expect(asked).rejects.toBeInstanceOf(TimedOut);
 });

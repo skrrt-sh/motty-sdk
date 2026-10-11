@@ -36,8 +36,8 @@ async function written(
 test.each(['/v1/chat/completions', '/v1/responses', '/v1/messages'])(
   'a body that stops arriving is answered 408 and its socket closed, with no idle timeout to end it: %s',
   async (path) => {
-    const served = mount(coder, () => ({ limits: { duration: 3_000 } }), {
-      receive: 100,
+    const served = mount(coder, () => ({ limits: { durationMs: 3_000 } }), {
+      receiveMs: 100,
     });
     using server = Bun.serve({ port: 0, idleTimeout: 0, fetch: served.fetch });
     const timeouts = spyOn(server, 'timeout');
@@ -56,7 +56,7 @@ test.each(['/v1/chat/completions', '/v1/responses', '/v1/messages'])(
 );
 
 test('a body that stops arriving is bounded under a mounted edge with no server', async () => {
-  const served = mount(coder, () => ({}), { receive: 50 });
+  const served = mount(coder, () => ({}), { receiveMs: 50 });
 
   const reply = await served.fetch(
     new Request('http://motty.test/v1/messages', {
@@ -81,7 +81,7 @@ test('a body that stops arriving is bounded under a mounted edge with no server'
 });
 
 test('a body that arrives in time is taken off the idle timeout and answered', async () => {
-  const served = mount(coder, () => ({}), { receive: 5_000 });
+  const served = mount(coder, () => ({}), { receiveMs: 5_000 });
   using server = Bun.serve({ port: 0, idleTimeout: 1, fetch: served.fetch });
 
   const reply = await fetch(`http://localhost:${server.port}/v1/messages`, {
@@ -107,7 +107,7 @@ test('a stated length over the limit is refused before a byte of the body is rea
         return { id: 'ada' };
       },
     },
-    limits: { body: 1_000 },
+    limits: { bodyBytes: 1_000 },
   }));
   using server = Bun.serve({ port: 0, idleTimeout: 0, fetch: served.fetch });
 
@@ -136,7 +136,7 @@ test.each([
 ])(
   'a body over the limit is a 413 in the error shape of its API: %s',
   async (path, headers, body) => {
-    const served = mount(coder, () => ({ limits: { body: 1_000 } }));
+    const served = mount(coder, () => ({ limits: { bodyBytes: 1_000 } }));
 
     const reply = await served.fetch(
       new Request(`http://motty.test${path}`, {
@@ -157,7 +157,7 @@ test.each([
 );
 
 test('a body with no stated length, or more of it than was stated, is cut at the limit while it is read', async () => {
-  const served = mount(coder, () => ({ limits: { body: 1_000 } }));
+  const served = mount(coder, () => ({ limits: { bodyBytes: 1_000 } }));
   const pulled = { unstated: 0, understated: 0 };
 
   const replies = await Promise.all(
@@ -191,7 +191,7 @@ test('a body of exactly the limit is taken, and with no limit stated 32 MB is th
     model: 'coder',
     messages: [{ role: 'user', content: 'Why does this deadlock?' }],
   });
-  const exact = mount(coder, () => ({ limits: { body: body.length } }));
+  const exact = mount(coder, () => ({ limits: { bodyBytes: body.length } }));
   const plain = mount(coder, () => ({}));
 
   const taken = await exact.fetch(
@@ -217,17 +217,24 @@ test('a body of exactly the limit is taken, and with no limit stated 32 MB is th
 });
 
 test.each([
-  [{ limits: { body: Number.NaN } }, {}, 'limits.body'],
-  [{ limits: { body: -1 } }, {}, 'limits.body'],
-  [{ limits: { body: Number.POSITIVE_INFINITY } }, {}, 'limits.body'],
-  [{}, { receive: Number.NaN }, 'receive'],
-  [{}, { receive: -1 }, 'receive'],
-  [{}, { receive: Number.POSITIVE_INFINITY }, 'receive'],
+  [{ limits: { bodyBytes: Number.NaN } }, {}, 'limits.bodyBytes', 'whole'],
+  [{ limits: { bodyBytes: 0.5 } }, {}, 'limits.bodyBytes', 'whole'],
+  [{ limits: { calls: 1.5 } }, {}, 'limits.calls', 'whole'],
+  [{ limits: { durationMs: -1 } }, {}, 'limits.durationMs', 'finite'],
+  [{}, { receiveMs: Number.NaN }, 'receiveMs', 'finite'],
+  [{}, { receiveMs: -1 }, 'receiveMs', 'finite'],
+  [{}, { receiveMs: Number.POSITIVE_INFINITY }, 'receiveMs', 'finite'],
+  [{}, { keepAliveMs: Number.NaN }, 'keepAliveMs', 'finite'],
+  [{}, { keepAliveMs: -1 }, 'keepAliveMs', 'finite'],
+  [{}, { keepAliveMs: Number.POSITIVE_INFINITY }, 'keepAliveMs', 'finite'],
+  [{}, { drainMs: Number.NaN }, 'drainMs', 'finite'],
+  [{}, { drainMs: -1 }, 'drainMs', 'finite'],
+  [{}, { drainMs: Number.POSITIVE_INFINITY }, 'drainMs', 'finite'],
 ])(
-  'a body limit or a time to receive that is no finite number of zero or more fails when the host is made, named: %o %o',
-  (options, edge, name) => {
+  'a limit or a time of the edge that is no number of zero or more fails when the host is made, named: %o %o',
+  (options, edge, name, kind) => {
     expect(() => mount(coder, () => options, edge)).toThrow(
-      `${name} must be a finite number of zero or more`,
+      `${name} must be a ${kind} number of zero or more`,
     );
   },
 );

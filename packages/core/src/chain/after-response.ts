@@ -26,7 +26,7 @@ export async function afterwards(
 ): Promise<void> {
   if (finished.length === 0) return;
   const { signal, stop } = beginAfterResponse();
-  const limitMs = limits.afterResponse ?? defaultLimitMs;
+  const limitMs = limits.afterResponseMs ?? defaultLimitMs;
   // A hook that blocked leaves the timer no turn to fire, so the clock is read.
   const due = performance.now() + limitMs;
   const timer = clock(

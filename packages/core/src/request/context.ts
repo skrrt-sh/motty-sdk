@@ -1,5 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { Host, Limits, RequestRecord, Storage } from '../contract.ts';
+import {
+  bound,
+  type Host,
+  type Limits,
+  type RequestRecord,
+  type Storage,
+} from '../contract.ts';
 import {
   disclosed,
   LimitReached,
@@ -70,16 +76,15 @@ function limited(limits: Limits | null | undefined): State['limits'] {
   if (typeof limits !== 'object') {
     throw new Error('The host must supply limits as an object');
   }
-  const held: Limits = {};
-  for (const name of ['calls', 'afterResponse'] as const) {
-    const limit = limits[name];
-    if (limit === undefined) continue;
-    if (!Number.isInteger(limit) || limit < 0) {
-      throw new Error(`limits.${name} must be a whole number of zero or more`);
-    }
-    held[name] = limit;
-  }
-  return Object.freeze(held);
+  const calls = bound('limits.calls', limits.calls, 'whole');
+  const afterResponseMs = bound(
+    'limits.afterResponseMs',
+    limits.afterResponseMs,
+  );
+  return Object.freeze({
+    ...(calls === undefined ? {} : { calls }),
+    ...(afterResponseMs === undefined ? {} : { afterResponseMs }),
+  });
 }
 
 function checked(host: Host): State['limits'] {

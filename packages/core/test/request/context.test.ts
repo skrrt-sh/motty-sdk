@@ -297,14 +297,14 @@ test('the storage hosted gives passes each call on to the storage of the host', 
 
   const read = await enter(host, async () => {
     const { storage } = hosted();
-    await storage?.set('tier', 'deep', { ttl: 60 });
+    await storage?.set('tier', 'deep', { ttlMs: 60_000 });
     const kept = await storage?.get('tier');
     await storage?.set('gone', 'soon');
     await storage?.delete('gone');
     return kept;
   });
 
-  expect(read).toBe('["deep",{"ttl":60}]');
+  expect(read).toBe('["deep",{"ttlMs":60000}]');
   expect([...stored.keys()]).toEqual(['tier']);
 });
 
@@ -326,11 +326,11 @@ test('the storage hosted gives passes an increment on to the storage of the host
   );
 
   const total = await enter(host, () =>
-    hosted().storage?.increment?.('spent', 2, { ttl: 60 }),
+    hosted().storage?.increment?.('spent', 2, { ttlMs: 60_000 }),
   );
 
   expect(total).toBe(7);
-  expect(added).toEqual([['spent', 2, { ttl: 60 }]]);
+  expect(added).toEqual([['spent', 2, { ttlMs: 60_000 }]]);
 });
 
 test('the storage hosted gives asks a storage that is an instance of a class to increment as its own method', async () => {
@@ -443,14 +443,14 @@ test('inside a request the state gives the host and its limits, and a signal the
   const stop = new AbortController();
   const host = stubHost(
     {},
-    { signal: stop.signal, limits: { calls: 3, afterResponse: 45_000 } },
+    { signal: stop.signal, limits: { calls: 3, afterResponseMs: 45_000 } },
   );
   const state = enter(host, () => current());
   const before = state.signal.aborted;
   stop.abort(new TimedOut('The host gave the request two minutes'));
 
   expect(state.host).toBe(host);
-  expect(state.limits).toEqual({ calls: 3, afterResponse: 45_000 });
+  expect(state.limits).toEqual({ calls: 3, afterResponseMs: 45_000 });
   expect([before, state.signal.aborted]).toEqual([false, true]);
   expect(state.signal.reason).toBe(stop.signal.reason);
 });
@@ -1022,15 +1022,15 @@ test.each([
 test.each([
   ['null', JSON.parse('null')],
   ['not a number', Number.NaN],
-  ['a fraction', 0.5],
+  ['infinite', Number.POSITIVE_INFINITY],
   ['text', JSON.parse('"30000"')],
   ['negative', -1],
 ])(
   'with an after-response limit that is %s the request is entered, and admitting it throws a plain error naming the limit',
-  (_name, afterResponse) => {
+  (_name, afterResponseMs) => {
     expect(() =>
-      enter(stubHost({}, { limits: { afterResponse } }), () => admitted()),
-    ).toThrow('limits.afterResponse must be a whole number of zero or more');
+      enter(stubHost({}, { limits: { afterResponseMs } }), () => admitted()),
+    ).toThrow('limits.afterResponseMs must be a finite number of zero or more');
   },
 );
 
@@ -1057,11 +1057,11 @@ test('a host that supplied no stop signal is entered with a signal of its own, a
 
 test('a host that supplied what it should is admitted', () => {
   expect(
-    enter(stubHost({}, { limits: { calls: 0, afterResponse: 0 } }), () => {
+    enter(stubHost({}, { limits: { calls: 0, afterResponseMs: 0 } }), () => {
       admitted();
       return current().limits;
     }),
-  ).toEqual({ calls: 0, afterResponse: 0 });
+  ).toEqual({ calls: 0, afterResponseMs: 0 });
 });
 
 test('limits given as null are no limits', () => {
@@ -1074,11 +1074,11 @@ test('limits given as null are no limits', () => {
 });
 
 test('a host that changes its limits after the request started does not change the request', async () => {
-  const limits = { calls: 1, afterResponse: 45_000 };
+  const limits = { calls: 1, afterResponseMs: 45_000 };
   await enter(stubHost({}, { limits }), async () => {
     limits.calls = Number.NaN;
-    limits.afterResponse = 0;
-    expect(current().limits).toEqual({ calls: 1, afterResponse: 45_000 });
+    limits.afterResponseMs = 0;
+    expect(current().limits).toEqual({ calls: 1, afterResponseMs: 45_000 });
     expect(current().limits).not.toBe(limits);
     await counted('acme/small', async () => 'Hi');
     await expect(

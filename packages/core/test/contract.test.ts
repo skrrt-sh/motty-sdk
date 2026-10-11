@@ -265,13 +265,13 @@ test('the host carries a caller, settings and limits as plain data', () => {
     {
       caller: { id: 'user_1' },
       settings: { tiers: { deep: 'acme/large' } },
-      limits: { calls: 10, afterResponse: 30_000 },
+      limits: { calls: 10, afterResponseMs: 30_000 },
     },
   );
   expect(JSON.parse(JSON.stringify({ caller, settings, limits }))).toEqual({
     caller: { id: 'user_1' },
     settings: { tiers: { deep: 'acme/large' } },
-    limits: { calls: 10, afterResponse: 30_000 },
+    limits: { calls: 10, afterResponseMs: 30_000 },
   });
 });
 

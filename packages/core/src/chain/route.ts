@@ -11,10 +11,7 @@ export type Routed = {
   readonly early?: string;
 };
 
-export type RunNested = (
-  lifecycle: Lifecycle,
-  context: Supplied,
-) => Promise<Routed>;
+type RunNested = (lifecycle: Lifecycle, context: Supplied) => Promise<Routed>;
 
 export function reroute<Name extends string>(name: Name): Reroute<Name> {
   return { reroute: name };
