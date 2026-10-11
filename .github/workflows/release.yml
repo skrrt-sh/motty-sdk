@@ -118,7 +118,8 @@ jobs:
               echo "::error::The registry did not say whether @mottyjs/$name@$version is published"
               exit 1
             fi
-            npm publish "tarballs/mottyjs-$name-$version.tgz" --access public --tag "$tag"
+            # Without the ./ npm reads the path as a GitHub owner/repo.
+            npm publish "./tarballs/mottyjs-$name-$version.tgz" --access public --tag "$tag"
           done
 
   release:
