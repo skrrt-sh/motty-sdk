@@ -53,7 +53,7 @@ export function typeCost(diagnostics: string) {
 
 export async function nanosecondsPerCall(
   subject: () => unknown,
-  iterations = 5000,
+  iterations: number,
 ) {
   const start = Bun.nanoseconds();
   for (let call = 0; call < iterations; call++) await subject();
