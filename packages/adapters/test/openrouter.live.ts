@@ -434,6 +434,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
         type: 'not_found_error',
         message: 'nobody/no-such-model is not a valid model ID',
       },
+      request_id: reply.headers.get('request-id'),
     });
     expect(reports).toMatchObject([
       {
@@ -592,6 +593,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
           type: 'api_error',
           message: "The upstream refused the host's credentials or account",
         },
+        request_id: whole.headers.get('request-id'),
       },
       {
         type: 'error',
@@ -599,6 +601,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
           type: 'api_error',
           message: "The upstream refused the host's credentials or account",
         },
+        request_id: streamed.headers.get('request-id'),
       },
     ]);
     expect(reports).toMatchObject([

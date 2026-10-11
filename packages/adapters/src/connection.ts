@@ -21,15 +21,16 @@ export function addressed(prefix: string, address: string): string {
   return address;
 }
 
-// A time no timer takes would fail the first call and not the start, so
-// it fails here, where the host that wrote it reads the option's name.
-export function timed(prefix: string, option: string, ms: number): number {
-  if (!Number.isFinite(ms) || ms < 0) {
+// A model is named as the prefix, a slash and the provider's own name. An
+// empty prefix would serve names that start with the slash, and one that
+// holds a slash would leave where the provider's name starts unsaid.
+export function prefixed(prefix: string): string {
+  if (prefix === '' || prefix.includes('/')) {
     throw new Error(
-      `The ${prefix} adapter was given a ${option} that is no time: it takes milliseconds, a finite number of zero or more`,
+      'An adapter was given a prefix that is no name: it takes one or more characters and no /',
     );
   }
-  return ms;
+  return prefix;
 }
 
 // A fetch that threw says only that it threw: whether the request was

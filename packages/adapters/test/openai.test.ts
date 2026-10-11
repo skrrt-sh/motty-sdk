@@ -49,6 +49,13 @@ test('with no key it fails when made', () => {
   );
 });
 
+test('an api it does not speak fails when made, in words that name the option', () => {
+  // @ts-expect-error the two it speaks are the type
+  expect(() => openai({ key: 'sk-host', api: 'completions' })).toThrow(
+    /^The openai adapter was given an api that is none: it takes 'responses' or 'chat-completions'$/,
+  );
+});
+
 test('a call goes to the Responses API with the key and the provider name', async () => {
   const seen: { path: string; key: string | null; body: unknown }[] = [];
   using upstream = Bun.serve({

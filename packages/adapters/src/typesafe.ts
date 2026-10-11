@@ -1,4 +1,5 @@
 import {
+  bound,
   type ErrorFacts,
   fromFacts,
   type Json,
@@ -19,7 +20,7 @@ import {
   credentials,
   endpoint,
   moved,
-  timed,
+  prefixed,
   told,
 } from './connection.ts';
 import { parsed } from './json.ts';
@@ -123,7 +124,8 @@ export function typesafe(options: {
   // server did not take is a model it does not know.
   routes?: boolean;
 }): ModelAdapter {
-  const { key, prefix: name = family, routes = false } = options;
+  const { key, routes = false } = options;
+  const name = prefixed(options.prefix ?? family);
   const address = addressed(
     name,
     options.address ?? 'https://api.typesafe.ai/v1',
@@ -131,7 +133,8 @@ export function typesafe(options: {
   // A decision is one short answer, and a route waits for it before it does
   // anything else. Jev on a new connection takes about half a second, so
   // this lets a slow one through and is still a wait a route can afford.
-  const timeoutMs = timed(name, 'timeoutMs', options.timeoutMs ?? 2000);
+  const timeoutMs =
+    bound(`The ${name} adapter's timeoutMs`, options.timeoutMs) ?? 2000;
   const prefix = `${name}/`;
   // The host's headers add; the content type and the credential stay ours.
   const { headers, clean } = credentials(name, key, undefined, options.headers);
@@ -140,7 +143,7 @@ export function typesafe(options: {
     options.address === undefined &&
     (key === undefined || key.trim() === '')
   ) {
-    throw new Error(`The ${family} adapter was given no key`);
+    throw new Error(`The ${name} adapter was given no key`);
   }
 
   return {

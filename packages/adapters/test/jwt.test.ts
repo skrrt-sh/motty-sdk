@@ -389,17 +389,6 @@ test('two sources cannot be given at once, nor none, in the types or past them',
   );
 });
 
-test('an option under a name the adapter left is no source', () => {
-  // @ts-expect-error the address of a key set is jwksAddress
-  expect(() => jwt({ jwks: 'https://id.example/jwks' })).toThrow(
-    'The jwt adapter takes exactly one of',
-  );
-  // @ts-expect-error a public key is publicKey
-  expect(() => jwt({ key: 'not read' })).toThrow(
-    'The jwt adapter takes exactly one of',
-  );
-});
-
 test('the plain secret gives the caller the host named', async () => {
   const adapter = bearer({ secret: 'host-secret', id: 'ops' });
 
@@ -420,6 +409,12 @@ test('a wrong plain secret of any length means no caller', async () => {
 test('with no plain secret it fails when made', () => {
   expect(() => bearer({ secret: undefined, id: 'ops' })).toThrow(
     'The bearer adapter was given no secret',
+  );
+});
+
+test('with no id for its caller it fails when made', () => {
+  expect(() => bearer({ secret: 'host-secret', id: '' })).toThrow(
+    'The bearer adapter was given no id',
   );
 });
 

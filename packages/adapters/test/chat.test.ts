@@ -35,6 +35,20 @@ test('a prompt the API cannot carry fails before anything is sent', async () => 
   expect(asked).toBe(0);
 });
 
+test.each(['', 'acme/eu'])(
+  'the prefix %p fails when the adapter is made',
+  (prefix) => {
+    expect(() =>
+      chat({
+        codec: responses,
+        prefix,
+        address: 'https://api.example/v1',
+        key: 'sk-host',
+      }),
+    ).toThrow('An adapter was given a prefix that is no name');
+  },
+);
+
 test('an upstream nobody listens at is one retryable error', async () => {
   const gone = Bun.serve({ port: 0, fetch: () => new Response('') });
   await gone.stop(true);

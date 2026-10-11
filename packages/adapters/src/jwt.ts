@@ -123,9 +123,10 @@ export function bearer(options: {
       'The bearer adapter was given a secret no header can carry: a bearer token holds letters, digits and - . _ ~ + / and may end in =',
     );
   }
+  const id = given('bearer', 'id', options.id);
   const held = digest(secret);
   return {
     verify: (sent) =>
-      timingSafeEqual(digest(sent), held) ? { id: options.id } : undefined,
+      timingSafeEqual(digest(sent), held) ? { id } : undefined,
   };
 }

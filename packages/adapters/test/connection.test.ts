@@ -5,7 +5,7 @@ import {
   credentials,
   endpoint,
   moved,
-  timed,
+  prefixed,
   told,
 } from '../src/connection.ts';
 
@@ -295,21 +295,18 @@ test('an address with no credentials is the address as it was written', () => {
   );
 });
 
-test.each([0, 0.5, 2000])(
-  'a time of %p milliseconds is the time as it was given',
-  (ms) => {
-    expect(timed('acme', 'timeoutMs', ms)).toBe(ms);
-  },
-);
-
-test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
-  'a time of %p fails in words that name the adapter and the option',
-  (ms) => {
-    expect(() => timed('acme', 'timeoutMs', ms)).toThrow(
-      /^The acme adapter was given a timeoutMs that is no time: it takes milliseconds, a finite number of zero or more$/,
+test.each(['', 'acme/eu', '/'])(
+  'the prefix %p, which would serve names no caller writes, fails',
+  (prefix) => {
+    expect(() => prefixed(prefix)).toThrow(
+      /^An adapter was given a prefix that is no name: it takes one or more characters and no \/$/,
     );
   },
 );
+
+test('a prefix that is a name is the prefix as it was written', () => {
+  expect(prefixed('acme-eu.2')).toBe('acme-eu.2');
+});
 
 test.each([301, 302, 303, 307, 308])(
   'a %i says where to go next, and is told as a redirect that is not followed',

@@ -46,6 +46,23 @@ test('with no key it fails when made, unless the address is its own', () => {
   expect(() => typesafe({ address: 'http://localhost:8000/v1' })).not.toThrow();
 });
 
+test('with no key it fails in words that name it by the prefix the host gave it', () => {
+  expect(() => typesafe({ key: undefined, prefix: 'jev' })).toThrow(
+    'The jev adapter was given no key',
+  );
+});
+
+test.each(['', 'laya/v1', '/'])(
+  'the prefix %p fails when the adapter is made',
+  (prefix) => {
+    expect(() =>
+      typesafe({ address: 'http://localhost:8000/v1', prefix }),
+    ).toThrow(
+      /^An adapter was given a prefix that is no name: it takes one or more characters and no \/$/,
+    );
+  },
+);
+
 test('a decision of all three kinds goes out and its answer comes back as it is', async () => {
   const input = {
     state: 'Help! My payouts have been failing for 3 days.',
@@ -926,11 +943,20 @@ test('past its time limit a call fails as timed out, and the upstream sees it', 
   expect((await left.promise).type).toBe('abort');
 });
 
-test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
-  'a time limit of %p fails when the adapter is made, in words that name the option',
+test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+  'a time limit of %p fails when the adapter is made, in words that name the adapter and the option',
   (timeoutMs) => {
     expect(() => typesafe({ key: 'ts-host', timeoutMs })).toThrow(
-      'The typesafe adapter was given a timeoutMs that is no time',
+      /^The typesafe adapter's timeoutMs must be a finite number of zero or more$/,
+    );
+    expect(() =>
+      typesafe({
+        address: 'http://localhost:8000/v1',
+        prefix: 'laya',
+        timeoutMs,
+      }),
+    ).toThrow(
+      /^The laya adapter's timeoutMs must be a finite number of zero or more$/,
     );
   },
 );

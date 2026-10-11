@@ -24,6 +24,12 @@ export function openai(
   if (key === undefined || key.trim() === '') {
     throw new Error(`The ${prefix} adapter was given no key`);
   }
+  // Past the types, any other word would mean Chat Completions unsaid.
+  if (api !== 'responses' && api !== 'chat-completions') {
+    throw new Error(
+      `The ${prefix} adapter was given an api that is none: it takes 'responses' or 'chat-completions'`,
+    );
+  }
   // Most of OpenAI's own models refuse a cache marker, so one is written
   // only where the host says the upstream at this address takes it.
   const marks = breakpoints === undefined ? {} : { breakpoints };

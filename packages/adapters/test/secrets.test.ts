@@ -197,7 +197,7 @@ function hostile(kept: unknown[], after: unknown[], name: string) {
         },
         () => decisions?.(name, { state: 'hi', questions: {} }, signal),
         () => storage?.get('key'),
-        () => storage?.set('key', 1, { ttl: 5 }),
+        () => storage?.set('key', 1, { ttlMs: 5000 }),
         () => storage?.delete('key'),
         () => storage?.increment?.('key', 1),
       ]) {
@@ -765,7 +765,7 @@ test.each([
     const reports: Report[] = [];
     const { fetch, close } = mount(hostile(kept, after, 'nobody/m'), () => ({
       storage: redis({
-        url: `redis://default:CANARY-storage-password@127.0.0.1:${database.port}/0`,
+        address: `redis://default:CANARY-storage-password@127.0.0.1:${database.port}/0`,
       }),
       auth: jwt({ secret: 'CANARY-jwt-secret-of-thirty-two-bytes' }),
       report: (report) => reports.push(report),
