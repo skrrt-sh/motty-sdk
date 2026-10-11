@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { InvalidRequest } from '@mottyjs/core';
-import { cacheOf, cacheTo } from '../../src/messages/cache.ts';
+import { cacheOf, cacheTo } from '../../src/wire/cache-control.ts';
 
 test('a cache marker is read with and without its lifetime', () => {
   expect(cacheOf(undefined)).toEqual({});

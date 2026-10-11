@@ -1,7 +1,7 @@
 import type { Cache, Content, Json, Media, Part } from '@mottyjs/core/host';
+import { cacheOf } from '../wire/cache-control.ts';
 import { type Dict, isDict } from '../wire/json.ts';
 import { invalid } from '../wire/refusals.ts';
-import { cacheOf } from './cache.ts';
 import { family, marked } from './family.ts';
 
 type Marker = { cache?: Cache };

@@ -1,5 +1,5 @@
-import type { Json, Media, Part } from '@mottyjs/core/host';
-import { inline } from '../wire/data-url.ts';
+import type { Json, Part } from '@mottyjs/core/host';
+import { address, inline } from '../wire/data-url.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { type Dict, dict, given, isDict, list, text } from '../wire/json.ts';
 import { breakpoint } from '../wire/openai-cache.ts';
@@ -104,15 +104,6 @@ export function partsOf(raw: Json, at: string): Part[] {
     default:
       return [{ type: 'provider', provider: { [family]: raw } }];
   }
-}
-
-// Both OpenAI APIs take inline bytes of a named type as a data address.
-export function address(media: Media): string | undefined {
-  const { url, data, mediaType } = media;
-  if (url !== undefined) return url;
-  return data === undefined || mediaType === undefined
-    ? undefined
-    : `data:${mediaType};base64,${data}`;
 }
 
 export function inputContent(left: Leaving, part: Part): Dict {

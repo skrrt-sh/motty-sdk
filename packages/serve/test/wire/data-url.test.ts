@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { inline } from '../../src/wire/data-url.ts';
+import { address, inline } from '../../src/wire/data-url.ts';
 
 test('inline bytes are split from their media type', () => {
   expect(inline('data:image/png;base64,iVBORw0KGgo=')).toEqual({
@@ -16,4 +16,15 @@ test('an address that holds no bytes is not split', () => {
   expect(inline('https://example.com/cat.png')).toBeUndefined();
   expect(inline('data:text/plain,hello')).toBeUndefined();
   expect(inline('iVBORw0KGgo=')).toBeUndefined();
+});
+
+test('media is addressed by its own address, or by its bytes when their type is named', () => {
+  expect(
+    address({ url: 'https://example.com/cat.png', mediaType: 'image/png' }),
+  ).toBe('https://example.com/cat.png');
+  expect(address({ data: 'iVBORw0KGgo=', mediaType: 'image/png' })).toBe(
+    'data:image/png;base64,iVBORw0KGgo=',
+  );
+  expect(address({ data: 'iVBORw0KGgo=' })).toBeUndefined();
+  expect(address({ id: 'file_1' })).toBeUndefined();
 });

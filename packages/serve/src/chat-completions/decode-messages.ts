@@ -1,5 +1,5 @@
 import type { Json, Message, Part, Role } from '@mottyjs/core/host';
-import { cacheOf } from '../messages/cache.ts';
+import { cacheOf } from '../wire/cache-control.ts';
 import { inline } from '../wire/data-url.ts';
 import {
   type Dict,

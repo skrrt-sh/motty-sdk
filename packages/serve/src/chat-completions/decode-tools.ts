@@ -1,5 +1,6 @@
 import type { Json, Tool, ToolChoice } from '@mottyjs/core/host';
 import { type Dict, dict, isDict, list } from '../wire/json.ts';
+import { parameterless } from '../wire/openai-tools.ts';
 import { invalid } from '../wire/refusals.ts';
 import { family } from './family.ts';
 
@@ -32,10 +33,7 @@ export function toolOf(raw: Json): Tool {
       type,
       name,
       ...described(description),
-      // No parameters given means a function that takes none.
-      input: isDict(parameters)
-        ? parameters
-        : { type: 'object', properties: {} },
+      input: isDict(parameters) ? parameters : parameterless(),
       ...(typeof strict === 'boolean' ? { strict } : {}),
     };
   }

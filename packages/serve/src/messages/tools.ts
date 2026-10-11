@@ -1,8 +1,8 @@
 import type { Json, Options, Tool, ToolChoice } from '@mottyjs/core/host';
+import { cacheOf, cacheTo } from '../wire/cache-control.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, given, isDict } from '../wire/json.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
-import { cacheOf, cacheTo } from './cache.ts';
 import { family, hinted, marked, noted, own } from './family.ts';
 
 export function toolOf(raw: Json): Tool {

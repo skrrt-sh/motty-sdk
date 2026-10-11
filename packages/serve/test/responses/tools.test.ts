@@ -3,7 +3,6 @@ import { InvalidRequest, Unsupported } from '@mottyjs/core';
 import {
   choiceBody,
   choiceOf,
-  customNames,
   toolBody,
   toolOf,
 } from '../../src/responses/tools.ts';
@@ -201,16 +200,6 @@ test('a choice that is neither a mode nor an object is refused', () => {
   expect(() =>
     choiceBody({ provider: { anthropic: { type: 'any' } } }, new Set()),
   ).toThrow(Unsupported);
-});
-
-test('the custom tools are told from the functions by name', () => {
-  expect(
-    customNames([
-      { type: 'function', name: 'weather', input: {} },
-      { type: 'custom', name: 'patch' },
-    ]),
-  ).toEqual(new Set(['patch']));
-  expect(customNames(undefined)).toEqual(new Set());
 });
 
 test('a function tool with no parameters is one that takes none', () => {

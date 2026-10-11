@@ -1,9 +1,9 @@
 import type { Cache, Media, Part } from '@mottyjs/core/host';
+import { cacheTo } from '../wire/cache-control.ts';
 import { inline } from '../wire/data-url.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, given } from '../wire/json.ts';
 import { a, unsupported } from '../wire/refusals.ts';
-import { cacheTo } from './cache.ts';
 import { hinted, own } from './family.ts';
 
 // A plain-text document is sent as the text it is, so bytes that are not

@@ -1,5 +1,5 @@
 import type { Cache } from '@mottyjs/core/host';
-import { cacheTo } from '../messages/cache.ts';
+import { cacheTo } from './cache-control.ts';
 import type { Leaving } from './fieldless.ts';
 import type { Dict } from './json.ts';
 

@@ -1,9 +1,10 @@
 import type { Json, JsonOutput, Options } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
-import { numberOf } from '../responses/decode.ts';
-import { customNames } from '../responses/tools.ts';
+import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
+import { numberOf } from '../wire/number.ts';
+import { customNames } from '../wire/openai-tools.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { messageOf } from './decode-messages.ts';
 import { choiceOf, toolOf } from './decode-tools.ts';
@@ -35,21 +36,9 @@ function stopOf(value: Given): string[] | undefined {
 }
 
 function effortOf(value: Given): NonNullable<Options['reasoning']>['effort'] {
-  switch (value) {
-    case undefined:
-    case null:
-      return undefined;
-    case 'none':
-    case 'minimal':
-    case 'low':
-    case 'medium':
-    case 'high':
-    case 'xhigh':
-    case 'max':
-      return value;
-    default:
-      invalid(`Unknown reasoning effort: ${JSON.stringify(value)}`);
-  }
+  if (absent(value)) return undefined;
+  if (isEffort(value)) return value;
+  invalid(`Unknown reasoning effort: ${JSON.stringify(value)}`);
 }
 
 // Both spellings are read: the API's own field, and the object that routers

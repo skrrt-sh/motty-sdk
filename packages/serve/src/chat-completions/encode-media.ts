@@ -1,5 +1,5 @@
 import type { Part } from '@mottyjs/core/host';
-import { address } from '../responses/content.ts';
+import { address } from '../wire/data-url.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { type Dict, given } from '../wire/json.ts';
 import { filename } from '../wire/openai-file.ts';
