@@ -4,8 +4,6 @@ import { join } from 'node:path';
 import { $ } from 'bun';
 import { subjects } from './bench/subjects.ts';
 
-const samples = 15;
-
 export async function build(entry: string) {
   const { outputs, metafile } = await Bun.build({
     entrypoints: [entry],
@@ -97,14 +95,9 @@ export async function baseCommit(folder = '.') {
   return found.exitCode === 0 ? base : undefined;
 }
 
-// The packages and the bench of a commit, and the path there of one bench
-// file. A base older than that file is timed through this tree's, against
-// its own packages.
-export async function baseSources(
-  commit: string,
-  folder: string,
-  bench: string,
-) {
+// The packages and the bench of a commit, each subject timed as that commit
+// wrote it.
+export async function baseSources(commit: string, folder: string) {
   const copied =
     await $`git archive ${commit} packages gates/bench | tar -x -C ${folder}`
       .nothrow()
@@ -114,44 +107,52 @@ export async function baseSources(
       `The base commit ${commit} has no packages and bench to time against: ${copied.stderr.toString().trim()}`,
     );
   }
-  const file = join(folder, bench);
-  if (!(await Bun.file(file).exists())) await Bun.write(file, Bun.file(bench));
-  return file;
 }
 
 async function subjectsOf(commit: string, folder: string) {
+  await baseSources(commit, folder);
   const loaded: typeof import('./bench/subjects.ts') = await import(
-    await baseSources(commit, folder, 'gates/bench/subjects.ts')
+    join(folder, 'gates/bench/subjects.ts')
   );
   return loaded.subjects;
 }
 
-// Each subject as a share of the same subject on the base commit: the median
-// over samples the two take in turn in one process, neither always first.
+// One subject as a share of the other: the median over rounds the two take
+// in turn in one process, neither always first. The rounds are short, so a
+// busy machine spoils a few of them and not the median.
+export async function share(
+  theirs: () => unknown,
+  ours: () => unknown,
+  timed: (subject: () => unknown) => number | Promise<number> = (subject) =>
+    nanosecondsPerCall(subject, 50),
+) {
+  const taken: number[] = [];
+  // The first rounds run code the engine has not compiled yet.
+  for (let round = -100; round < 1000; round++) {
+    const [first, second] = round % 2 === 0 ? [theirs, ours] : [ours, theirs];
+    const before = await timed(first);
+    const after = await timed(second);
+    if (round >= 0) {
+      taken.push(round % 2 === 0 ? after / before : before / after);
+    }
+  }
+  return median(taken);
+}
+
+// Each subject as a share of the same subject on the base commit.
 async function againstBase(): Promise<Record<string, number>> {
   const commit = await baseCommit();
   if (commit === undefined) return {};
   const folder = await mkdtemp(join(tmpdir(), 'motty-base-'));
   try {
     const base = await subjectsOf(commit, folder);
-    const shares = Object.keys(subjects).map((): number[] => []);
-    for (let round = 0; round <= samples; round++) {
-      for (const [index, [name, ours]] of Object.entries(subjects).entries()) {
-        const theirs = base[name];
-        if (theirs === undefined) {
-          throw new Error(`The base commit ${commit} has no subject ${name}`);
-        }
-        const [first, second] =
-          round % 2 === 0 ? [theirs, ours] : [ours, theirs];
-        const before = await nanosecondsPerCall(first);
-        const after = await nanosecondsPerCall(second);
-        const share = round % 2 === 0 ? after / before : before / after;
-        if (round > 0) shares[index]?.push(share);
-      }
-    }
     const timePerCall: Record<string, number> = {};
-    for (const [index, name] of Object.keys(subjects).entries()) {
-      timePerCall[name] = median(shares[index] ?? []);
+    for (const [name, ours] of Object.entries(subjects)) {
+      const theirs = base[name];
+      if (theirs === undefined) {
+        throw new Error(`The base commit ${commit} has no subject ${name}`);
+      }
+      timePerCall[name] = await share(theirs, ours);
     }
     return timePerCall;
   } finally {

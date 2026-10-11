@@ -280,6 +280,16 @@ Baselines are recorded at the first milestone; each gate fails a change, not a r
   it. Fifteen percent over fails. Cause: a ratio to a baseline recorded on another machine read
   a third to four fifths over with no change, so the gate allowed 75% and passed a real
   regression of 17%. Rejected: a baseline recorded on the CI runner, which still needs a quarter.
+  **The reading is the median over a thousand rounds of fifty calls.** Cause: over fifteen rounds
+  of five thousand calls, unchanged code read up to 1.21 with every core busy and once failed on
+  the runner at 1.153, and a core made 17% slower failed 31 times in 40 on a quiet machine and 15
+  in 40 on a busy one. Over the short rounds unchanged code read 0.96 to 1.06 in 120 readings,
+  quiet and with every core busy twice over, and the slowed core 1.13 to 1.22, failing 114 times
+  in 120. Rejected: measuring again when a reading is over and failing only if both are, under
+  which the slowed core failed 27 times in 40 quiet and 6 in 40 busy. Rejected: four times as
+  many long rounds, which took four times as long and still let the slowed core pass 19 times in
+  40 busy. Rejected: pairs of single calls, as serving is timed, where the same slowdown read 14%
+  on the shorter subject.
 - **Serving:** a served request on each of the three APIs, streamed, and one whole, each timed
   against the same path built from the base commit, in one process, the two taking turns. A
   quarter over fails, one limit for all: the same code against itself read 0.95 to 1.06, and a
