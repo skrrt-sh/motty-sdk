@@ -67,10 +67,17 @@ function mistakeIn(question: Question, answer: Fields): string | undefined {
       }
       break;
     }
-    case 'score':
-      if (typeof score !== 'number') return 'has no score';
+    case 'score': {
+      const levels = question.criteria;
+      if (typeof score !== 'number' || !Number.isFinite(score)) {
+        return 'has no score';
+      }
+      if (score < 0 || score > levels.length - 1) {
+        return 'has a score outside the levels of the question';
+      }
       if (
         !isFields(probabilities) ||
+        !levels.every((_, level) => isProbability(probabilities[level])) ||
         !Object.values(probabilities).every(isProbability)
       ) {
         return 'lacks a probability for each level';
@@ -79,13 +86,14 @@ function mistakeIn(question: Question, answer: Fields): string | undefined {
         return 'has no legend';
       }
       break;
+    }
     case 'noul':
       if (!isProbability(noul)) return 'has no probability';
       break;
     default:
       return question satisfies never;
   }
-  if (question.type !== 'noul' && typeof confidence !== 'number') {
+  if (question.type !== 'noul' && !Number.isFinite(confidence)) {
     return 'has no confidence';
   }
   const field = mistypedIn(question, answer);

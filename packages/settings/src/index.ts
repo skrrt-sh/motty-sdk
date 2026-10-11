@@ -46,13 +46,28 @@ function assertWhole<Given extends Groups>(
   }
 }
 
+// One value is read by every request that follows, so a write to it throws
+// in the motty that makes it. Only plain data is walked: nothing else can be
+// closed by freezing it.
+function frozen(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
+    return value;
+  }
+  const kind: unknown = Object.getPrototypeOf(value);
+  if (Array.isArray(value) || kind === Object.prototype || kind === null) {
+    Object.freeze(value);
+    for (const held of Object.values(value)) frozen(held);
+  }
+  return value;
+}
+
 // Loading awaits nothing, so a group is checked only by a schema that
-// validates at once.
+// validates at once. No prototype: a group of any name is a key of its own.
 function defaultsOf(groups: Groups): { [group: string]: unknown } {
-  const defaults: { [group: string]: unknown } = {};
+  const defaults: { [group: string]: unknown } = { __proto__: null };
   for (const [group, schema] of Object.entries(groups)) {
     const result = schema['~standard'].validate({});
-    if (result instanceof Promise) {
+    if ('then' in result) {
       throw new Error(
         `The settings group "${group}" validates asynchronously, so it cannot be checked at load`,
       );
@@ -62,9 +77,9 @@ function defaultsOf(groups: Groups): { [group: string]: unknown } {
         `The settings group "${group}" must accept {}, so that every setting has a default: ${said(result.issues)}`,
       );
     }
-    defaults[group] = result.value;
+    defaults[group] = frozen(result.value);
   }
-  return defaults;
+  return Object.freeze(defaults);
 }
 
 async function overridden(
@@ -72,7 +87,7 @@ async function overridden(
   defaults: { readonly [group: string]: unknown },
   overrides: NonNullable<ReturnType<typeof hosted>['settings']>,
 ): Promise<{ [group: string]: unknown }> {
-  const held = { ...defaults };
+  const held: { [group: string]: unknown } = { __proto__: null, ...defaults };
   for (const [group, schema] of Object.entries(groups)) {
     if (!Object.hasOwn(overrides, group)) continue;
     const result = await schema['~standard'].validate(overrides[group]);
@@ -81,9 +96,9 @@ async function overridden(
         `The host's settings for the group "${group}" are not valid: ${said(result.issues)}`,
       );
     }
-    held[group] = result.value;
+    held[group] = frozen(result.value);
   }
-  return held;
+  return Object.freeze(held);
 }
 
 // Every settings part grows from this one motty, so the core tells two
