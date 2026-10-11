@@ -2,3 +2,5 @@ telemetry = false
 
 [install]
 linker = "isolated"
+# Three days: a poisoned release is most often pulled within hours.
+minimumReleaseAge = 259200

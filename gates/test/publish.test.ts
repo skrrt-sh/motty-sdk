@@ -8,13 +8,17 @@ import { z } from 'zod';
 const packed: { name: string; files: string[]; manifest: string }[] = [];
 
 // One at a time: every pack writes the declarations of all the packages
-// to one folder before it copies its own.
+// to one folder before it copies its own. A release names the folder of the
+// tarballs it is about to publish, so that those very files are the ones checked.
 beforeAll(async () => {
-  const folder = await mkdtemp(join(tmpdir(), 'motty-publish-'));
-  for await (const manifest of new Glob('packages/*/package.json').scan()) {
-    await $`bun pm pack --destination ${folder} --quiet`
-      .cwd(dirname(manifest))
-      .quiet();
+  const { TARBALLS: given } = Bun.env;
+  const folder = given ?? (await mkdtemp(join(tmpdir(), 'motty-publish-')));
+  if (given === undefined) {
+    for await (const manifest of new Glob('packages/*/package.json').scan()) {
+      await $`bun pm pack --destination ${folder} --quiet`
+        .cwd(dirname(manifest))
+        .quiet();
+    }
   }
   const tarballs = await Array.fromAsync(new Glob('*.tgz').scan(folder));
   for (const tarball of tarballs.sort()) {
@@ -28,7 +32,7 @@ beforeAll(async () => {
       manifest,
     });
   }
-  await rm(folder, { recursive: true });
+  if (given === undefined) await rm(folder, { recursive: true });
 }, 60_000);
 
 test('all eight packages are packed', () => {
@@ -100,4 +104,25 @@ test('every package carries the same version', () => {
       ),
     ).size,
   ).toBe(1);
+});
+
+// The packer reads a sibling's version from the lockfile, so a lockfile left
+// behind by a version bump would publish packages that ask for the old ones.
+test('every package depends on the others at the version it carries', () => {
+  expect(
+    packed.flatMap(({ name, manifest }) => {
+      const { version, dependencies } = z
+        .object({
+          version: z.string(),
+          dependencies: z.record(z.string(), z.string()).default({}),
+        })
+        .parse(JSON.parse(manifest));
+      return Object.entries(dependencies)
+        .filter(
+          ([dependency, range]) =>
+            dependency.startsWith('@mottyjs/') && range !== version,
+        )
+        .map(([dependency, range]) => `${name}: ${dependency} ${range}`);
+    }),
+  ).toEqual([]);
 });

@@ -7,11 +7,18 @@ on:
   pull_request:
     branches:
       - main
+  # A release runs these same checks on its tag, and publishes what they packed.
+  workflow_call:
+
+permissions: {}
 
 jobs:
   ci:
     name: Lint, Type Check & Test
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     # The storage adapter is tested against a real server, or not at all.
     services:
@@ -27,13 +34,14 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # The time gate compares with the parent commit: the main branch's, on a pull request.
         with:
           fetch-depth: 2
+          persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
@@ -46,13 +54,29 @@ jobs:
       - name: Type check
         run: bun run typecheck
 
+      # Packed once: the tests check these tarballs, and a release publishes them.
+      - name: Pack the packages
+        run: |
+          for package in packages/*/; do
+            (cd "$package" && bun pm pack --destination "$RUNNER_TEMP/tarballs" --quiet)
+          done
+
       - name: Run tests
         run: bun test
         env:
           REDIS_URL: redis://127.0.0.1:6379
+          TARBALLS: ${{ runner.temp }}/tarballs
 
       - name: Install Chromium
         run: bunx playwright install --with-deps chromium
 
       - name: Run browser tests
         run: bun run test:browser
+
+      - name: Keep the tarballs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tarballs
+          path: ${{ runner.temp }}/tarballs/*.tgz
+          if-no-files-found: error
+          retention-days: 7
