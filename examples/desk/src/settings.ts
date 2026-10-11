@@ -18,7 +18,7 @@ export const tuning = settings({
     silentMs: positiveInteger.default(30_000),
   }),
   conversation: z.object({
-    rememberedSeconds: positiveInteger.default(3 * 24 * 60 * 60),
+    rememberedMs: positiveInteger.default(3 * 24 * 60 * 60 * 1000),
     keptMessages: positiveInteger.default(8),
   }),
 });

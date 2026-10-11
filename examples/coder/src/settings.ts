@@ -15,7 +15,7 @@ export const tuning = settings({
   tiers: z.object({
     quickQuestionChars: z.number().int().min(0).default(400),
     deepProbability: probability.default(0.35),
-    rememberedSeconds: positiveInteger.default(24 * 60 * 60),
+    rememberedMs: positiveInteger.default(24 * 60 * 60 * 1000),
   }),
   structured: z.object({
     smallProbability: probability.default(0.7),

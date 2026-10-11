@@ -21,13 +21,13 @@ export default serve(
       }),
       typesafe({ key: TYPESAFE_KEY }),
     ],
-    storage: redis({ url: REDIS_URL }),
-    auth: jwt({ jwks: JWKS_URL }),
+    storage: redis({ address: REDIS_URL }),
+    auth: jwt({ jwksAddress: JWKS_URL }),
     // The worst request triages, tries both strong models, reroutes, compacts and tries again
-    limits: { duration: 90_000, calls: 12, afterResponse: 10_000 },
+    limits: { durationMs: 90_000, calls: 12, afterResponseMs: 10_000 },
     settings: {
       triage: { abuseProbability: 0.9 },
-      conversation: { rememberedSeconds: 7 * 24 * 60 * 60 },
+      conversation: { rememberedMs: 7 * 24 * 60 * 60 * 1000 },
     },
     report: (record) => console.log(JSON.stringify(record)),
   }),
