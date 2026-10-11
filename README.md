@@ -87,6 +87,45 @@ test("a short question without tools goes to the quick tier", async () => {
 });
 ```
 
+## Speed
+
+The same calls are made through Motty and through four other SDKs: the Vercel AI SDK, Mastra,
+LangChain JS and TanStack AI. The upstream is a stub that answers inside the process, so a
+figure is what an SDK adds to a call, never a model's own latency. A gate runs the comparison
+on every change and fails when a rival does not take more than 1.1 times Motty's time, or when
+its program is not larger.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/benchmark-time-dark.svg">
+  <img alt="Time per call through Motty and four other SDKs, in five scenarios. The figures are in the table below." src=".github/assets/benchmark-time-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/benchmark-start-dark.svg">
+  <img alt="Cold start and minified program size of Motty and four other SDKs. The figures are in the table below." src=".github/assets/benchmark-start-light.svg">
+</picture>
+
+Each rival's cost as a multiple of Motty's, the median over the rounds. Above one, Motty is
+ahead:
+
+| | Motty | AI SDK | Mastra | LangChain | TanStack AI |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Text, 20 chunks | 38.6 µs | 1.42× | 6.67× | 0.53× | 3.03× |
+| Stream, 20 chunks | 40.4 µs | 8.60× | 11.63× | 2.91× | 3.11× |
+| Stream, 200 chunks | 259 µs | 9.26× | 7.83× | 3.79× | 3.71× |
+| Structured output stream, 20 chunks | 52.9 µs | 10.05× | 13.64× | 3.40× | 2.86× |
+| Served over HTTP, 200 chunks | 460 µs | 4.51× | 3.48× | 2.93× | 2.30× |
+| Cold start, import to first streamed answer | 21.5 ms | 1.94× | 8.56× | 3.09× | 2.33× |
+| Minified program size | 237 KB | 2.61× | 23.89× | 4.87× | 3.02× |
+
+- **Motty is behind in one place:** a non-streamed text call against LangChain. Motty always
+  reads a stream upstream, and the gate lists that entry as a known loss.
+- **Measured on 2026-10-11** on an Apple M4 Max with Bun 1.4.2, against `ai` 7.0.137,
+  `@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0: 15 rounds of
+  20,000 chunks after one discarded, the SDKs taking turns in one process.
+- **To measure it yourself:** `bun gates/bench/rivals/compare.ts` prints the same figures with
+  each call's 99th percentile.
+
 ## Packages
 
 | Package | Kind | Holds |
