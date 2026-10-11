@@ -16,6 +16,7 @@ import {
 } from '@mottyjs/core/host';
 import { fake, on } from '@mottyjs/test';
 import { chatCompletions, messages, responses, serve } from '../src/index.ts';
+import { refused } from '../src/reply.ts';
 import { parsed } from '../src/sse.ts';
 
 const gpt = model('openai/gpt');
@@ -999,3 +1000,23 @@ test('Chat Completions, streamed: the usage is sent only to a caller who asked f
     usage: { prompt_tokens: 12, completion_tokens: 5, total_tokens: 17 },
   });
 });
+
+test.each([
+  [2400, '3'],
+  [0, '0'],
+  [Number.NaN, null],
+  [Number.POSITIVE_INFINITY, null],
+  [-5000, null],
+])(
+  'a wait of %p ms is told in whole seconds, and one that is no time is not told',
+  (retryAfterMs, told) => {
+    const reply = refused(messages, {
+      code: 'rate_limited',
+      message: 'Limit reached',
+      retryAfterMs,
+    });
+
+    expect(reply.status).toBe(429);
+    expect(reply.headers.get('retry-after')).toBe(told);
+  },
+);

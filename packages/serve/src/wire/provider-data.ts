@@ -6,14 +6,14 @@ import { unsupported } from './refusals.ts';
 // A null, an empty list and an empty object say what leaving the field out
 // says, so none of them is worth failing a call of another family for.
 export function meant(fields: Dict): Dict {
-  const kept: Dict = {};
-  for (const [name, value] of Object.entries(fields)) {
-    const empty = Array.isArray(value)
-      ? value.length === 0
-      : isDict(value) && Object.keys(value).length === 0;
-    if (value !== null && !empty) kept[name] = value;
-  }
-  return kept;
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => {
+      const empty = Array.isArray(value)
+        ? value.length === 0
+        : isDict(value) && Object.keys(value).length === 0;
+      return value !== null && !empty;
+    }),
+  );
 }
 
 // One per wire API, not per provider: two APIs of one provider name the same

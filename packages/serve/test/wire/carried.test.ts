@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { InvalidRequest } from '@mottyjs/core';
 import { carrying } from '../../src/wire/carried.ts';
+import { dict, parsed } from '../../src/wire/json.ts';
 
 test('only the headers named are heard, in any letter case, and an empty one says nothing', () => {
   const { heard } = carrying((name) => name.endsWith('-beta'));
@@ -52,4 +53,22 @@ test('a header that is not text fails the call', () => {
       'anthropic-beta': ['effort-2025-11-24'],
     }),
   ).toThrow(new InvalidRequest('The header anthropic-beta must be text'));
+});
+
+test('a field named as the prototype stays the body`s own, and names no header', () => {
+  const { headers, rest } = carrying(
+    (name) => name === 'anthropic-beta',
+  ).parted(
+    dict(
+      parsed(
+        '{"__proto__":{"anthropic-beta":"planted","service_tier":"planted"},"container":"c_1"}',
+      ),
+    ),
+  );
+  const { service_tier: tier } = rest;
+
+  expect(headers).toEqual({});
+  expect(Object.keys(rest)).toEqual(['__proto__', 'container']);
+  expect(Object.getPrototypeOf(rest)).toBe(Object.prototype);
+  expect(tier).toBeUndefined();
 });

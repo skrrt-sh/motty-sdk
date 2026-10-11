@@ -1,21 +1,15 @@
 import { expect, test } from 'bun:test';
 import type { Json, Progress, StreamEvent } from '@mottyjs/core/host';
+import { chatCompletions } from '../../src/chat-completions/index.ts';
+import type { Decoded } from '../../src/codec.ts';
 import { messages } from '../../src/messages/index.ts';
-import { parsed } from '../../src/wire/json.ts';
+import { responses } from '../../src/responses/index.ts';
+import { dict, list, parsed, text } from '../../src/wire/json.ts';
 
-async function reply(wire: Json[], stream: boolean, thinking: Json) {
+async function answered(decoded: Decoded, wire: Json[], stream: boolean) {
   async function* upstream() {
     for (const event of wire) yield { data: JSON.stringify(event) };
   }
-  const decoded = messages.decode(
-    {
-      model: 'claude-opus-5-5',
-      max_tokens: 1024,
-      thinking,
-      messages: [{ role: 'user', content: 'Hi' }],
-    },
-    new Headers(),
-  );
   const events: (StreamEvent | Progress)[] = await Array.fromAsync(
     messages.events(upstream()),
   );
@@ -33,6 +27,62 @@ async function reply(wire: Json[], stream: boolean, thinking: Json) {
     event.type === 'finish' ? [event] : [],
   )[0] ?? { type: 'finish', reason: 'other' };
   return [decoded.collected(chunks, finish, 'req_1')];
+}
+
+function reply(wire: Json[], stream: boolean, thinking: Json) {
+  return answered(
+    messages.decode(
+      {
+        model: 'claude-opus-5-5',
+        max_tokens: 1024,
+        thinking,
+        messages: [{ role: 'user', content: 'Hi' }],
+      },
+      new Headers(),
+    ),
+    wire,
+    stream,
+  );
+}
+
+// As the upstream streams a call of a tool that takes nothing.
+function timeAsked(decoded: Decoded, stream: boolean) {
+  return answered(
+    decoded,
+    [
+      {
+        type: 'message_start',
+        message: {
+          id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+          model: 'claude-haiku-5-5',
+          usage: { input_tokens: 25, output_tokens: 1 },
+        },
+      },
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'tool_use',
+          id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+          name: 'get_time',
+          input: {},
+        },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '' },
+      },
+      { type: 'content_block_stop', index: 0 },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'tool_use', stop_sequence: null },
+        usage: { output_tokens: 12 },
+      },
+      { type: 'message_stop' },
+    ],
+    stream,
+  );
 }
 
 test('the codec serves the Messages path', () => {
@@ -526,3 +576,184 @@ test('what the adapter cuts is cut from a failed response and from a failure in 
     ),
   ).toMatchObject([{ type: 'error', error: cleaned }]);
 });
+
+test.each([false, true])(
+  'a call with no arguments reaches a Chat Completions caller as an empty object, which goes back upstream (stream %p)',
+  async (stream) => {
+    const sent = await timeAsked(
+      chatCompletions.decode(
+        {
+          model: 'coder',
+          stream,
+          messages: [{ role: 'user', content: 'What time is it?' }],
+        },
+        new Headers(),
+      ),
+      stream,
+    );
+    const written = sent
+      .flatMap((frame) => {
+        const { choices } = dict(frame);
+        const { message, delta } = dict(list(choices)[0]);
+        const { tool_calls: calls } = dict(stream ? delta : message);
+        return list(calls).map((call) => {
+          const { function: named } = dict(call);
+          const { arguments: said } = dict(named);
+          return text(said);
+        });
+      })
+      .join('');
+    expect(written).toBe('{}');
+
+    const { request } = chatCompletions.decode(
+      {
+        model: 'coder',
+        messages: [
+          { role: 'user', content: 'What time is it?' },
+          {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              {
+                id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+                type: 'function',
+                function: { name: 'get_time', arguments: written },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            tool_call_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+            content: '12:04',
+          },
+        ],
+      },
+      new Headers(),
+    );
+    const { messages: turns } = dict(
+      messages.encode('claude-haiku-5-5', request).body,
+    );
+    expect(list(turns)[1]).toEqual({
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+          name: 'get_time',
+          input: {},
+        },
+      ],
+    });
+  },
+);
+
+test.each([false, true])(
+  'a call with no arguments reaches a Responses caller as an empty object, which goes back upstream (stream %p)',
+  async (stream) => {
+    const sent = await timeAsked(
+      responses.decode(
+        { model: 'coder', stream, input: 'What time is it?' },
+        new Headers(),
+      ),
+      stream,
+    );
+    const { response, ...whole } = dict(sent.at(-1));
+    const { output } = dict(stream ? response : whole);
+    const [call] = list(output);
+    const { arguments: written } = dict(call);
+    expect(written).toBe('{}');
+    if (stream) {
+      expect(sent).toContainEqual(
+        expect.objectContaining({
+          type: 'response.function_call_arguments.done',
+          arguments: '{}',
+        }),
+      );
+    }
+
+    const { request } = responses.decode(
+      {
+        model: 'coder',
+        input: [
+          { role: 'user', content: 'What time is it?' },
+          call ?? null,
+          {
+            type: 'function_call_output',
+            call_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+            output: '12:04',
+          },
+        ],
+      },
+      new Headers(),
+    );
+    const { messages: turns } = dict(
+      messages.encode('claude-haiku-5-5', request).body,
+    );
+    expect(list(turns)[1]).toEqual({
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+          name: 'get_time',
+          input: {},
+        },
+      ],
+    });
+  },
+);
+
+test.each([
+  [
+    'Chat Completions',
+    chatCompletions,
+    {
+      messages: [
+        { role: 'user', content: 'What time is it?' },
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'get_time', arguments: '' },
+            },
+          ],
+        },
+        { role: 'tool', tool_call_id: 'call_1', content: '12:04' },
+      ],
+    },
+  ],
+  [
+    'Responses',
+    responses,
+    {
+      input: [
+        { role: 'user', content: 'What time is it?' },
+        {
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'get_time',
+          arguments: '',
+        },
+        { type: 'function_call_output', call_id: 'call_1', output: '12:04' },
+      ],
+    },
+  ],
+])(
+  'arguments a %s caller sends back empty are the input of a tool that takes none',
+  (_, codec, echoed) => {
+    const { request } = codec.decode(
+      { model: 'coder', ...echoed },
+      new Headers(),
+    );
+    const { messages: sent } = dict(
+      messages.encode('claude-haiku-5-5', request).body,
+    );
+    const { content } = dict(list(sent)[1]);
+    expect(content).toEqual([
+      { type: 'tool_use', id: 'call_1', name: 'get_time', input: {} },
+    ]);
+  },
+);

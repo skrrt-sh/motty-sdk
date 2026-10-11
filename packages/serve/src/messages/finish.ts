@@ -43,11 +43,12 @@ export function stopOf({ reason, rawReason }: Finish): string {
 // The counts and the ending both arrive in several events; a later null
 // says nothing new, so only a value replaces what is held.
 export function merged(held: Dict, more: Dict): Dict {
-  const all = { ...held };
-  for (const [name, value] of Object.entries(more)) {
-    if (value !== null) all[name] = value;
-  }
-  return all;
+  return {
+    ...held,
+    ...Object.fromEntries(
+      Object.entries(more).filter(([, value]) => value !== null),
+    ),
+  };
 }
 
 // This wire counts cached and cache-writing tokens beside the input, the

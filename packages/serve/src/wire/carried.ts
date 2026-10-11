@@ -1,3 +1,4 @@
+import type { Json } from '@mottyjs/core/host';
 import type { Dict } from './json.ts';
 import { invalid } from './refusals.ts';
 
@@ -9,29 +10,33 @@ import { invalid } from './refusals.ts';
 export function carrying(named: (name: string) => boolean) {
   // A header sent twice is read as one list.
   function heard(headers: Headers): Dict {
-    const said: Dict = {};
+    const said: [string, string][] = [];
     for (const [name, value] of headers) {
-      if (named(name) && value.trim() !== '') said[name] = value.trim();
+      if (named(name) && value.trim() !== '') said.push([name, value.trim()]);
     }
-    return said;
+    return Object.fromEntries(said);
   }
 
   function parted(fields: Dict): {
     headers: { [name: string]: string };
     rest: Dict;
   } {
-    const headers: { [name: string]: string } = {};
-    const rest: Dict = {};
+    const headers: [string, string][] = [];
+    const rest: [string, Json][] = [];
     for (const [written, value] of Object.entries(fields)) {
       // A header's name has no letter case, and a field's has.
       const name = written.toLowerCase();
-      if (!named(name)) rest[written] = value;
-      else if (typeof value === 'string') headers[name] = value;
+      if (!named(name)) rest.push([written, value]);
+      else if (typeof value === 'string') headers.push([name, value]);
       // Left out, the body's field would go upstream without what turns it
       // on, and the upstream's refusal would name the field alone.
       else invalid(`The header ${name} must be text`);
     }
-    return { headers, rest };
+    // Made from entries, a key named as the prototype is a key like any other.
+    return {
+      headers: Object.fromEntries(headers),
+      rest: Object.fromEntries(rest),
+    };
   }
 
   return { heard, parted };

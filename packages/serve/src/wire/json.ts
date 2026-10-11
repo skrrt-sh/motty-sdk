@@ -63,13 +63,14 @@ export function parsed(source: string): Json | undefined {
   }
 }
 
-// JSON has no undefined, so a field that was not given is left out.
+// JSON has no undefined, so a field that was not given is left out. Made
+// from entries, a key named as the prototype is a key like any other.
 export function given(fields: { [key: string]: Json | undefined }): Dict {
-  const out: Dict = {};
+  const said: [string, Json][] = [];
   for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined) out[key] = value;
+    if (value !== undefined) said.push([key, value]);
   }
-  return out;
+  return Object.fromEntries(said);
 }
 
 function isList(value: ReadonlyJson): value is readonly ReadonlyJson[] {
