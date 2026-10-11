@@ -376,21 +376,43 @@ test('with no limit from the host, an afterResponse hook that never returns is g
   }
 });
 
-test('a host limit replaces the thirty seconds', async () => {
-  const timers = spyOn(globalThis, 'setTimeout');
-  const over = Promise.withResolvers<RequestRecord>();
+test('a host limit replaces the thirty seconds: a hook that never returns is given up at the limit and not before', async () => {
+  jest.useFakeTimers();
+  const records: RequestRecord[] = [];
 
-  await told(
-    motty({ name: 'coder' })
-      .handle(() => answer('Hi'))
-      .afterResponse(() => {}),
-    stubHost({}, { limits: { afterResponseMs: 45_000 }, record: over.resolve }),
-  );
-  await over.promise;
-  const delays = timers.mock.calls.map(([, delay]) => delay);
-  timers.mockRestore();
+  try {
+    await told(
+      motty({ name: 'coder' })
+        .handle(() => answer('Hi'))
+        .afterResponse(() => new Promise(() => {})),
+      stubHost(
+        {},
+        {
+          limits: { afterResponseMs: 45_000 },
+          record: (record) => {
+            records.push(record);
+          },
+        },
+      ),
+    );
+    // Fake timers leave setImmediate real, so this lets what is due run.
+    await new Promise((resolve) => setImmediate(resolve));
+    jest.advanceTimersByTime(44_999);
+    await new Promise((resolve) => setImmediate(resolve));
+    const before = records.length;
+    jest.advanceTimersByTime(1);
+    jest.runOnlyPendingTimers();
+    await new Promise((resolve) => setImmediate(resolve));
 
-  expect(delays).toEqual([45_000]);
+    expect(before).toBe(0);
+    expect(
+      records.map(({ afterResponse }) =>
+        afterResponse.failed.map(({ error }) => error.code),
+      ),
+    ).toEqual([['timed_out']]);
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test('the time limit is dropped once the hooks are done, so nothing fires later', async () => {
