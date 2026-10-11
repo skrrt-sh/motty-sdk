@@ -1,4 +1,24 @@
-# Motty SDK
+<p align="center">
+  <img src=".github/assets/logo.webp" alt="Motty" width="240">
+</p>
+
+<h1 align="center">Motty SDK</h1>
+
+<p align="center"><strong>A model made of code, not weights</strong></p>
+
+<p align="center">
+  Agents call a motty like any other LLM. Inside, your TypeScript decides<br>
+  which real models answer, in what order, and what is remembered.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+  <a href="https://www.npmjs.com/package/@mottyjs/core"><img src="https://img.shields.io/npm/v/%40mottyjs%2Fcore?label=npm&color=cb3837" alt="@mottyjs/core on npm"></a>
+  <img src="https://img.shields.io/badge/runtime-Bun-f472b6" alt="Runtime: Bun">
+  <img src="https://img.shields.io/badge/TypeScript-strict-3178c6" alt="TypeScript: strict">
+</p>
+
+---
 
 A motty is a model made of code, not weights. An agent calls it like any other LLM, sending a
 chat request and getting an answer back. Inside, your TypeScript code decides which real models
