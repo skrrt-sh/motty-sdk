@@ -50,7 +50,9 @@ The decisions are in [ARCHITECTURE.md](ARCHITECTURE.md), with their causes. In s
   what names the host's account is cut from the message the caller and the motty are told.
 - **An adapter address that holds a name or a password fails when the adapter is made,** in words
   that do not hold it.
-- **Caller headers are not forwarded upstream.**
+- **Caller headers are not forwarded upstream,** but for an API's own that say what the body may
+  hold: every `anthropic-*` header but the version, to an upstream that speaks Anthropic
+  Messages. No credential is sent in one, and every other header stays with the host.
 - **A request's body is bounded in size and in the time it may take to arrive,** for a caller
   with a credential and for one with none, and what its headers alone settle is settled before
   it is read.

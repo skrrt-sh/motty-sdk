@@ -117,6 +117,7 @@ export function openrouter(
     // A file may be of any type or an address, sound of any format, a video
     // has a part of its own, and a tool may answer with any of them. A
     // picture a model made comes, and goes back, in a field of its own.
+    // The betas of a Claude model are named in a header of the router's.
     codec: chatCompletionsIn({
       name: 'openrouter',
       thought: 'reasoning',
@@ -130,6 +131,7 @@ export function openrouter(
       native: true,
       topK: true,
       breakpoints: 'cache_control',
+      carried: ['x-anthropic-beta'],
       failures,
       cuts: openrouterCuts,
     }),
