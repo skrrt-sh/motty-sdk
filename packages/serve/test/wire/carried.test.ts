@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { InvalidRequest } from '@mottyjs/core';
 import { carrying } from '../../src/wire/carried.ts';
 
 test('only the headers named are heard, in any letter case, and an empty one says nothing', () => {
@@ -37,10 +38,18 @@ test('fields are parted into the headers named and the body`s own', () => {
   });
 });
 
-test('a header that is not text is sent neither as a header nor in the body', () => {
+test('a header named in another letter case is still a header', () => {
   expect(
+    carrying((name) => name === 'anthropic-beta').parted({
+      'Anthropic-Beta': 'effort-2025-11-24',
+    }),
+  ).toEqual({ headers: { 'anthropic-beta': 'effort-2025-11-24' }, rest: {} });
+});
+
+test('a header that is not text fails the call', () => {
+  expect(() =>
     carrying((name) => name === 'anthropic-beta').parted({
       'anthropic-beta': ['effort-2025-11-24'],
     }),
-  ).toEqual({ headers: {}, rest: {} });
+  ).toThrow(new InvalidRequest('The header anthropic-beta must be text'));
 });

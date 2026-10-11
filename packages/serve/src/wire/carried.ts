@@ -1,4 +1,5 @@
 import type { Dict } from './json.ts';
+import { invalid } from './refusals.ts';
 
 // A header that says what the body may hold, as a beta does, is the
 // request's own as a body field is. It is kept among its family's fields
@@ -21,9 +22,14 @@ export function carrying(named: (name: string) => boolean) {
   } {
     const headers: { [name: string]: string } = {};
     const rest: Dict = {};
-    for (const [name, value] of Object.entries(fields)) {
-      if (!named(name)) rest[name] = value;
+    for (const [written, value] of Object.entries(fields)) {
+      // A header's name has no letter case, and a field's has.
+      const name = written.toLowerCase();
+      if (!named(name)) rest[written] = value;
       else if (typeof value === 'string') headers[name] = value;
+      // Left out, the body's field would go upstream without what turns it
+      // on, and the upstream's refusal would name the field alone.
+      else invalid(`The header ${name} must be text`);
     }
     return { headers, rest };
   }
