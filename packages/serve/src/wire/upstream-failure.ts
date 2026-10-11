@@ -97,7 +97,7 @@ export type FailureReader = (
   headers: Headers,
   error: Dict,
 ) =>
-  | ({ code: KnownCode } & Pick<ErrorFacts, 'retryable' | 'retryAfterMs'>)
+  | ({ code: KnownCode } & Pick<ErrorFacts, 'retryable' | 'retryAfter'>)
   | undefined;
 
 // What in a provider's failure names the host's account, and what stands in
@@ -289,7 +289,7 @@ export function upstreamFailure(
     headers?: Headers;
   },
   status?: number,
-  retryAfterMs?: number,
+  retryAfter?: number,
   byProvider?: FailureReader,
   cuts?: readonly Cut[],
 ): ErrorFacts {
@@ -319,7 +319,7 @@ export function upstreamFailure(
     (unnamed ? false : undefined);
   const lasting = code === 'quota_exceeded' || code === 'upstream_refused';
   const retryable = lasting && flag === true ? undefined : flag;
-  const wait = own?.retryAfterMs ?? retryAfterMs;
+  const wait = own?.retryAfter ?? retryAfter;
   // The host's key was turned down, which is not the caller's 401 to see.
   const refused = code === 'upstream_refused';
   const whole = joined(told.message, told.detail);
@@ -356,7 +356,7 @@ export function upstreamFailure(
           ? 'The upstream answered with an error'
           : `The upstream answered ${status}`)),
     ...(retryable === undefined ? {} : { retryable }),
-    ...(wait === undefined ? {} : { retryAfterMs: wait }),
+    ...(wait === undefined ? {} : { retryAfter: wait }),
     provider:
       refused || said !== whole ? kept(told.record, whole) : told.record,
     upstream: true,

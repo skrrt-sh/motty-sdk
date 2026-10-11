@@ -915,7 +915,7 @@ test('a combinator keeps the typed value of a Standard Schema', async () => {
 test('a call that ignores its signal holds no combinator once the request is stopped', async () => {
   for (const wrap of [
     (inner: Model) => timeout(inner, 1000),
-    (inner: Model) => timeout(inner, { stallMs: 1000 }),
+    (inner: Model) => timeout(inner, { stall: 1000 }),
     (inner: Model) => retry(inner, 2),
     (inner: Model) => fallback(inner, model('acme/next')),
     (inner: Model) => race(inner, inner),
@@ -1065,7 +1065,7 @@ test('a combinator stopped before it began asks no model and throws Aborted with
     (inner: Model) => race(inner, inner),
     (inner: Model) => retry(inner, 2),
     (inner: Model) => timeout(inner, 1000),
-    (inner: Model) => timeout(inner, { stallMs: 1000 }),
+    (inner: Model) => timeout(inner, { stall: 1000 }),
   ]) {
     const request = new AbortController();
     request.abort();
@@ -1318,7 +1318,7 @@ test('an answer through retry names the model that answered after its first fail
             status: 503,
             message: 'Try later',
             retryable: true,
-            retryAfterMs: 0,
+            retryAfter: 0,
           },
         };
         return;

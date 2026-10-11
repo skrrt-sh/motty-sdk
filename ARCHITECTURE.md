@@ -154,7 +154,7 @@ export default motty({ name: "coder" })
 - **A failure in after-response work reaches no boundary.** The caller already has the answer, so
   the failure goes in the record.
 - **Ending early.** A caller leaving or the host's time limit fires `signal`: `"aborted"`. Passing
-  `limits.calls` throws `LimitReached`. After-response work has `limits.afterResponseMs` for its
+  `limits.calls` throws `LimitReached`. After-response work has `limits.afterResponse` for its
   time, and its calls still count against `limits.calls`.
 - **After-response work is limited to thirty seconds unless the host sets another limit.**
   Rejected: no limit by default. One hook that never returned then meant no record was ever sent.
@@ -271,7 +271,7 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **A time limit belongs to a model call; how long a request may take is the host's.** `timeout`
   fails a call whose first chunk is late, with `TimedOut`. Without it, `fallback` waits forever on
   an upstream that hangs. A decision call past its adapter's limit throws `TimedOut` too.
-- **`timeout(model, { firstMs, stallMs })` also ends a stream that goes silent between chunks,** as
+- **`timeout(model, { first, stall })` also ends a stream that goes silent between chunks,** as
   an error in the stream. A `timeout` limits whatever it wraps, a `fallback` or a `retry` as a
   whole.
 - **`fallback` and `race` stop switching models at the answer's first chunk,** not at progress. An
@@ -612,7 +612,7 @@ How whatever runs a motty, `serve` or the Hub, calls it. Both sides are written 
   make the two disagree.
 - **The record also tells the host that the request is over.** A serverless host is stopped by its
   platform soon after the response ends, so it must ask the platform to wait until the record
-  arrives. Platforms limit that wait, so the host sets `limits.afterResponseMs` below the
+  arrives. Platforms limit that wait, so the host sets `limits.afterResponse` below the
   platform's limit.
 - **Running never throws.** A mistake in what the host supplied, such as a limit that is not a
   whole number, comes back as a stream with one error and a record, like any failed request. So a
@@ -669,10 +669,10 @@ core stays what every motty uses, and a plugin is proven possible by being writt
   no check: it throws `Unauthenticated`, 401, when the host knows no caller, else adds `caller`.
 - **`caller.id` is extracted and validated, never read raw.** The motty never sees the key or token.
 - **Without `auth()` a motty is open** to whoever reaches its host.
-- **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttlMs }`,
+- **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttl }`,
   `delete`, and `increment`. It adds a key prefix only: one call is one command, no cache, no
   batching.
-- **`increment(key, by, { ttlMs })` adds to a number in one step of the database and returns the
+- **`increment(key, by, { ttl })` adds to a number in one step of the database and returns the
   new value.** A key that is absent starts from zero, and the time to live is set when the key
   is made, not on each addition. A value that is no number fails the call. Cause: a counter kept
   with `get` and `set` lost additions whenever two requests of one caller ran at once, which is
@@ -826,7 +826,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   ],
   storage: redis({ address: REDIS_URL }),
   auth: jwt({ jwksAddress: JWKS_URL }),
-  limits: { durationMs: 120_000, calls: 10, afterResponseMs: 30_000 },
+  limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
   report: (record) => console.log(JSON.stringify(record)),
 }));
 ```
@@ -991,8 +991,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   Measured from a client that opens a new connection each time, Jev answers in 270 to 450 ms
   and a warm, local Laya in 10 to 250. A Laya checkpoint that is not preloaded took 14.6 s on
   its first call, which the limit ends as a timeout: the host preloads its checkpoints or
-  raises `timeoutMs`. Rejected: a longer default for a local server, which would hide a server
-  that is not ready behind a wait no route can afford. A `timeoutMs` that is no finite number
+  raises `timeout`. Rejected: a longer default for a local server, which would hide a server
+  that is not ready behind a wait no route can afford. A `timeout` that is no finite number
   of zero or more fails when the adapter is made.
 - **What a router's provider said is told after the router's own message.** A router may say only
   that its provider refused and put the provider's words beside that; the most specific message
@@ -1087,14 +1087,16 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **`limits` caps a request's duration, its model calls, its after-response work and its body.**
   The host enforces the duration by firing the stop signal; the bundle enforces the calls and
   the after-response work; the edge enforces the body, which no other host has.
-- **An option that has a unit carries it in its name, and each kind has one unit:** every time
-  is milliseconds and ends in `Ms`, every size is bytes and ends in `Bytes`, and a count has
-  neither. So the limits are `durationMs`, `afterResponseMs`, `bodyBytes` and `calls`, the
-  edge's times `keepAliveMs`, `drainMs` and `receiveMs`, and a stored value's time to live
-  `ttlMs`. Cause: three conventions stood at once, bare milliseconds in the limits and the
-  edge, `timeoutMs` in the adapters and seconds in `store`; and `key` meant an API key in every
-  model adapter and a public key in `jwt`, which is now `publicKey`. No earlier name is kept
-  beside the new one: one way to say each.
+- **Every time is milliseconds and every size is bytes, so no name carries a unit.** The limits
+  are `duration`, `afterResponse`, `body` and `calls`, the edge's times `keepAlive`, `drain` and
+  `receive`, a stored value's time to live `ttl`, a decision adapter's `timeout`, the `first`
+  and `stall` of `timeout`, and an error's `retryAfter`. Cause: the names had three conventions
+  at once, bare milliseconds in the limits and the edge, an `Ms` suffix in the adapters, the
+  errors and `timeout`, and seconds in `store`. Rejected: a suffix on every name, which says
+  the same thing in each of them once there is one unit.
+- **`key` is an API key in every adapter, and the public key `jwt` takes is `publicKey`.** Cause:
+  `key` meant an API key in every model adapter and a public key in `jwt`. No earlier name is
+  kept beside the new one: one way to say each.
 - **`settings` overrides the motty's defaults,** any subset, typed. Rejected: mapping environment
   variables onto settings by name: flat strings onto typed groups, and a second way to set a value.
 - **The overrides are typed by the motty they are given with:** any of the groups its settings
@@ -1123,7 +1125,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   watcher of the SDK's own, a copy of what the runtime has.
 - **A server passed to `fetch` means one thing:** this request is taken off its idle timeout,
   once its body has arrived whole. Until then the server's idle timeout stands.
-- **A body has a time to arrive in, the edge's own `receiveMs`, sixty seconds unless the host
+- **A body has a time to arrive in, the edge's own `receive`, sixty seconds unless the host
   says otherwise.** It is counted from the request's arrival to the body's last byte, under `serve`
   and under `mount` alike, and a body that is late is answered 408 and the connection closed.
   Cause: a socket that sent the headers of a chat request with a length of 1000, nine bytes
@@ -1136,7 +1138,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   does not have; starting the duration limit at arrival, since that limit is optional and is
   the time the motty may run, which a slow upload would then spend. A path that is not chat
   reads no body, so the server's own timeout is all that holds its socket.
-- **A body is at most `limits.bodyBytes`, 32 MB unless the host says otherwise.** A stated
+- **A body is at most `limits.body`, 32 MB unless the host says otherwise.** A stated
   length over the limit is refused before a byte is read; the bytes are counted as they are
   read as well, so a body with no stated length, or more of it than was stated, ends at the
   limit. The answer is a 413 in the API's own error shape, `request_too_large` on Messages,

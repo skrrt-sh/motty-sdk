@@ -8,7 +8,8 @@ export type ErrorFacts = {
   code: Code;
   status?: number;
   message: string;
-  retryAfterMs?: number;
+  // In milliseconds.
+  retryAfter?: number;
   retryable?: boolean;
   provider?: ProviderData;
   // The error came from outside the motty, so its message is not the motty's.
@@ -25,7 +26,8 @@ type RaiseOptions = {
   cause?: unknown;
   status?: number;
   retryable?: boolean;
-  retryAfterMs?: number;
+  // In milliseconds.
+  retryAfter?: number;
   provider?: ProviderData;
   upstream?: true;
   unexpected?: boolean;
@@ -49,7 +51,7 @@ export class MottyError extends Error {
   readonly code: string = 'internal';
   readonly status: number;
   readonly retryable: boolean;
-  declare readonly retryAfterMs?: number;
+  declare readonly retryAfter?: number;
   declare readonly provider?: ProviderData;
   declare readonly upstream?: true;
   declare readonly unexpected?: true;
@@ -59,8 +61,8 @@ export class MottyError extends Error {
     this.name = new.target.name || 'MottyError';
     this.status = options.status ?? 500;
     this.retryable = options.retryable ?? false;
-    if (options.retryAfterMs !== undefined) {
-      this.retryAfterMs = options.retryAfterMs;
+    if (options.retryAfter !== undefined) {
+      this.retryAfter = options.retryAfter;
     }
     if (options.provider !== undefined) this.provider = options.provider;
     if (options.upstream === true) this.upstream = true;
@@ -245,7 +247,7 @@ export function unexpected(thrown: unknown): ErrorFacts {
 function told(thrown: unknown): ErrorFacts {
   const raised = interrupted(thrown);
   if (raised === undefined) return sealed(quoted(thrown));
-  const { code, status, message, retryable, retryAfterMs, provider, upstream } =
+  const { code, status, message, retryable, retryAfter, provider, upstream } =
     raised;
   // The brand alone promises no field types, and JSON has no NaN or Infinity.
   return {
@@ -253,10 +255,10 @@ function told(thrown: unknown): ErrorFacts {
     ...(Number.isFinite(status) ? { status } : {}),
     message: typeof message === 'string' ? message : internal,
     ...(typeof retryable === 'boolean' ? { retryable } : {}),
-    ...(typeof retryAfterMs === 'number' &&
-    Number.isFinite(retryAfterMs) &&
-    retryAfterMs >= 0
-      ? { retryAfterMs }
+    ...(typeof retryAfter === 'number' &&
+    Number.isFinite(retryAfter) &&
+    retryAfter >= 0
+      ? { retryAfter }
       : {}),
     ...(provider === undefined ? {} : { provider }),
     ...(upstream === true ? { upstream } : {}),
@@ -277,20 +279,20 @@ export function toFacts(thrown: unknown): ErrorFacts {
 // thrown value that is no SDK error may hold anything, so only its code goes
 // out. The stack and the cause are the host's to read and never go out.
 export function disclosed(facts: ErrorFacts): ErrorFacts {
-  const { code, status, message, retryable, retryAfterMs, provider } = facts;
+  const { code, status, message, retryable, retryAfter, provider } = facts;
   const meant = facts.unexpected !== true;
   return {
     code,
     ...(status === undefined ? {} : { status }),
     message: meant ? message : internal,
     ...(retryable === undefined ? {} : { retryable }),
-    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    ...(retryAfter === undefined ? {} : { retryAfter }),
     ...(meant && provider !== undefined ? { provider } : {}),
   };
 }
 
 export function fromFacts(facts: ErrorFacts): MottyError {
-  const { status, retryable, retryAfterMs, provider, upstream, cause } = facts;
+  const { status, retryable, retryAfter, provider, upstream, cause } = facts;
   const { unexpected } = facts;
   // Facts that crossed a wire as JSON may hold a null or a wrong type.
   const code = typeof facts.code === 'string' ? facts.code : 'internal';
@@ -301,7 +303,7 @@ export function fromFacts(facts: ErrorFacts): MottyError {
   return new Raised(message, {
     ...(typeof status === 'number' ? { status } : {}),
     ...(typeof retryable === 'boolean' ? { retryable } : {}),
-    ...(typeof retryAfterMs === 'number' ? { retryAfterMs } : {}),
+    ...(typeof retryAfter === 'number' ? { retryAfter } : {}),
     ...(typeof provider === 'object' &&
     provider !== null &&
     !Array.isArray(provider)

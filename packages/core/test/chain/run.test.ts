@@ -2306,8 +2306,8 @@ test.each([
   ],
   [
     'an after-response limit below zero',
-    { limits: { afterResponseMs: -1 } },
-    'limits.afterResponseMs',
+    { limits: { afterResponse: -1 } },
+    'limits.afterResponse',
   ],
   ['no stop signal', { signal: JSON.parse('null') }, 'signal'],
 ])(

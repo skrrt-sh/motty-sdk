@@ -485,7 +485,7 @@ test("the call limit is the bundle's to enforce and is passed to it", async () =
   const reported = Promise.withResolvers<Report>();
   const over = serve(askingTwice, () => ({
     models: [fake(on(gpt, 'Use a mutex.'))],
-    limits: { calls: 1, durationMs: 60_000 },
+    limits: { calls: 1, duration: 60_000 },
     report: reported.resolve,
   }));
   const reply = await over.fetch(ask());
@@ -540,7 +540,7 @@ test('the limit on after-response work is passed to the bundle', async () => {
       .afterResponse(() => Bun.sleep(10_000))
       .afterResponse(() => {})
       .handle(() => answer('Use a mutex.')),
-    () => ({ limits: { afterResponseMs: 20 }, report: reported.resolve }),
+    () => ({ limits: { afterResponse: 20 }, report: reported.resolve }),
   );
 
   const reply = await served.fetch(ask());
@@ -587,13 +587,13 @@ test("the report is the record with the request's id and the overrides in effect
     calls: [
       {
         model: 'openai/gpt',
-        latencyMs: expect.any(Number),
-        firstEventMs: expect.any(Number),
+        latency: expect.any(Number),
+        firstEvent: expect.any(Number),
       },
     ],
     usage: {},
-    answerMs: expect.any(Number),
-    totalMs: expect.any(Number),
+    answer: expect.any(Number),
+    total: expect.any(Number),
     afterResponse: { failed: [], skipped: [], unreached: [] },
   });
   expect(await first.json()).toMatchObject({

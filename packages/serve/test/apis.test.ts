@@ -301,7 +301,7 @@ test.each([
           on(
             gpt,
             new RateLimited('Limit 90000 TPM reached, try again in 2.4s', {
-              retryAfterMs: 2400,
+              retryAfter: 2400,
               upstream: true,
             }),
           ),
@@ -1009,11 +1009,11 @@ test.each([
   [-5000, null],
 ])(
   'a wait of %p ms is told in whole seconds, and one that is no time is not told',
-  (retryAfterMs, told) => {
+  (retryAfter, told) => {
     const reply = refused(messages, {
       code: 'rate_limited',
       message: 'Limit reached',
-      retryAfterMs,
+      retryAfter,
     });
 
     expect(reply.status).toBe(429);

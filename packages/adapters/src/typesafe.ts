@@ -113,7 +113,8 @@ export function typesafe(options: {
   key?: string | undefined;
   address?: string;
   prefix?: string;
-  timeoutMs?: number;
+  // In milliseconds.
+  timeout?: number;
   headers?: { [name: string]: string };
   // Fields in the server's own names, sent with every request. Laya takes
   // controls that Jev refuses with a 400, so only a host that knows its
@@ -133,8 +134,8 @@ export function typesafe(options: {
   // A decision is one short answer, and a route waits for it before it does
   // anything else. Jev on a new connection takes about half a second, so
   // this lets a slow one through and is still a wait a route can afford.
-  const timeoutMs =
-    bound(`The ${name} adapter's timeoutMs`, options.timeoutMs) ?? 2000;
+  const timeout =
+    bound(`The ${name} adapter's timeout`, options.timeout) ?? 2000;
   const prefix = `${name}/`;
   // The host's headers add; the content type and the credential stay ours.
   const { headers, clean } = credentials(name, key, undefined, options.headers);
@@ -156,7 +157,7 @@ export function typesafe(options: {
           message: 'A decision takes a state and questions',
         });
       }
-      const limit = AbortSignal.timeout(timeoutMs);
+      const limit = AbortSignal.timeout(timeout);
       let response: Response;
       let body: string;
       try {
@@ -179,7 +180,7 @@ export function typesafe(options: {
             ? {
                 code: 'timed_out',
                 status: 504,
-                message: `The decision upstream gave no answer in ${timeoutMs} ms`,
+                message: `The decision upstream gave no answer in ${timeout} ms`,
                 retryable: true,
                 upstream: true,
               }

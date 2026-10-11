@@ -232,15 +232,12 @@ test("a body that is not this API's error is named by its status", () => {
 test('the wait an upstream asks for is read from its headers', () => {
   const limited = body('rate_limit_error', 'Slow down.');
   expect(
-    failure(429, new Headers({ 'retry-after': '12' }), limited).retryAfterMs,
+    failure(429, new Headers({ 'retry-after': '12' }), limited).retryAfter,
   ).toBe(12000);
   expect(
-    failure(429, new Headers({ 'retry-after-ms': '250' }), limited)
-      .retryAfterMs,
+    failure(429, new Headers({ 'retry-after-ms': '250' }), limited).retryAfter,
   ).toBe(250);
-  expect(failure(429, new Headers(), limited)).not.toHaveProperty(
-    'retryAfterMs',
-  );
+  expect(failure(429, new Headers(), limited)).not.toHaveProperty('retryAfter');
 });
 
 test('a failure told inside a stream is named by its type alone', () => {

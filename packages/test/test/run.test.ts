@@ -553,7 +553,7 @@ test('the duration limit stops the request as the host would', async () => {
     return answer('late reply');
   });
 
-  const asked = run(waiting, { text: 'hi' }, { limits: { durationMs: 5 } });
+  const asked = run(waiting, { text: 'hi' }, { limits: { duration: 5 } });
 
   await expect(asked).rejects.toBeInstanceOf(TimedOut);
 });
@@ -712,7 +712,7 @@ test('the answer names the model through a retry, a time limit and a race', asyn
     retry(small, 1).complete(prompt),
   );
   const limited = motty({ name: 'limited' }).handle(({ prompt }) =>
-    timeout(fallback(small, large), { firstMs: 1000, stallMs: 1000 }).complete(
+    timeout(fallback(small, large), { first: 1000, stall: 1000 }).complete(
       prompt,
     ),
   );
@@ -726,7 +726,7 @@ test('the answer names the model through a retry, a time limit and a race', asyn
     {
       models: [
         fake(
-          on(small, new Overloaded('busy', { retryAfterMs: 0 })),
+          on(small, new Overloaded('busy', { retryAfter: 0 })),
           on(small, 'second reply'),
         ),
       ],

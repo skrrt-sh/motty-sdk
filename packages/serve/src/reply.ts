@@ -27,7 +27,7 @@ export function refused(
   id?: string,
 ): Response {
   const { status, body } = codec.error(facts, id);
-  const { retryAfterMs: wait } = facts;
+  const { retryAfter: wait } = facts;
   return Response.json(body, {
     status,
     headers: {

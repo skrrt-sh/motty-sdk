@@ -65,9 +65,7 @@ test('increment is one command to the storage of the host, and gives back the to
 
   await ran(
     motty({ name: 'coder' }).handle(async () => {
-      totals.push(
-        await store.increment('spent:c1', 2.5, { ttlMs: 86_400_000 }),
-      );
+      totals.push(await store.increment('spent:c1', 2.5, { ttl: 86_400_000 }));
       return answer('Hi');
     }),
     {
@@ -82,7 +80,7 @@ test('increment is one command to the storage of the host, and gives back the to
   );
 
   expect(commands).toEqual([
-    ['increment', 'spent:c1', 2.5, { ttlMs: 86_400_000 }],
+    ['increment', 'spent:c1', 2.5, { ttl: 86_400_000 }],
   ]);
   expect(totals).toEqual([7.5]);
 });
@@ -191,7 +189,7 @@ test('get, set and delete are each one command to the storage of the host, with 
   await ran(
     motty({ name: 'coder' }).handle(async () => {
       read.push(await store.get('tier:c1'), await store.get('tier:c2'));
-      await store.set('tier:c2', 'quick', { ttlMs: 86_400_000 });
+      await store.set('tier:c2', 'quick', { ttl: 86_400_000 });
       await store.delete('tier:c1');
       return answer('Hi');
     }),
@@ -201,7 +199,7 @@ test('get, set and delete are each one command to the storage of the host, with 
   expect(commands).toEqual([
     ['get', 'tier:c1'],
     ['get', 'tier:c2'],
-    ['set', 'tier:c2', 'quick', { ttlMs: 86_400_000 }],
+    ['set', 'tier:c2', 'quick', { ttl: 86_400_000 }],
     ['delete', 'tier:c1'],
   ]);
   expect(read).toEqual(['deep', undefined]);
@@ -246,14 +244,14 @@ test('the store is read in a derive and written in after-response work', async (
     motty({ name: 'coder' })
       .derive(async () => ({ previous: await store.get<'deep'>('tier:c1') }))
       .handle(({ previous }) => answer(previous ?? 'none'))
-      .afterResponse(() => store.set('tier:c1', 'deep', { ttlMs: 60_000 })),
+      .afterResponse(() => store.set('tier:c1', 'deep', { ttl: 60_000 })),
     { storage },
   );
 
   expect(events[0]).toEqual({ type: 'text', text: 'deep' });
   expect(commands).toEqual([
     ['get', 'tier:c1'],
-    ['set', 'tier:c1', 'deep', { ttlMs: 60_000 }],
+    ['set', 'tier:c1', 'deep', { ttl: 60_000 }],
   ]);
 });
 
@@ -320,11 +318,11 @@ test('a value is typed by what the author says it is, and only JSON is stored', 
     // @ts-expect-error
     await store.set('tier:c1', new Date());
     // @ts-expect-error
-    await store.set('tier:c1', 'deep', { ttlMs: '1h' });
+    await store.set('tier:c1', 'deep', { ttl: '1h' });
     // @ts-expect-error
     await store.set('tier:c1', 'deep', { expires: 60 });
     const spent: number = await store.increment('spent:c1', 0.5, {
-      ttlMs: 60_000,
+      ttl: 60_000,
     });
     // @ts-expect-error
     await store.increment('spent:c1', '1');

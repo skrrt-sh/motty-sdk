@@ -610,7 +610,7 @@ test('an upstream failure is answered in the shape of this API', () => {
   );
   expect(facts).toMatchObject({
     code: 'quota_exceeded',
-    retryAfterMs: 2000,
+    retryAfter: 2000,
     provider: {
       'openai.responses': { status: 429, code: 'insufficient_quota' },
     },

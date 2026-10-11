@@ -35,7 +35,7 @@ export const cases = motty({ name: "cases" })
       await remember(
         request,
         { category, urgent, family: familyOf(answeredBy) },
-        settings.conversation.rememberedMs,
+        settings.conversation.remembered,
       );
     }
   });

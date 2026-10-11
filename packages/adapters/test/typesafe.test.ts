@@ -234,7 +234,7 @@ test.each([
       code === 'upstream_refused'
         ? "The upstream refused the host's credentials or account"
         : 'The upstream said why',
-    retryAfterMs: 2000,
+    retryAfter: 2000,
     provider: { typesafe: { status } },
     upstream: true,
     cause: '{"detail":"The upstream said why"}',
@@ -892,7 +892,7 @@ test('a wait the upstream gives in milliseconds is read before the one in second
     AbortSignal.timeout(5000),
   ).catch((raised: unknown) => raised);
 
-  expect(toFacts(thrown)).toMatchObject({ retryAfterMs: 250 });
+  expect(toFacts(thrown)).toMatchObject({ retryAfter: 250 });
 });
 
 test('an address that ends in a slash asks the same path', async () => {
@@ -929,7 +929,7 @@ test('past its time limit a call fails as timed out, and the upstream sees it', 
   // A limit that fires before the request reaches the server leaves it no
   // abort to see, so this one is long enough for a machine under load.
   const { decisions } = adapted([
-    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeoutMs: 500 }),
+    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeout: 500 }),
   ]);
 
   const thrown = await decisions(
@@ -945,18 +945,18 @@ test('past its time limit a call fails as timed out, and the upstream sees it', 
 
 test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
   'a time limit of %p fails when the adapter is made, in words that name the adapter and the option',
-  (timeoutMs) => {
-    expect(() => typesafe({ key: 'ts-host', timeoutMs })).toThrow(
-      /^The typesafe adapter's timeoutMs must be a finite number of zero or more$/,
+  (timeout) => {
+    expect(() => typesafe({ key: 'ts-host', timeout })).toThrow(
+      /^The typesafe adapter's timeout must be a finite number of zero or more$/,
     );
     expect(() =>
       typesafe({
         address: 'http://localhost:8000/v1',
         prefix: 'laya',
-        timeoutMs,
+        timeout,
       }),
     ).toThrow(
-      /^The laya adapter's timeoutMs must be a finite number of zero or more$/,
+      /^The laya adapter's timeout must be a finite number of zero or more$/,
     );
   },
 );
@@ -967,7 +967,7 @@ test('a time limit of zero is a time, and a call under it times out', async () =
     fetch: () => new Promise<Response>(() => {}),
   });
   const { decisions } = adapted([
-    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeoutMs: 0 }),
+    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeout: 0 }),
   ]);
 
   const thrown = await decisions(

@@ -297,14 +297,14 @@ test('the storage hosted gives passes each call on to the storage of the host', 
 
   const read = await enter(host, async () => {
     const { storage } = hosted();
-    await storage?.set('tier', 'deep', { ttlMs: 60_000 });
+    await storage?.set('tier', 'deep', { ttl: 60_000 });
     const kept = await storage?.get('tier');
     await storage?.set('gone', 'soon');
     await storage?.delete('gone');
     return kept;
   });
 
-  expect(read).toBe('["deep",{"ttlMs":60000}]');
+  expect(read).toBe('["deep",{"ttl":60000}]');
   expect([...stored.keys()]).toEqual(['tier']);
 });
 
@@ -326,11 +326,11 @@ test('the storage hosted gives passes an increment on to the storage of the host
   );
 
   const total = await enter(host, () =>
-    hosted().storage?.increment?.('spent', 2, { ttlMs: 60_000 }),
+    hosted().storage?.increment?.('spent', 2, { ttl: 60_000 }),
   );
 
   expect(total).toBe(7);
-  expect(added).toEqual([['spent', 2, { ttlMs: 60_000 }]]);
+  expect(added).toEqual([['spent', 2, { ttl: 60_000 }]]);
 });
 
 test('the storage hosted gives asks a storage that is an instance of a class to increment as its own method', async () => {
@@ -443,14 +443,14 @@ test('inside a request the state gives the host and its limits, and a signal the
   const stop = new AbortController();
   const host = stubHost(
     {},
-    { signal: stop.signal, limits: { calls: 3, afterResponseMs: 45_000 } },
+    { signal: stop.signal, limits: { calls: 3, afterResponse: 45_000 } },
   );
   const state = enter(host, () => current());
   const before = state.signal.aborted;
   stop.abort(new TimedOut('The host gave the request two minutes'));
 
   expect(state.host).toBe(host);
-  expect(state.limits).toEqual({ calls: 3, afterResponseMs: 45_000 });
+  expect(state.limits).toEqual({ calls: 3, afterResponse: 45_000 });
   expect([before, state.signal.aborted]).toEqual([false, true]);
   expect(state.signal.reason).toBe(stop.signal.reason);
 });
@@ -529,10 +529,10 @@ test('a counted call resolves with its result and is recorded with its name, its
       cached: 1,
       cacheWrite: 5,
       reasoning: 0,
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
-  expect(calls.made[0]?.latencyMs).toBeGreaterThanOrEqual(4);
+  expect(calls.made[0]?.latency).toBeGreaterThanOrEqual(4);
   expect(calls.total).toEqual({
     input: 3,
     output: 2,
@@ -562,7 +562,7 @@ test('a counted call with no way to read usage records no count and adds nothing
   });
 
   expect(calls.made).toStrictEqual([
-    { model: 'typesafe/jev', latencyMs: expect.any(Number) },
+    { model: 'typesafe/jev', latency: expect.any(Number) },
   ]);
   expect(calls.total).toStrictEqual({});
 });
@@ -582,7 +582,7 @@ test('a count the call did not report stays absent, and a reported zero is kept'
       model: 'acme/small',
       input: 3,
       reasoning: 0,
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
   expect(calls.total).toStrictEqual({ input: 3, reasoning: 0 });
@@ -604,12 +604,12 @@ test('a count a call reports that is not a whole number is dropped, and the tota
   });
 
   expect(calls.made).toStrictEqual([
-    { model: 'typesafe/jev', output: 2, latencyMs: expect.any(Number) },
+    { model: 'typesafe/jev', output: 2, latency: expect.any(Number) },
     {
       model: 'typesafe/jev',
       input: 4,
       output: 1,
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
   expect(calls.total).toStrictEqual({ input: 4, output: 3 });
@@ -660,7 +660,7 @@ test('the totals sum the cost each call reported, and hold none when no call rep
     model: 'acme/small',
     input: 3,
     cost: 0.25,
-    latencyMs: expect.any(Number),
+    latency: expect.any(Number),
   });
 });
 
@@ -684,14 +684,14 @@ test('a call that says its first event arrived and how it failed is recorded wit
     {
       model: 'acme/small',
       output: 2,
-      firstEventMs: expect.any(Number),
+      firstEvent: expect.any(Number),
       code: 'overloaded',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
-  expect(made[0]?.firstEventMs).toBeGreaterThanOrEqual(4);
-  expect(made[0]?.firstEventMs).toBeLessThan(9);
-  expect(made[0]?.latencyMs).toBeGreaterThanOrEqual(9);
+  expect(made[0]?.firstEvent).toBeGreaterThanOrEqual(4);
+  expect(made[0]?.firstEvent).toBeLessThan(9);
+  expect(made[0]?.latency).toBeGreaterThanOrEqual(9);
 });
 
 test('a call given up at the stop keeps the time to its first event', async () => {
@@ -710,10 +710,10 @@ test('a call given up at the stop keeps the time to its first event', async () =
   expect(made).toStrictEqual([
     {
       model: 'acme/small',
-      firstEventMs: expect.any(Number),
+      firstEvent: expect.any(Number),
       code: 'aborted',
       message: 'The work was stopped',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
 });
@@ -738,7 +738,7 @@ test('a counted call that rejects is counted with the code of its failure and re
       model: 'typesafe/jev',
       code: 'upstream_failed',
       message: 'The decision model is down',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
 });
@@ -756,7 +756,7 @@ test('a counted call that throws when asked is counted as an internal failure, w
       model: 'typesafe/jev',
       code: 'internal',
       message: 'Internal error',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
 });
@@ -816,7 +816,7 @@ test('nothing assigned through a widened view of calls changes the counts', () =
     const total: { input?: number } = calls.total;
 
     expect(() => {
-      view.made = [{ model: 'acme/free', latencyMs: 0 }];
+      view.made = [{ model: 'acme/free', latency: 0 }];
     }).toThrow(TypeError);
     expect(() => {
       view.total = { input: 1_000_000, output: 0 };
@@ -921,7 +921,7 @@ test('a counted call that never settles ends with the stop once the signal fires
       model: 'typesafe/jev',
       code: 'aborted',
       message: 'The work was stopped',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
 });
@@ -969,7 +969,7 @@ test('a counted call that follows the signal itself ends the way it says', async
 
   expect(reply).toEqual({ usage: { input: 40 } });
   expect(made).toStrictEqual([
-    { model: 'typesafe/jev', input: 40, latencyMs: expect.any(Number) },
+    { model: 'typesafe/jev', input: 40, latency: expect.any(Number) },
   ]);
 });
 
@@ -1027,10 +1027,10 @@ test.each([
   ['negative', -1],
 ])(
   'with an after-response limit that is %s the request is entered, and admitting it throws a plain error naming the limit',
-  (_name, afterResponseMs) => {
+  (_name, afterResponse) => {
     expect(() =>
-      enter(stubHost({}, { limits: { afterResponseMs } }), () => admitted()),
-    ).toThrow('limits.afterResponseMs must be a finite number of zero or more');
+      enter(stubHost({}, { limits: { afterResponse } }), () => admitted()),
+    ).toThrow('limits.afterResponse must be a finite number of zero or more');
   },
 );
 
@@ -1057,11 +1057,11 @@ test('a host that supplied no stop signal is entered with a signal of its own, a
 
 test('a host that supplied what it should is admitted', () => {
   expect(
-    enter(stubHost({}, { limits: { calls: 0, afterResponseMs: 0 } }), () => {
+    enter(stubHost({}, { limits: { calls: 0, afterResponse: 0 } }), () => {
       admitted();
       return current().limits;
     }),
-  ).toEqual({ calls: 0, afterResponseMs: 0 });
+  ).toEqual({ calls: 0, afterResponse: 0 });
 });
 
 test('limits given as null are no limits', () => {
@@ -1074,11 +1074,11 @@ test('limits given as null are no limits', () => {
 });
 
 test('a host that changes its limits after the request started does not change the request', async () => {
-  const limits = { calls: 1, afterResponseMs: 45_000 };
+  const limits = { calls: 1, afterResponse: 45_000 };
   await enter(stubHost({}, { limits }), async () => {
     limits.calls = Number.NaN;
-    limits.afterResponseMs = 0;
-    expect(current().limits).toEqual({ calls: 1, afterResponseMs: 45_000 });
+    limits.afterResponse = 0;
+    expect(current().limits).toEqual({ calls: 1, afterResponse: 45_000 });
     expect(current().limits).not.toBe(limits);
     await counted('acme/small', async () => 'Hi');
     await expect(
@@ -1164,12 +1164,12 @@ test('ending a phase cancels the calls still open and goes on only when each has
   expect(rejected[0]).toBeInstanceOf(Aborted);
   expect(rejected[1]).toEqual({ input: 7 });
   expect(calls.made).toEqual([
-    { model: 'acme/small', input: 7, latencyMs: expect.any(Number) },
+    { model: 'acme/small', input: 7, latency: expect.any(Number) },
     {
       model: 'acme/large',
       code: 'aborted',
       message: 'The work was stopped',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
   expect(calls.total).toEqual({ input: 7 });
@@ -1304,7 +1304,7 @@ test('usage added to a call that has closed replaces its entry and the total, an
 
   expect(outcome.before.made[1]).toEqual({
     model: 'acme/slow',
-    latencyMs: expect.any(Number),
+    latency: expect.any(Number),
     code: 'aborted',
   });
   expect(outcome.before.total).toEqual({ input: 1, output: 1 });
@@ -1313,7 +1313,7 @@ test('usage added to a call that has closed replaces its entry and the total, an
     model: 'acme/slow',
     input: 40,
     cost: 0.5,
-    latencyMs: expect.any(Number),
+    latency: expect.any(Number),
     code: 'aborted',
   });
   expect(outcome.total).toEqual({ input: 41, output: 1, cost: 0.5 });
@@ -1333,7 +1333,7 @@ test('usage added to a call that has not closed is not counted', () => {
   });
 
   expect(calls.made).toEqual([
-    { model: 'acme/small', latencyMs: expect.any(Number) },
+    { model: 'acme/small', latency: expect.any(Number) },
   ]);
   expect(calls.total).toEqual({});
 });

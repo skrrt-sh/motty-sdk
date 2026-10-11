@@ -29,7 +29,7 @@ async function get(key: string): Promise<Json | undefined> {
 async function increment(
   key: string,
   by = 1,
-  options?: { ttlMs?: number },
+  options?: { ttl?: number },
 ): Promise<number> {
   const supplied = storage().increment;
   if (supplied === undefined) {

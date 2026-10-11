@@ -4,13 +4,13 @@ import { parsed } from './json.ts';
 
 // The server counts whole milliseconds and refuses none. A time that is no
 // count is the caller's mistake, so it is named before any call.
-function milliseconds(ttlMs: number): number {
-  if (!(ttlMs >= 1) || !Number.isSafeInteger(ttlMs)) {
+function milliseconds(ttl: number): number {
+  if (!(ttl >= 1) || !Number.isSafeInteger(ttl)) {
     throw new Error(
-      `A time to live is a positive, whole number of milliseconds, and ${ttlMs} is not`,
+      `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
     );
   }
-  return ttlMs;
+  return ttl;
 }
 
 // Run by the server as one step, so no other command comes between the read
@@ -83,11 +83,11 @@ export function redis(options: { address: string | undefined }): Storage {
     },
     set: async (key, value, options) => {
       const text = JSON.stringify(value);
-      if (options?.ttlMs === undefined) {
+      if (options?.ttl === undefined) {
         await (await linked()).set(key, text);
         return;
       }
-      const ms = milliseconds(options.ttlMs);
+      const ms = milliseconds(options.ttl);
       await (await linked()).set(key, text, 'PX', ms);
     },
     delete: async (key) => {
@@ -98,7 +98,7 @@ export function redis(options: { address: string | undefined }): Storage {
         throw new Error(`An increment is a finite number, and ${by} is not`);
       }
       const ms =
-        options?.ttlMs === undefined ? '' : `${milliseconds(options.ttlMs)}`;
+        options?.ttl === undefined ? '' : `${milliseconds(options.ttl)}`;
       const text: unknown = await (await linked()).send('EVAL', [
         adding,
         '1',

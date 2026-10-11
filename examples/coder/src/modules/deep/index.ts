@@ -10,5 +10,5 @@ export const deep = motty({ name: "deep" })
     prompt.options = { ...prompt.options, reasoning: { effort: "high" } };
   })
   .handle(({ prompt, settings }) =>
-    fallback(timeout(opus, settings.deep.firstChunkMs), gpt).complete(prompt),
+    fallback(timeout(opus, settings.deep.firstChunk), gpt).complete(prompt),
   );

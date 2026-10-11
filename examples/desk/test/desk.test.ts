@@ -421,7 +421,7 @@ describe("resilience", () => {
   test("a rate-limited strong model is tried again, then the other provider answers", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { dispute: 1 }, urgency: 0 }),
-      on(sonnet, new RateLimited("slow down", { retryAfterMs: 1 })),
+      on(sonnet, new RateLimited("slow down", { retryAfter: 1 })),
       on(oss, "Clause 2 applies."),
     );
 
@@ -439,7 +439,7 @@ describe("resilience", () => {
   test("both strong models busy sends the case to the standard path", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { dispute: 1 }, urgency: 0 }),
-      on(sonnet, new RateLimited("slow down", { retryAfterMs: 1 })),
+      on(sonnet, new RateLimited("slow down", { retryAfter: 1 })),
       on(oss, new Overloaded("busy")),
       on(nano, "Clause 2 applies."),
     );
@@ -486,7 +486,7 @@ describe("time limits", () => {
     const { answer, calls } = await run(
       desk,
       { text: "How much is Plus?" },
-      { models: [models], settings: { models: { firstChunkMs: 20 } } },
+      { models: [models], settings: { models: { firstChunk: 20 } } },
     );
 
     expect(await answer.text()).toBe("Plus is 12 USD a month.");
@@ -510,7 +510,7 @@ describe("time limits", () => {
     const { path, answer } = await run(
       desk,
       { text: "You charged me twice and I want it back." },
-      { models: [models], settings: { models: { silentMs: 20 } } },
+      { models: [models], settings: { models: { silent: 20 } } },
     );
 
     expect(path).toEqual(["conversation", "escalated"]);
@@ -535,7 +535,7 @@ describe("time limits", () => {
     const { path, answer } = await run(
       desk,
       { text: "You charged me twice and I want it back." },
-      { models: [models], settings: { models: { silentMs: 20 } } },
+      { models: [models], settings: { models: { silent: 20 } } },
     );
 
     expect(path).toEqual(["conversation", "standard"]);
@@ -555,7 +555,7 @@ describe("time limits", () => {
     const asked = run(
       desk,
       { text: "You charged me twice and I want it back." },
-      { models: [models], settings: { models: { silentMs: 20 } } },
+      { models: [models], settings: { models: { silent: 20 } } },
     );
 
     await expect(asked).rejects.toBeInstanceOf(TimedOut);

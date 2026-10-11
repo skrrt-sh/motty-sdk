@@ -304,7 +304,7 @@ test('retry calls again at once on a retry-after of zero', async () => {
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 0,
+          retryAfter: 0,
         },
       },
     ],
@@ -332,7 +332,7 @@ test('a try that failed before a later one answered stays in the calls with its 
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 0,
+          retryAfter: 0,
         },
       },
     ],
@@ -359,15 +359,15 @@ test('a try that failed before a later one answered stays in the calls with its 
   expect(made).toStrictEqual([
     {
       model: 'acme/limited',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
       code: 'rate_limited',
       message: 'Slow down',
     },
     {
       model: 'acme/limited',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
     },
   ]);
 });
@@ -503,7 +503,7 @@ test('retry ends its wait with Aborted when the request is stopped, and calls no
             code: 'rate_limited',
             status: 429,
             message: 'Slow down',
-            retryAfterMs: 1500,
+            retryAfter: 1500,
           },
         },
       ],
@@ -604,7 +604,7 @@ test('retry waits the failure’s retry-after before it calls again', async () =
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 20,
+          retryAfter: 20,
         },
       },
     ],
@@ -669,7 +669,7 @@ test('retry gives up at once on a retry-after longer than its backoff cap, with 
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 30_001,
+          retryAfter: 30_001,
           provider: { plan: 'free' },
         },
       },
@@ -697,7 +697,7 @@ test('retry gives up at once on a retry-after longer than its backoff cap, with 
       message: 'Slow down',
       status: 429,
       retryable: true,
-      retryAfterMs: 30_001,
+      retryAfter: 30_001,
       provider: { plan: 'free' },
     });
     expect(await due(reply.text())).toBe('Hello');
@@ -710,14 +710,14 @@ test('retry gives up at once on a retry-after longer than its backoff cap, with 
 test('retry gives up at once on a retry-after of a day or of longer than any timer runs', async () => {
   jest.useFakeTimers();
 
-  for (const retryAfterMs of [86_400_000, 2 ** 40]) {
+  for (const retryAfter of [86_400_000, 2 ** 40]) {
     let tries = 0;
     const failed = await enter(stubHost(), () =>
       due(
         retry(
           callable(async () => {
             tries += 1;
-            throw new RateLimited('Slow down', { retryAfterMs });
+            throw new RateLimited('Slow down', { retryAfter });
           }),
           20,
         )
@@ -743,7 +743,7 @@ test('retry waits out a retry-after as long as its backoff cap', async () => {
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 30_000,
+          retryAfter: 30_000,
         },
       },
     ],
@@ -766,7 +766,7 @@ test('retry waits out a retry-after as long as its backoff cap', async () => {
 test('retry backs off as if unhinted when the retry-after is negative or not a finite number', async () => {
   jest.useFakeTimers();
 
-  for (const retryAfterMs of [
+  for (const retryAfter of [
     -1,
     Number.NaN,
     Number.POSITIVE_INFINITY,
@@ -777,7 +777,7 @@ test('retry backs off as if unhinted when the retry-after is negative or not a f
       const failed = retry(
         callable(async () => {
           tries += 1;
-          throw new RateLimited('Slow down', { retryAfterMs });
+          throw new RateLimited('Slow down', { retryAfter });
         }),
         1,
       )
@@ -818,7 +818,7 @@ test('retry never repeats Aborted or LimitReached, whatever their facts say abou
           status: 500,
           message: 'Enough',
           retryable: true,
-          retryAfterMs: 0,
+          retryAfter: 0,
         },
       },
     ],
@@ -858,7 +858,7 @@ test('retry does not repeat a thrown value that only looks retryable and is not 
         tries += 1;
         throw Object.assign(new TypeError('Not ours'), {
           retryable: true,
-          retryAfterMs: 0,
+          retryAfter: 0,
         });
       }),
       2,

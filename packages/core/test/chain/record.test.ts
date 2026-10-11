@@ -87,22 +87,22 @@ test('a completed request is recorded with its path, entries, calls, usage and t
     calls: [
       {
         model: 'acme/small',
-        latencyMs: expect.any(Number),
-        firstEventMs: expect.any(Number),
+        latency: expect.any(Number),
+        firstEvent: expect.any(Number),
         input: 3,
         output: 2,
       },
       {
         model: 'acme/large',
-        latencyMs: expect.any(Number),
-        firstEventMs: expect.any(Number),
+        latency: expect.any(Number),
+        firstEvent: expect.any(Number),
         input: 7,
         cached: 0,
       },
     ],
     usage: { input: 10, output: 2, cached: 0 },
-    answerMs: expect.any(Number),
-    totalMs: expect.any(Number),
+    answer: expect.any(Number),
+    total: expect.any(Number),
     afterResponse: { failed: [], skipped: [], unreached: [] },
   });
 });
@@ -191,12 +191,12 @@ test('the record holds the calls made in after-response work and the time it too
       }),
     stubHost({ 'acme/small': says('Hi', 4, 1) }, { record: over.resolve }),
   );
-  const { calls, usage, answerMs, totalMs } = await over.promise;
+  const { calls, usage, answer: answered, total } = await over.promise;
 
   expect(calls.map((call) => call.model)).toEqual(['acme/small', 'acme/small']);
   expect(usage).toStrictEqual({ input: 8, output: 2 });
-  expect(answerMs).toBeGreaterThan(0);
-  expect(totalMs - answerMs).toBeGreaterThan(8);
+  expect(answered).toBeGreaterThan(0);
+  expect(total - answered).toBeGreaterThan(8);
 });
 
 test('a failed request is recorded with the whole error as facts and the part that threw, and the caller is told it in the same words', async () => {
@@ -422,7 +422,7 @@ test('the record survives a JSON round trip', async () => {
       .afterResponse(() => {}),
     stubHost(
       { 'acme/small': says('Hi', 4, 1) },
-      { limits: { afterResponseMs: 1_000 }, record: over.resolve },
+      { limits: { afterResponse: 1_000 }, record: over.resolve },
     ),
   );
   const made = await over.promise;
@@ -525,15 +525,15 @@ test('a call still open when the answer has been sent is cancelled, and what it 
   expect(calls).toStrictEqual([
     {
       model: 'acme/small',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
       input: 3,
       output: 2,
     },
     {
       model: 'acme/large',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
       input: 40,
       output: 1,
       code: 'aborted',
@@ -571,8 +571,8 @@ test('a call still open on a host that never answers its stop is given up, recor
   expect(calls).toStrictEqual([
     {
       model: 'acme/large',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
       code: 'aborted',
       message: 'The call was given up',
     },
@@ -607,7 +607,7 @@ test('a call nobody waited for is cancelled when the answer has been sent, and r
   expect(calls).toStrictEqual([
     {
       model: 'acme/large',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
       code: 'aborted',
       message: 'The call was given up',
     },
@@ -674,15 +674,15 @@ test('a call a fallback moved past is recorded with the message of its failure b
   expect(calls).toStrictEqual([
     {
       model: 'acme/strict',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
       code: 'unsupported',
       message: 'This API takes no previous_response_id',
     },
     {
       model: 'acme/small',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
       input: 3,
       output: 2,
     },
@@ -702,7 +702,7 @@ test('a call that completed holds no code and no message', async () => {
 
   expect(
     (await over.promise).calls.map((call) => Object.keys(call).sort()),
-  ).toEqual([['firstEventMs', 'input', 'latencyMs', 'model', 'output']]);
+  ).toEqual([['firstEvent', 'input', 'latency', 'model', 'output']]);
 });
 
 test('the message of a failed call is still in the record after a structured clone', async () => {
@@ -722,8 +722,8 @@ test('the message of a failed call is still in the record after a structured clo
   expect(structuredClone(record).calls).toStrictEqual([
     {
       model: 'acme/gone',
-      latencyMs: expect.any(Number),
-      firstEventMs: expect.any(Number),
+      latency: expect.any(Number),
+      firstEvent: expect.any(Number),
       code: 'unknown_model',
       message: 'No model named acme/gone',
     },

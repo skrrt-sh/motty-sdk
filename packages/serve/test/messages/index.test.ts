@@ -525,7 +525,7 @@ test("a first-event failure is answered as this API's error body", () => {
     new Headers({ 'retry-after': '3' }),
     '{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
   );
-  expect(facts).toMatchObject({ code: 'overloaded', retryAfterMs: 3000 });
+  expect(facts).toMatchObject({ code: 'overloaded', retryAfter: 3000 });
   expect(facts).not.toHaveProperty('status');
   expect(messages.error(facts)).toEqual({
     status: 529,

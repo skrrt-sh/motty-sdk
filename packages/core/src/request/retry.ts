@@ -22,9 +22,9 @@ type Attempt =
   | { at: 'givenUp'; failure: unknown }
   | { at: 'stopped'; failure?: unknown };
 
-const backoffCapMs = 30_000;
+const backoffCap = 30_000;
 
-function backoffMs(failure: unknown, retried: number): number | undefined {
+function backoff(failure: unknown, retried: number): number | undefined {
   if (
     !(failure instanceof MottyError) ||
     failure instanceof Aborted ||
@@ -33,13 +33,13 @@ function backoffMs(failure: unknown, retried: number): number | undefined {
   ) {
     return undefined;
   }
-  const hint = failure.retryAfterMs;
+  const hint = failure.retryAfter;
   if (hint === undefined || !Number.isFinite(hint) || hint < 0) {
-    return Math.min(500 * 2 ** retried, backoffCapMs);
+    return Math.min(500 * 2 ** retried, backoffCap);
   }
   // An upstream that asks for longer than any backoff lasts is not waited
   // for, and not called sooner than it asked either.
-  return hint > backoffCapMs ? undefined : hint;
+  return hint > backoffCap ? undefined : hint;
 }
 
 async function paused(ms: number, left: Promise<unknown>): Promise<void> {
@@ -76,7 +76,7 @@ export function retry(model: Model, times: number): Model {
                   : { at: 'answered', events: streamOf(opened) };
             } catch (failure) {
               const ms: number | undefined =
-                retried < times ? backoffMs(failure, retried) : undefined;
+                retried < times ? backoff(failure, retried) : undefined;
               if (signal.aborted) attempt = { at: 'stopped', failure };
               else if (ms === undefined) attempt = { at: 'givenUp', failure };
               else attempt = { at: 'waiting', retried, ms, failure };

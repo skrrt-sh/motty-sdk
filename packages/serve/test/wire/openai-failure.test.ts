@@ -13,7 +13,7 @@ test('a failure is read with its message and the upstream`s own names', () => {
     code: 'rate_limited',
     message:
       'Rate limit reached for gpt-x in organization org-abc on tokens per min.',
-    retryAfterMs: 20_000,
+    retryAfter: 20_000,
     provider: {
       'openai.chat': {
         status: 429,
@@ -373,7 +373,7 @@ test('the upstream`s word on another try is read from its header', () => {
   ).toMatchObject({
     code: 'rate_limited',
     retryable: false,
-    retryAfterMs: 20_000,
+    retryAfter: 20_000,
   });
   expect(
     failure(

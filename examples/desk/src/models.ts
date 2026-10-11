@@ -30,7 +30,7 @@ function inOrder<Name extends string>(
 export function frontline(chosen: Tuning["models"], family?: string): Model {
   return fallback(
     ...inOrder(frontlines, chosen.frontline, family).map((model) =>
-      timeout(model, chosen.firstChunkMs),
+      timeout(model, chosen.firstChunk),
     ),
   );
 }
@@ -38,14 +38,14 @@ export function frontline(chosen: Tuning["models"], family?: string): Model {
 // A model that reasons is silent for long before its first chunk too, so one patience limits both
 export function senior(chosen: Tuning["models"], family?: string): Model {
   const patient = (model: Model) =>
-    timeout(model, { firstMs: chosen.silentMs, stallMs: chosen.silentMs });
+    timeout(model, { first: chosen.silent, stall: chosen.silent });
   const [first, ...others] = inOrder(seniors, chosen.senior, family);
   return fallback(retry(patient(first), 1), ...others.map(patient));
 }
 
 export function reader(chosen: Tuning["models"], family?: string): Model {
   return fallback(
-    ...inOrder(readers, chosen.reader, family).map((model) => timeout(model, chosen.firstChunkMs)),
+    ...inOrder(readers, chosen.reader, family).map((model) => timeout(model, chosen.firstChunk)),
   );
 }
 

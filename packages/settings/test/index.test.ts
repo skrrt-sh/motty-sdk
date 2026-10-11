@@ -164,7 +164,7 @@ test('an override for a group the motty does not define is not a setting and is 
         read.push(Object.keys(settings));
         return answer('Hi');
       }),
-    { settings: { deep: { firstChunkMs: 1 }, toString: {} } },
+    { settings: { deep: { firstChunk: 1 }, toString: {} } },
   );
 
   expect(record.outcome).toBe('completed');

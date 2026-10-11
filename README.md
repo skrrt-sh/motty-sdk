@@ -54,13 +54,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY }) => ({
     openai({ key: OPENAI_KEY }),
     anthropic({ key: ANTHROPIC_KEY }),
   ],
-  limits: { durationMs: 120_000, calls: 10, afterResponseMs: 30_000 },
+  limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
   report: (record) => console.log(JSON.stringify(record)),
 }));
 ```
 
-`bun run src/serve.ts` starts it. A client of any of the three APIs then points its base URL at
-the server and calls it as it would a model.
+`bun run src/serve.ts` starts it. Every time in the SDK is in milliseconds and every size in
+bytes. A client of any of the three APIs then points its base URL at the server and calls it as
+it would a model.
 
 A test scripts the models and runs the whole request without the wire:
 

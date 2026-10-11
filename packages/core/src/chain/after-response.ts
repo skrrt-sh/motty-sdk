@@ -16,7 +16,7 @@ export type Finished = {
   readonly answered: boolean;
 };
 
-const defaultLimitMs = 30_000;
+const defaultLimit = 30_000;
 
 export async function afterwards(
   finished: readonly Finished[],
@@ -26,12 +26,12 @@ export async function afterwards(
 ): Promise<void> {
   if (finished.length === 0) return;
   const { signal, stop } = beginAfterResponse();
-  const limitMs = limits.afterResponseMs ?? defaultLimitMs;
+  const limit = limits.afterResponse ?? defaultLimit;
   // A hook that blocked leaves the timer no turn to fire, so the clock is read.
-  const due = performance.now() + limitMs;
+  const due = performance.now() + limit;
   const timer = clock(
     () => stop(new TimedOut('After-response work passed its time limit')),
-    limitMs,
+    limit,
   );
   for (const { lifecycle, context, cut, answered } of finished) {
     // A lifecycle that gave no answer did not complete, whatever the caller got.

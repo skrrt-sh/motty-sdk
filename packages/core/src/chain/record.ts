@@ -72,8 +72,8 @@ export function recorded(trace: Trace | undefined, calls: Calls): void {
       ...call,
     })),
     usage: { ...calls.total },
-    answerMs: ms,
-    totalMs: performance.now() - trace.begun,
+    answer: ms,
+    total: performance.now() - trace.begun,
     afterResponse: trace.afterResponse,
   };
   try {

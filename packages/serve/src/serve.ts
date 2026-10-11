@@ -20,13 +20,9 @@ import { modelList, modelOf } from './models.ts';
 import { failed } from './reply.ts';
 import { formatOf, routed } from './routes.ts';
 
-// How long a stream may be silent, how long a shutdown waits for the requests
-// in flight, and how long a body has to arrive.
-export type Edge = {
-  keepAliveMs?: number;
-  drainMs?: number;
-  receiveMs?: number;
-};
+// All in milliseconds: how long a stream may be silent, how long a shutdown
+// waits for the requests in flight, and how long a body has to arrive.
+export type Edge = { keepAlive?: number; drain?: number; receive?: number };
 
 // A callback's result is not checked for names its type lacks, so a group
 // the motty does not declare is refused by name here. Overrides held as any
@@ -65,14 +61,14 @@ export function mount<
   const given = options(Bun.env);
   // Made first: it refuses a limit that is no number, the body's among them.
   const admit = hosting(motty, given);
-  const drainMs = bound('drainMs', edge.drainMs) ?? 25_000;
+  const drain = bound('drain', edge.drain) ?? 25_000;
   const serving = {
     admit,
     run,
-    keepAlive: bound('keepAliveMs', edge.keepAliveMs) ?? 15_000,
+    keepAlive: bound('keepAlive', edge.keepAlive) ?? 15_000,
     body: {
-      size: given.limits?.bodyBytes ?? 32 * 1024 * 1024,
-      time: bound('receiveMs', edge.receiveMs) ?? 60_000,
+      size: given.limits?.body ?? 32 * 1024 * 1024,
+      time: bound('receive', edge.receive) ?? 60_000,
     },
     begin,
   };
@@ -83,7 +79,7 @@ export function mount<
   // record says so, and is given a moment to hand that record over.
   async function close(): Promise<void> {
     closing = true;
-    if (!(await landed(drainMs))) {
+    if (!(await landed(drain))) {
       stopAll(shuttingDown());
       await landed(1_000);
     }

@@ -427,7 +427,7 @@ test('a terminal error raises the known class after the chunks before it', async
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 1500,
+          retryAfter: 1500,
           retryable: true,
           provider: { acme: { bucket: 'tokens' } },
         },
@@ -442,7 +442,7 @@ test('a terminal error raises the known class after the chunks before it', async
   await expect(reading).rejects.toBeInstanceOf(RateLimited);
   await expect(reading).rejects.toMatchObject({
     message: 'Slow down',
-    retryAfterMs: 1500,
+    retryAfter: 1500,
     retryable: true,
     provider: { acme: { bucket: 'tokens' } },
   });
@@ -538,7 +538,7 @@ test('a source that throws fails the answer with a MottyError holding the cause'
 });
 
 test('a source that throws a MottyError fails the answer with that error', async () => {
-  const raised = new RateLimited('Slow down', { retryAfterMs: 20 });
+  const raised = new RateLimited('Slow down', { retryAfter: 20 });
   async function* broken(): EventStream {
     yield { type: 'text', text: 'Partial' };
     throw raised;

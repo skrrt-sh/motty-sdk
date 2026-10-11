@@ -40,25 +40,27 @@ export type DecisionCall = (
   signal: AbortSignal,
 ) => Promise<Json>;
 
+// A time to live is a whole number of milliseconds.
 export type Storage = {
   get: (key: string) => Promise<Json | undefined>;
   set: (
     key: string,
     value: ReadonlyJson,
-    options?: { ttlMs?: number },
+    options?: { ttl?: number },
   ) => Promise<void>;
   delete: (key: string) => Promise<void>;
   // Absent on a host that cannot add in one step of its database.
   increment?: (
     key: string,
     by: number,
-    options?: { ttlMs?: number },
+    options?: { ttl?: number },
   ) => Promise<number>;
 };
 
 export type Caller = { id: string };
 
-export type Limits = { calls?: number; afterResponseMs?: number };
+// The time after the response is in milliseconds.
+export type Limits = { calls?: number; afterResponse?: number };
 
 // A bound that is no number would refuse nothing, with no word of it.
 export function bound(
@@ -86,6 +88,7 @@ export type Host = {
 };
 
 // A caller who left gets no terminal event, so why the request ended is here.
+// Every time in it is in milliseconds.
 export type RequestRecord = {
   outcome: 'completed' | 'aborted' | 'failed';
   error?: ErrorFacts;
@@ -94,16 +97,16 @@ export type RequestRecord = {
   part?: string;
   calls: (Usage & {
     model: string;
-    latencyMs: number;
-    firstEventMs?: number;
+    latency: number;
+    firstEvent?: number;
     code?: ErrorFacts['code'];
     // What the failure said, so one a fallback recovered from is still told.
     message?: string;
     warnings?: NonNullable<Finish['warnings']>;
   })[];
   usage: Usage;
-  answerMs: number;
-  totalMs: number;
+  answer: number;
+  total: number;
   afterResponse: {
     failed: { part: string; error: ErrorFacts }[];
     // The hooks the time limit left no time for.

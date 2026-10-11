@@ -30,7 +30,7 @@ export default serve(
     storage: redis({ address: REDIS_URL }),
     auth: jwt({ jwksAddress: JWKS_URL }),
     // Two rounds of three seats with their races and fallbacks, a verdict and a merge
-    limits: { durationMs: 180_000, calls: 24, afterResponseMs: 10_000 },
+    limits: { duration: 180_000, calls: 24, afterResponse: 10_000 },
     // Nothing returned for a model with no rate, so the cost its upstream reported stands
     price: (model, { input = 0, output = 0 }) => {
       const rate = usdPerMillionTokens.get(model);

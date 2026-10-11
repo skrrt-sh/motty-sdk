@@ -178,13 +178,13 @@ test('a decision call is counted like a model call, with the usage the API repor
       model: 'typesafe/jev',
       input: 41,
       output: 1,
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
     {
       model: 'typesafe/jev',
       input: 41,
       output: 1,
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
   expect(record.usage).toEqual({ input: 82, output: 2 });
@@ -309,7 +309,7 @@ test('a decision call follows the signal: it ends with Aborted when the host sto
       model: 'typesafe/jev',
       code: 'aborted',
       message: 'The work was stopped',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
 });
@@ -346,7 +346,7 @@ test('a call the host failed rejects with that error, and the record holds its c
       model: 'typesafe/jev',
       code: 'rate_limited',
       message: 'Slow down',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
 });
@@ -376,7 +376,7 @@ test('a host with no decision call fails only that call, with UnknownModel, and 
       code: 'unknown_model',
       message:
         'The host serves no decision model, so none is named typesafe/jev',
-      latencyMs: expect.any(Number),
+      latency: expect.any(Number),
     },
   ]);
 });

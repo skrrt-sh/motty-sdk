@@ -23,12 +23,12 @@ type Followed = AbortSignal & { [waiters]?: Waiters };
 const noReason = new DOMException(stopped, 'AbortError');
 
 // A timer given a longer delay than this fires after one millisecond.
-const timerMaxMs = 2 ** 31 - 1;
+const timerMax = 2 ** 31 - 1;
 
 export function clock(ring: () => void, ms?: number): Timer | undefined {
   return ms === undefined
     ? undefined
-    : setTimeout(ring, Math.min(ms, timerMaxMs));
+    : setTimeout(ring, Math.min(ms, timerMax));
 }
 
 // Not awaited: a stream that never answers its close must not hold whoever

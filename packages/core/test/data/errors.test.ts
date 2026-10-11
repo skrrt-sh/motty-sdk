@@ -105,13 +105,13 @@ test.each([
 );
 
 test('an error carries the retry hint it was given', () => {
-  expect(
-    new RateLimited('slow down', { retryAfterMs: 1500 }).retryAfterMs,
-  ).toBe(1500);
+  expect(new RateLimited('slow down', { retryAfter: 1500 }).retryAfter).toBe(
+    1500,
+  );
 });
 
 test('an error given no retry hint has none', () => {
-  expect('retryAfterMs' in new RateLimited('slow down')).toBe(false);
+  expect('retryAfter' in new RateLimited('slow down')).toBe(false);
 });
 
 test('a raised error overrides the defaults of its class', () => {
@@ -164,15 +164,13 @@ test('a known error gives its own facts', () => {
 });
 
 test('the facts of an error include its retry hint', () => {
-  expect(toFacts(new RateLimited('slow down', { retryAfterMs: 1500 }))).toEqual(
-    {
-      code: 'rate_limited',
-      status: 429,
-      message: 'slow down',
-      retryable: true,
-      retryAfterMs: 1500,
-    },
-  );
+  expect(toFacts(new RateLimited('slow down', { retryAfter: 1500 }))).toEqual({
+    code: 'rate_limited',
+    status: 429,
+    message: 'slow down',
+    retryable: true,
+    retryAfter: 1500,
+  });
 });
 
 test('the facts of an error include its provider data', () => {
@@ -238,7 +236,7 @@ test('a caller is told the own message of an error that is their mistake', () =>
     disclosed(
       toFacts(
         new RateLimited('Slow down, acme', {
-          retryAfterMs: 1500,
+          retryAfter: 1500,
           provider: { openai: { type: 'requests' } },
         }),
       ),
@@ -248,7 +246,7 @@ test('a caller is told the own message of an error that is their mistake', () =>
     status: 429,
     message: 'Slow down, acme',
     retryable: true,
-    retryAfterMs: 1500,
+    retryAfter: 1500,
     provider: { openai: { type: 'requests' } },
   });
 });
@@ -258,7 +256,7 @@ test('a caller is told the own message of a server failure an SDK error names', 
     disclosed(
       toFacts(
         new Overloaded('The index is rebuilding', {
-          retryAfterMs: 1500,
+          retryAfter: 1500,
           provider: { anthropic: { request_id: 'req_1' } },
         }),
       ),
@@ -268,7 +266,7 @@ test('a caller is told the own message of a server failure an SDK error names', 
     status: 503,
     message: 'The index is rebuilding',
     retryable: true,
-    retryAfterMs: 1500,
+    retryAfter: 1500,
     provider: { anthropic: { request_id: 'req_1' } },
   });
 });
@@ -592,8 +590,8 @@ test('facts with a retry hint raise an error carrying it', () => {
       code: 'rate_limited',
       status: 429,
       message: 'slow down',
-      retryAfterMs: 1500,
-    }).retryAfterMs,
+      retryAfter: 1500,
+    }).retryAfter,
   ).toBe(1500);
 });
 
@@ -608,14 +606,14 @@ test('facts with no status take the status of their class', () => {
 test('facts that crossed a wire as JSON nulls are read as absent', () => {
   const error = fromFacts(
     JSON.parse(
-      '{"code":"rate_limited","message":"no","status":null,"retryable":null,"retryAfterMs":null,"provider":null}',
+      '{"code":"rate_limited","message":"no","status":null,"retryable":null,"retryAfter":null,"provider":null}',
     ),
   );
   expect([
     error instanceof RateLimited,
     error.status,
     error.retryable,
-    'retryAfterMs' in error,
+    'retryAfter' in error,
     'provider' in error,
   ]).toEqual([true, 429, true, false, false]);
 });
@@ -625,7 +623,7 @@ test('facts of the wrong type are read as absent', () => {
     toFacts(
       fromFacts(
         JSON.parse(
-          '{"code":"rate_limited","message":"no","status":"429","retryable":"no","retryAfterMs":"1500","provider":7}',
+          '{"code":"rate_limited","message":"no","status":"429","retryable":"no","retryAfter":"1500","provider":7}',
         ),
       ),
     ),
@@ -666,7 +664,7 @@ test('an error survives the trip to facts and back', () => {
     toFacts(
       new Overloaded('busy', {
         status: 529,
-        retryAfterMs: 1500,
+        retryAfter: 1500,
         provider: { anthropic: { type: 'overloaded_error' } },
       }),
     ),
@@ -678,7 +676,7 @@ test('an error survives the trip to facts and back', () => {
       status: 529,
       message: 'busy',
       retryable: true,
-      retryAfterMs: 1500,
+      retryAfter: 1500,
       provider: { anthropic: { type: 'overloaded_error' } },
     },
   ]);
@@ -710,7 +708,7 @@ test.each([
     { status: 418 },
     { retryable: true },
     { retryable: false },
-    { retryAfterMs: 1500 },
+    { retryAfter: 1500 },
     { provider: { openai: { param: 'input' } } },
   ]) {
     const error = new Known('failed', options);
@@ -749,7 +747,7 @@ test.each([
       {},
       { status: 418 },
       { retryable: !retryable },
-      { retryAfterMs: 1500 },
+      { retryAfter: 1500 },
       { provider: { openai: { param: 'input' } } },
     ]) {
       expect(
@@ -883,7 +881,7 @@ test('a retry hint that is not finite or is negative is left out of the facts', 
   class Weird extends MottyError.define('weird', 400) {}
   expect(
     [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1].map(
-      (retryAfterMs) => toFacts(new Weird('w', { retryAfterMs })),
+      (retryAfter) => toFacts(new Weird('w', { retryAfter })),
     ),
   ).toStrictEqual([
     { code: 'weird', status: 400, message: 'w', retryable: false },
@@ -953,7 +951,7 @@ test('a branded value with a status or retry hint of the wrong type gives neithe
       status: '418',
       message: 'no',
       retryable: false,
-      retryAfterMs: '1500',
+      retryAfter: '1500',
     }),
   ).toStrictEqual({ code: 'teapot', message: 'no', retryable: false });
 });
@@ -962,7 +960,7 @@ test.each([
   [
     new RateLimited('slow down', {
       status: Number.NaN,
-      retryAfterMs: Number.POSITIVE_INFINITY,
+      retryAfter: Number.POSITIVE_INFINITY,
     }),
   ],
   [new RateLimited('slow down', { status: Number.NEGATIVE_INFINITY })],
@@ -973,7 +971,7 @@ test.each([
       code: 'teapot',
       status: Number.NaN,
       retryable: 'yes',
-      retryAfterMs: Number.POSITIVE_INFINITY,
+      retryAfter: Number.POSITIVE_INFINITY,
     },
   ],
 ])('the facts of %p are the same after a trip through JSON', (thrown) => {
@@ -999,8 +997,8 @@ test.each([
 });
 
 test('an error caught as unknown narrows to the class it is an instance of', () => {
-  const caught: unknown = new RateLimited('slow down', { retryAfterMs: 1500 });
-  expect(caught instanceof RateLimited ? caught.retryAfterMs : 0).toBe(1500);
+  const caught: unknown = new RateLimited('slow down', { retryAfter: 1500 });
+  expect(caught instanceof RateLimited ? caught.retryAfter : 0).toBe(1500);
 });
 
 test('an error from another copy gives its facts here', () => {
@@ -1088,7 +1086,7 @@ test.each([
         status,
         message: 'Expected temperature to be at most 2, received 9',
         retryable: false,
-        retryAfterMs: 1500,
+        retryAfter: 1500,
         provider: { openai: { param: 'temperature' } },
         upstream: true,
       }),
@@ -1097,7 +1095,7 @@ test.each([
       status,
       message: 'Expected temperature to be at most 2, received 9',
       retryable: false,
-      retryAfterMs: 1500,
+      retryAfter: 1500,
       provider: { openai: { param: 'temperature' } },
     });
   },

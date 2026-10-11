@@ -3,7 +3,7 @@ import { auth } from "@mottyjs/auth";
 import { store } from "@mottyjs/store";
 import { tuning } from "../settings";
 
-const KEPT_MS = 2 * 24 * 60 * 60 * 1000;
+const KEPT = 2 * 24 * 60 * 60 * 1000;
 
 // The day is part of the key, so a new day starts at nothing and no reset has to run
 const spendKey = (callerId: string) =>
@@ -23,5 +23,5 @@ export const dailyLimit = motty({ name: "daily-limit" })
     const { cost } = calls.total;
     if (!caller || !cost) return;
     // One step of the store: one caller's requests overlap, and each addition must be kept
-    await store.increment(spendKey(caller.id), cost, { ttlMs: KEPT_MS });
+    await store.increment(spendKey(caller.id), cost, { ttl: KEPT });
   });

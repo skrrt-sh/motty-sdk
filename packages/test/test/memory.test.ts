@@ -40,7 +40,7 @@ test('what was read back can be changed without changing what is stored', async 
 test('a value set with a time to live is gone after that many milliseconds', async () => {
   const storage = memory();
   setSystemTime(new Date('2026-01-01T00:00:00Z'));
-  await storage.set('tier:c1', 'deep', { ttlMs: 60_000 });
+  await storage.set('tier:c1', 'deep', { ttl: 60_000 });
 
   setSystemTime(new Date('2026-01-01T00:00:59Z'));
   const before = await storage.get('tier:c1');
@@ -54,11 +54,11 @@ test('a value set with a time to live is gone after that many milliseconds', asy
 
 test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
   'a time to live of %p is refused in the words a real store refuses it in',
-  async (ttlMs) => {
+  async (ttl) => {
     const storage = memory();
 
-    await expect(storage.set('tier:c1', 'deep', { ttlMs })).rejects.toThrow(
-      `A time to live is a positive, whole number of milliseconds, and ${ttlMs} is not`,
+    await expect(storage.set('tier:c1', 'deep', { ttl })).rejects.toThrow(
+      `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
     );
     expect(await storage.get('tier:c1')).toBeUndefined();
   },
@@ -67,7 +67,7 @@ test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
 test('a time to live shorter than a second is kept that long', async () => {
   const storage = memory();
   setSystemTime(new Date('2026-01-01T00:00:00Z'));
-  await storage.set('tier:c1', 'deep', { ttlMs: 500 });
+  await storage.set('tier:c1', 'deep', { ttl: 500 });
 
   const before = await storage.get('tier:c1');
   setSystemTime(new Date('2026-01-01T00:00:00.500Z'));
@@ -202,10 +202,10 @@ test('increments made at once are all kept', async () => {
 test('the time to live is set by the increment that made the key and left alone by the ones after', async () => {
   const storage = memory();
   setSystemTime(new Date('2026-01-01T00:00:00Z'));
-  await storage.increment?.('spent', 1, { ttlMs: 60_000 });
+  await storage.increment?.('spent', 1, { ttl: 60_000 });
 
   setSystemTime(new Date('2026-01-01T00:00:30Z'));
-  await storage.increment?.('spent', 1, { ttlMs: 60_000 });
+  await storage.increment?.('spent', 1, { ttl: 60_000 });
   setSystemTime(new Date('2026-01-01T00:00:59Z'));
   const before = await storage.get('spent');
   setSystemTime(new Date('2026-01-01T00:01:00Z'));
@@ -220,7 +220,7 @@ test('an increment with a time to live gives none to a key that was set without 
   const storage = memory();
   setSystemTime(new Date('2026-01-01T00:00:00Z'));
   await storage.set('spent', 4);
-  await storage.increment?.('spent', 1, { ttlMs: 60_000 });
+  await storage.increment?.('spent', 1, { ttl: 60_000 });
 
   setSystemTime(new Date('2026-01-01T01:00:00Z'));
   const held = await storage.get('spent');
@@ -232,7 +232,7 @@ test('an increment with a time to live gives none to a key that was set without 
 test('an increment keeps the time to live the key was set with', async () => {
   const storage = memory();
   setSystemTime(new Date('2026-01-01T00:00:00Z'));
-  await storage.set('spent', 4, { ttlMs: 60_000 });
+  await storage.set('spent', 4, { ttl: 60_000 });
   await storage.increment?.('spent', 1);
 
   setSystemTime(new Date('2026-01-01T00:01:00Z'));
@@ -245,10 +245,10 @@ test('an increment keeps the time to live the key was set with', async () => {
 test('an increment of a key whose time ran out starts from zero, with a time to live of its own', async () => {
   const storage = memory();
   setSystemTime(new Date('2026-01-01T00:00:00Z'));
-  await storage.set('spent', 4, { ttlMs: 60_000 });
+  await storage.set('spent', 4, { ttl: 60_000 });
 
   setSystemTime(new Date('2026-01-01T00:01:00Z'));
-  const total = await storage.increment?.('spent', 1, { ttlMs: 60_000 });
+  const total = await storage.increment?.('spent', 1, { ttl: 60_000 });
   setSystemTime(new Date('2026-01-01T00:01:59Z'));
   const before = await storage.get('spent');
   setSystemTime(new Date('2026-01-01T00:02:00Z'));
@@ -287,15 +287,15 @@ test.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
 
 test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
   'an increment with a time to live of %p is refused as a set with it is, whether or not the key is held',
-  async (ttlMs) => {
+  async (ttl) => {
     const storage = memory();
     await storage.set('held', 4);
 
-    await expect(storage.increment?.('spent', 1, { ttlMs })).rejects.toThrow(
-      `A time to live is a positive, whole number of milliseconds, and ${ttlMs} is not`,
+    await expect(storage.increment?.('spent', 1, { ttl })).rejects.toThrow(
+      `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
     );
-    await expect(storage.increment?.('held', 1, { ttlMs })).rejects.toThrow(
-      `A time to live is a positive, whole number of milliseconds, and ${ttlMs} is not`,
+    await expect(storage.increment?.('held', 1, { ttl })).rejects.toThrow(
+      `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
     );
     expect(await storage.get('spent')).toBeUndefined();
     expect(await storage.get('held')).toBe(4);
