@@ -93,7 +93,8 @@ The same calls are made through Motty and through four other SDKs: the Vercel AI
 LangChain JS and TanStack AI. The upstream is a stub that answers inside the process, so a
 figure is what an SDK adds to a call, never a model's own latency. A gate runs the comparison
 on every change and fails when a rival does not take more than 1.1 times Motty's time, or when
-its program is not larger.
+its program is not larger. One entry is listed as a known loss and is held to the opposite: it
+fails once Motty is ahead there, so the list cannot go stale.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/benchmark-time-dark.svg">
@@ -119,7 +120,7 @@ ahead:
 | Minified program size | 237 KB | 2.61× | 23.89× | 4.87× | 3.02× |
 
 - **Motty is behind in one place:** a non-streamed text call against LangChain. Motty always
-  reads a stream upstream, and the gate lists that entry as a known loss.
+  reads a stream upstream, and that is the entry the gate lists as a known loss.
 - **Measured on 2026-10-11** on an Apple M4 Max with Bun 1.4.2, against `ai` 7.0.137,
   `@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0: 15 rounds of
   20,000 chunks after one discarded, the SDKs taking turns in one process.
