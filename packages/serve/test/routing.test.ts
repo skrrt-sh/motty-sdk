@@ -246,11 +246,64 @@ test.each([
   ['POST', '/v1/chat'],
   ['POST', '/v1/embeddingsx'],
   ['POST', '/v2/chat/completions'],
-])('%s %s is an unknown path: a plain 404', async (method, path) => {
+  ['POST', '/chat/completions'],
+  ['POST', '/responses'],
+])(
+  '%s %s is an unknown path: a 404 an OpenAI client can read',
+  async (method, path) => {
+    const reply = await coderServed().fetch(
+      new Request(`http://motty.test${path}`, { method }),
+    );
+
+    expect(reply.status).toBe(404);
+    expect(await reply.json()).toEqual({
+      error: {
+        message: 'Nothing is served at this path: every endpoint is under /v1',
+        type: 'invalid_request_error',
+        param: null,
+        code: 'unsupported',
+      },
+    });
+  },
+);
+
+test('an unknown path asked with the version header of Anthropic is a 404 its client can read', async () => {
   const reply = await coderServed().fetch(
-    new Request(`http://motty.test${path}`, { method }),
+    new Request('http://motty.test/messages', {
+      method: 'POST',
+      headers: { 'anthropic-version': '2023-06-01' },
+    }),
   );
 
   expect(reply.status).toBe(404);
-  expect(await reply.text()).toBe('Not found');
+  expect(await reply.json()).toEqual({
+    type: 'error',
+    error: {
+      type: 'invalid_request_error',
+      message: 'Nothing is served at this path: every endpoint is under /v1',
+    },
+  });
 });
+
+test.each([
+  ['/v1/chat/completions', { messages: [{ role: 'user', content: 'Hi' }] }],
+  ['/v1/responses', { input: 'Hi' }],
+  [
+    '/v1/messages',
+    { max_tokens: 64, messages: [{ role: 'user', content: 'Hi' }] },
+  ],
+])(
+  'a body with no model is told the same on every API: %s',
+  async (path, body) => {
+    const reply = await coderServed().fetch(
+      new Request(`http://motty.test${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+
+    expect(reply.status).toBe(400);
+    expect(await reply.text()).toContain('"message":"The body needs a model"');
+  },
+);

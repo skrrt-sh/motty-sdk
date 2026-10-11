@@ -51,3 +51,7 @@ No cut can know these, so the SDK does not claim them:
   is the motty's to read, and that is how a token for a service the motty calls is sent.
 - The process itself. The SDK hands a motty no credential; what code can read of the process it
   runs in is the host's to control.
+- **A request's body is bounded in size and in the time it may take to arrive,** for a caller
+  with a credential and for one with none, and what its headers alone settle is settled before
+  it is read.
+- **The model list of a motty that asks for a caller is shown only to a caller the host knows.**

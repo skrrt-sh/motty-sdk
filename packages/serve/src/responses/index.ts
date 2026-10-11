@@ -18,6 +18,7 @@ export function responsesIn(
   return {
     paths: ['/v1/responses'],
     credentials: ['authorization', 'api-key'],
+    requestId: 'x-request-id',
     decode,
     error,
     encode: (model, prompt, defaults, takes) =>

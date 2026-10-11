@@ -45,7 +45,7 @@ export function decode(body: Json, headers: Headers): Decoded {
   }
   if (!isDict(body)) invalid('The request body must be a JSON object');
   const { model, messages, system, stream, tools, ...settings } = body;
-  if (typeof model !== 'string') invalid('model must be a string');
+  if (typeof model !== 'string') invalid('The body needs a model');
   if (!Array.isArray(messages) || messages.length === 0) {
     invalid('messages must be a list with at least one message');
   }

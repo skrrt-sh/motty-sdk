@@ -652,3 +652,201 @@ test('a request refused before the motty ran makes no report', async () => {
 
   expect(reports).toMatchObject([{ outcome: 'completed' }]);
 });
+
+test.each([
+  ['/v1/models', {}, 401],
+  ['/v1/models/coder', {}, 401],
+  ['/v1/models', { authorization: 'Bearer sk-eve' }, 401],
+  ['/v1/models', { 'x-api-key': 'sk-ada' }, 401],
+  ['/v1/models', { authorization: 'Bearer sk-ada' }, 200],
+  ['/v1/models/coder', { 'api-key': 'sk-ada' }, 200],
+  [
+    '/v1/models',
+    { 'x-api-key': 'sk-ada', 'anthropic-version': '2023-06-01' },
+    200,
+  ],
+])(
+  'the model list of a motty that asks for a caller is shown only to one the adapter knows by the headers of the API: %s %o',
+  async (path, headers, status) => {
+    const served = serve(whoAsked, () => ({ auth: keys }));
+
+    const reply = await served.fetch(
+      new Request(`http://motty.test${path}`, { headers }),
+    );
+
+    expect(reply.status).toBe(status);
+    if (status === 401) {
+      expect(await reply.json()).toEqual({
+        error: {
+          message: 'This motty needs a caller, and the host knows none',
+          type: 'authentication_error',
+          param: null,
+          code: 'invalid_api_key',
+        },
+      });
+    }
+  },
+);
+
+test('the model list of a motty that asks for no caller is shown to anyone, and no caller is looked up', async () => {
+  let verified = 0;
+  const served = serve(
+    motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
+    () => ({
+      auth: {
+        verify: () => {
+          verified += 1;
+          return undefined;
+        },
+      },
+    }),
+  );
+
+  const reply = await served.fetch(
+    new Request('http://motty.test/v1/models', {
+      headers: { authorization: 'Bearer sk-eve' },
+    }),
+  );
+
+  expect(reply.status).toBe(200);
+  expect(verified).toBe(0);
+});
+
+test('the model list asks a host that gives its models per request for none', async () => {
+  let models = 0;
+  const served = serve(whoAsked, () => ({
+    auth: keys,
+    models: () => {
+      models += 1;
+      return [];
+    },
+  }));
+
+  const reply = await served.fetch(
+    new Request('http://motty.test/v1/models', {
+      headers: { authorization: 'Bearer sk-ada' },
+    }),
+  );
+
+  expect(reply.status).toBe(200);
+  expect(models).toBe(0);
+});
+
+test.each([
+  ['/v1/chat/completions', 'x-request-id', { messages: [] }],
+  ['/v1/responses', 'x-request-id', { input: 'Why does this deadlock?' }],
+  [
+    '/v1/messages',
+    'request-id',
+    {
+      max_tokens: 64,
+      messages: [{ role: 'user', content: 'Why does this deadlock?' }],
+    },
+  ],
+])(
+  'a reply that failed, one that succeeded and a stream all carry the id of their report in the header the API reads: %s',
+  async (path, header, body) => {
+    const reports: Report[] = [];
+    const served = serve(
+      motty({ name: 'coder' }).handle(({ request }) => {
+        if (request.headers.has('x-fail')) throw new Error('The index is gone');
+        return answer('Use a mutex.');
+      }),
+      () => ({ report: (report) => reports.push(report) }),
+    );
+
+    const replies = await Promise.all(
+      [
+        { headers: { 'x-fail': 'yes' }, stream: false },
+        { headers: {}, stream: false },
+        { headers: {}, stream: true },
+      ].map(async ({ headers, stream }) => {
+        const reply = await served.fetch(
+          new Request(`http://motty.test${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', ...headers },
+            body: JSON.stringify({ model: 'coder', stream, ...body }),
+          }),
+        );
+        return { reply, text: await reply.text() };
+      }),
+    );
+    await served.close();
+
+    expect(replies.map(({ reply }) => reply.status)).toEqual([500, 200, 200]);
+    expect(reports).toHaveLength(3);
+    expect(
+      replies.map(({ reply }) => reply.headers.get(header)).sort(),
+    ).toEqual(reports.map(({ id }) => id).sort());
+    const failure = reports.find(({ outcome }) => outcome === 'failed');
+    expect(replies[0]?.reply.headers.get(header)).toBe(failure?.id ?? '');
+    if (header === 'request-id') {
+      expect(JSON.parse(replies[0]?.text ?? '')).toEqual({
+        type: 'error',
+        error: { type: 'api_error', message: 'Internal error' },
+        request_id: failure?.id,
+      });
+    }
+  },
+);
+
+test('a request refused before it was let in has no record and carries no id', async () => {
+  const served = serve(whoAsked, () => ({ auth: keys }));
+
+  const reply = await served.fetch(
+    new Request('http://motty.test/v1/chat/completions', {
+      method: 'POST',
+      body: 'not json',
+    }),
+  );
+
+  expect(reply.status).toBe(400);
+  expect(reply.headers.has('x-request-id')).toBe(false);
+});
+
+test.each([
+  ['/v1/chat/completions', 'x-request-id', { messages: [] }],
+  ['/v1/responses', 'x-request-id', { input: 'Why does this deadlock?' }],
+  [
+    '/v1/messages',
+    'request-id',
+    {
+      max_tokens: 64,
+      messages: [{ role: 'user', content: 'Why does this deadlock?' }],
+    },
+  ],
+  ['/v1/models', 'x-request-id', undefined],
+])(
+  'a reply to a request the auth adapter threw on carries the id of the report that holds what was thrown: %s',
+  async (path, header, body) => {
+    const reports: Report[] = [];
+    const served = serve(whoAsked, () => ({
+      auth: {
+        verify: () => {
+          throw new Error('The key set is gone');
+        },
+      },
+      report: (report) => reports.push(report),
+    }));
+
+    const reply = await served.fetch(
+      new Request(`http://motty.test${path}`, {
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer sk-ada',
+        },
+        ...(body === undefined
+          ? {}
+          : {
+              method: 'POST',
+              body: JSON.stringify({ model: 'coder', ...body }),
+            }),
+      }),
+    );
+    await served.close();
+
+    expect(reply.status).toBe(500);
+    expect(reports).toHaveLength(1);
+    expect(reply.headers.get(header)).toBe(reports[0]?.id ?? '');
+  },
+);

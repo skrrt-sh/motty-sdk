@@ -1,4 +1,9 @@
-import { Overloaded, UnknownModel, Unsupported } from '@mottyjs/core';
+import {
+  Overloaded,
+  Unauthenticated,
+  UnknownModel,
+  Unsupported,
+} from '@mottyjs/core';
 import {
   type HostOptions,
   hosting,
@@ -14,9 +19,9 @@ import { modelList, modelOf } from './models.ts';
 import { failed } from './reply.ts';
 import { formatOf, routed } from './routes.ts';
 
-// Both in milliseconds: how long a stream may be silent, and how long a
-// shutdown waits for the requests in flight.
-export type Edge = { keepAlive?: number; drain?: number };
+// All in milliseconds: how long a stream may be silent, how long a shutdown
+// waits for the requests in flight, and how long a body has to arrive.
+export type Edge = { keepAlive?: number; drain?: number; receive?: number };
 
 // A callback's result is not checked for names its type lacks, so a group
 // the motty does not declare is refused by name here. Overrides held as any
@@ -42,6 +47,15 @@ function shuttingDown(): Overloaded {
   return new Overloaded('The server is shutting down');
 }
 
+// A bound that is no number would refuse nothing, with no word of it.
+function bound(name: string, given: number | undefined, unset: number): number {
+  const held = given ?? unset;
+  if (!(Number.isFinite(held) && held >= 0)) {
+    throw new Error(`${name} must be a finite number of zero or more`);
+  }
+  return held;
+}
+
 // The edge alone, for a host with a server of its own: nothing here touches
 // the process or a listener.
 export function mount<
@@ -52,12 +66,18 @@ export function mount<
   const { name } = description;
   const started = new Date();
   const { begin, landed, stopAll } = flights();
+  const given = options(Bun.env);
   const serving = {
-    admit: hosting(motty, options(Bun.env)),
+    admit: hosting(motty, given),
     run,
     keepAlive: edge.keepAlive ?? 15_000,
+    body: {
+      size: bound('limits.body', given.limits?.body, 32 * 1024 * 1024),
+      time: bound('receive', edge.receive, 60_000),
+    },
     begin,
   };
+  const guarded = description.plugins.includes('auth');
   let closing = false;
 
   // What is still in flight when the wait is over is stopped, so that its
@@ -68,6 +88,40 @@ export function mount<
       stopAll(shuttingDown());
       await landed(1_000);
     }
+  }
+
+  // A list has no route to choose by, so a motty that asks for a caller
+  // anywhere shows it only to one the host knows.
+  async function listed(
+    request: Request,
+    format: Codec,
+    model: string | undefined,
+  ): Promise<Response> {
+    if (guarded) {
+      let reported: string | undefined;
+      const caller = await serving
+        .admit({
+          headers: request.headers,
+          credentials: format.credentials,
+          reported: (id) => {
+            reported = id;
+          },
+        })
+        .catch((thrown: unknown) => failed(format, thrown, reported));
+      if (caller instanceof Response) return caller;
+      if (caller === undefined) {
+        throw new Unauthenticated(
+          'This motty needs a caller, and the host knows none',
+        );
+      }
+    }
+    const anthropic = format === messages;
+    if (model === undefined) {
+      return Response.json(modelList(name, started, anthropic));
+    }
+    return model === name
+      ? Response.json(modelOf(name, started, anthropic))
+      : failed(format, new UnknownModel(`No model named ${model}`));
   }
 
   function answered(
@@ -86,21 +140,21 @@ export function mount<
         }
         // The time limit is the host's own, and a long answer may be silent
         // for longer than the server lets a connection idle.
-        server?.timeout(request, 0);
-        return chat(serving, route.codec, request);
-      case 'models': {
-        const anthropic = format === messages;
-        if (route.model === undefined) {
-          return Response.json(modelList(name, started, anthropic));
-        }
-        return route.model === name
-          ? Response.json(modelOf(name, started, anthropic))
-          : failed(format, new UnknownModel(`No model named ${route.model}`));
-      }
+        return chat(serving, route.codec, request, () =>
+          server?.timeout(request, 0),
+        );
+      case 'models':
+        return listed(request, format, route.model);
       case 'unserved':
         return failed(format, new Unsupported(route.said, { status: 404 }));
       case 'nowhere':
-        return new Response('Not found', { status: 404 });
+        return failed(
+          format,
+          new Unsupported(
+            'Nothing is served at this path: every endpoint is under /v1',
+            { status: 404 },
+          ),
+        );
       default:
         return route satisfies never;
     }

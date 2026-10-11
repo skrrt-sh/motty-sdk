@@ -1,64 +1,60 @@
-import { InvalidRequest } from '@mottyjs/core';
-import type { Contract, hosting, Json } from '@mottyjs/core/host';
+import type { Contract, hosting } from '@mottyjs/core/host';
+import { type Bounds, bodyOf } from './body.ts';
 import type { Codec, LeftOut } from './codec.ts';
 import { failed, refused, streamed, watched, whole } from './reply.ts';
 import { credentials } from './routes.ts';
-import { deepest, nested, parsed } from './wire/json.ts';
 
 type Serving = {
   admit: ReturnType<typeof hosting>;
   run: Contract['run'];
   keepAlive: number;
+  body: Bounds;
   begin: (stop: (reason: unknown) => void) => () => void;
 };
 
-async function bodyOf(request: Request): Promise<Json> {
-  const type = request.headers.get('content-type');
-  if (type !== null && !/\bjson\b/i.test(type)) {
-    throw new InvalidRequest(
-      `The body must be JSON, sent as application/json and not as ${type}`,
-    );
-  }
-  const text = await request.text();
-  const body = parsed(text);
-  if (body === undefined) {
-    throw new InvalidRequest(
-      nested(text)
-        ? `The body is nested more than ${deepest} levels deep`
-        : 'The body is not valid JSON',
-    );
-  }
-  return body;
-}
-
 async function received(
-  { admit, begin }: Serving,
+  { admit, begin, body: bounds }: Serving,
   codec: Codec,
   request: Request,
+  arrived: () => void,
 ) {
-  const decoded = codec.decode(await bodyOf(request), request.headers);
+  const body = await bodyOf(codec, request, bounds);
+  if (body instanceof Response) return body;
+  arrived();
+  const decoded = codec.decode(body, request.headers);
   const leftOut = new Map<string, LeftOut>();
-  // A request refused here was never in flight. The record comes only once
-  // the motty has run, so the flight has begun by then.
-  const admitted = await admit({
-    request: decoded.request,
-    headers: request.headers,
-    credentials: codec.credentials,
-    removed: credentials,
-    signal: request.signal,
-    over: () => landed(),
-    leftOut: () => [...leftOut.values()],
-  });
-  const landed = begin(admitted.stop);
-  return { decoded, leftOut, ...admitted };
+  let reported: string | undefined;
+  try {
+    // A request refused here was never in flight. The record comes only once
+    // the motty has run, so the flight has begun by then.
+    const admitted = await admit({
+      request: decoded.request,
+      headers: request.headers,
+      credentials: codec.credentials,
+      removed: credentials,
+      signal: request.signal,
+      over: () => landed(),
+      leftOut: () => [...leftOut.values()],
+      reported: (id) => {
+        reported = id;
+      },
+    });
+    const landed = begin(admitted.stop);
+    return { decoded, leftOut, ...admitted };
+  } catch (thrown) {
+    return failed(codec, thrown, reported);
+  }
 }
 
 export async function chat(
   serving: Serving,
   codec: Codec,
   request: Request,
+  // Called once the body is here whole: the server's idle timeout holds a
+  // body that stalls, and must not hold an answer that takes long.
+  arrived: () => void,
 ): Promise<Response> {
-  const asked = await received(serving, codec, request).catch(
+  const asked = await received(serving, codec, request, arrived).catch(
     (thrown: unknown) => failed(codec, thrown),
   );
   if (asked instanceof Response) return asked;
@@ -81,9 +77,9 @@ export async function chat(
   clearTimeout(timer);
   if (early?.done === false && early.value.type === 'error') {
     await events.return?.();
-    return refused(codec, early.value.error);
+    return refused(codec, early.value.error, id);
   }
-  return streamed(decoded, first, events, id, {
+  return streamed(codec, decoded, first, events, id, {
     keepAlive: serving.keepAlive,
     waiting: early === undefined,
     left: () => {

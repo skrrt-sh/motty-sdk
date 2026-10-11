@@ -14,6 +14,7 @@ export function chatCompletionsIn(dialect: Dialect): Codec {
   return {
     paths: ['/v1/chat/completions'],
     credentials: ['authorization', 'api-key'],
+    requestId: 'x-request-id',
     decode,
     error,
     encode: (model, prompt, defaults, takes) =>

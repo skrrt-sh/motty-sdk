@@ -31,6 +31,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, REDIS_URL, JWKS_URL })
 }));
 ```
 
+A request body is at most `limits.body` bytes, 32 MB unless stated, and has the edge's `receive`
+milliseconds to arrive, 60 000 unless stated in the third argument beside `keepAlive` and `drain`:
+`serve(coder, options, { receive: 30_000 })`. Every reply to a request that was let in carries
+the id of its report, in `x-request-id` on the two OpenAI APIs and in `request-id` on Messages.
+
 The SDK as a whole is described in the
 [root README](https://github.com/skrrt-sh/motty-sdk#readme), and the reasons behind its design in
 [ARCHITECTURE.md](https://github.com/skrrt-sh/motty-sdk/blob/main/ARCHITECTURE.md).

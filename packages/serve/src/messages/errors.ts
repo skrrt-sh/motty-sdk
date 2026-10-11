@@ -67,8 +67,14 @@ function statusTo(facts: ErrorFacts): number {
   }
 }
 
-export function error(facts: ErrorFacts): ReturnType<Codec['error']> {
-  return { status: statusTo(facts), body: problem(facts) };
+export function error(
+  facts: ErrorFacts,
+  id?: string,
+): ReturnType<Codec['error']> {
+  return {
+    status: statusTo(facts),
+    body: { ...problem(facts), ...given({ request_id: id }) },
+  };
 }
 
 // A balance or a limit that is spent is told under three names, two of them

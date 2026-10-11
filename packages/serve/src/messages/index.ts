@@ -8,6 +8,7 @@ import { formless } from './formless.ts';
 export const messages: Codec = {
   paths: ['/v1/messages'],
   credentials: ['x-api-key', 'authorization'],
+  requestId: 'request-id',
   decode,
   error,
   encode,

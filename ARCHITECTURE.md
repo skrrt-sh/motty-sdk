@@ -980,6 +980,13 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   asks the auth adapter who the caller is, makes the stop signal from the caller's own signal and
   the duration limit, and adds the request id and the setting overrides to the report. `serve`
   keeps only the wire, and `run` only its test defaults and its result.
+- **Given a request's headers and no request, the same function says who the caller is and does
+  nothing else.** The credential is read and the auth adapter asked exactly as for a request,
+  and what the adapter throws is reported the same. Cause: the edge learned the caller of a
+  model list by letting in an empty chat request, so a host that gives its models per request
+  was asked for them, and a time limit was started, for a request that calls no model.
+  Rejected: the edge reading the credential itself, a second reading that would drift from the
+  first; a step of its own beside the function, the same.
 - **The wire API says which headers carry the credential; the auth adapter only verifies a
   token.** Each codec lists its credential headers in the order they are tried: `authorization`
   and `api-key`, the header Azure's clients send, for the two OpenAI APIs; `x-api-key` and
@@ -1016,8 +1023,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   and a total that is not finite is refused by both stores with the same message. Cause: the
   server adds in a wider float and prints a rounded decimal, so 0.1 + 0.2 read 0.3 on a real
   store and 0.30000000000000004 on the test store.
-- **`limits` caps a request's duration, its model calls and its after-response work.** The host
-  enforces the duration by firing the stop signal; the bundle enforces the other two.
+- **`limits` caps a request's duration, its model calls, its after-response work and its body.**
+  The host enforces the duration by firing the stop signal; the bundle enforces the calls and
+  the after-response work; the edge enforces the body, which no other host has.
 - **`settings` overrides the motty's defaults,** any subset, typed. Rejected: mapping environment
   variables onto settings by name: flat strings onto typed groups, and a second way to set a value.
 - **The overrides are typed by the motty they are given with:** any of the groups its settings
@@ -1038,7 +1046,65 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   handler and stops no listener. `serve` is for a serve file, whose default export Bun starts: it
   also drains on a stop signal, stops the listener and ends the process. Cause: with one function
   for both, a host that mounted two motties lost its own shutdown to ours.
-- **A server passed to `fetch` means one thing:** this request is taken off its idle timeout.
+- **A server passed to `fetch` means one thing:** this request is taken off its idle timeout,
+  once its body has arrived whole. Until then the server's idle timeout stands.
+- **A body has a time to arrive in, the edge's own `receive`, sixty seconds unless the host
+  says otherwise.** It is counted from the request's arrival to the body's last byte, under `serve`
+  and under `mount` alike, and a body that is late is answered 408 and the connection closed.
+  Cause: a socket that sent the headers of a chat request with a length of 1000, nine bytes
+  and then nothing was still open after 12 s on a server whose idle timeout was 2 s and whose
+  duration limit was 3 s, with no credential: the request had been taken off the idle timeout
+  before its body was read, and the duration limit starts only once a request is decoded. The
+  same socket on a path that reads no body was closed at 4 s. Sixty seconds is nginx's wait
+  for a body and Node's for the headers; Node gives the whole request 300 s. Rejected: the
+  idle timeout alone, which a byte sent now and then never trips and which a mounted edge
+  does not have; starting the duration limit at arrival, since that limit is optional and is
+  the time the motty may run, which a slow upload would then spend. A path that is not chat
+  reads no body, so the server's own timeout is all that holds its socket.
+- **A body is at most `limits.body` bytes, 32 MB unless the host says otherwise.** A stated
+  length over the limit is refused before a byte is read; the bytes are counted as they are
+  read as well, so a body with no stated length, or more of it than was stated, ends at the
+  limit. The answer is a 413 in the API's own error shape, `request_too_large` on Messages,
+  and the connection is closed. Cause: an anonymous 64 MB request to a motty that asks for a
+  caller was read and parsed whole, about 131 MB of resident memory, before its 401. The
+  default is from what the upstreams take: Anthropic refuses a Messages request over 32 MB,
+  OpenAI takes files of 50 MB together and states 512 MB for a request of images, and a
+  request holds its images and files as base64. Of the gateways, LiteLLM's limit is unset
+  unless the host sets one, Vercel's functions take 4.5 MB, and Bun's own server stops at
+  128 MB; no limit was found stated for Portkey or for Vercel's AI gateway. So the default is
+  the smallest limit an upstream served here has: what is over it one of the three refuses
+  anyway, and a host that sends more to another raises it. Rejected: a megabyte or a few, the
+  proxy's habit, which refuses one photograph; no default, which is the defect.
+- **`limits.body` or `receive` that is no finite number of zero or more fails when the host is
+  made,** in words that name the option. Cause: a body limit that was no number refused
+  nothing, with no word of it, and these two are what an anonymous request is bounded by.
+  Rejected: reading such a value as the default, which hides the host's mistake. The other
+  limits are not checked there: the bundle checks the two it enforces on each request, and
+  the duration and the edge's other two times are not checked at all.
+- **What the headers alone settle is settled before the body is read:** that the server is
+  shutting down, the content type, and the stated length. Whether a caller is needed is not
+  among them. A motty says it needs a caller with a part in its chain, which may stand on one
+  route only, and the route is chosen from the decoded request: so the edge cannot refuse an
+  anonymous request without it, and bounds what one can cost by the two limits above instead.
+  Proving the token first would refuse nobody either, since an unknown token is no caller and
+  only the motty says whether that matters. Rejected: refusing at the edge whenever the motty
+  has `auth()` somewhere, which closes a route the author left open.
+- **The model list is shown as a chat request would be let in.** Where the motty has `auth()`
+  anywhere in it, the list and each model in it are answered only to a caller the host's
+  adapter knows, by the same reading of the same headers, and anyone else gets the 401 a chat
+  request gets. A motty with no `auth()` lists to anyone, as it answers anyone. Cause: the
+  list answered with no credential on a motty that needs a caller, so who serves what could
+  be read by anyone who reached the host. Stricter than chat where `auth()` stands on one
+  route only: a list has no route to choose by. Chat still answers to any model name.
+- **Every reply to a request that was let in carries its id, the one on the host's report,**
+  in the header the API's own clients read it from: `x-request-id` on the two OpenAI APIs,
+  `request-id` on Messages, whose error body holds it as `request_id` too, as Anthropic's
+  does. A whole answer, a stream and a failure carry it alike. Cause: only an answer that
+  succeeded held the id, inside its body, so a caller who reported a failure had nothing to
+  match it to a record by. A request refused before it was let in, for its body or its path,
+  has no record and so no id. A request the auth adapter threw on has one where the host was
+  told of it, a model list's too: what was thrown that is no SDK error is on a report, and
+  the reply carries that report's id.
 - **The edge has the last boundary.** Whatever is thrown while a request is taken in is answered
   in the format of the path, and a path that cannot be read is the caller's mistake, a 400. Cause:
   such a path was answered with the server's own error page.
@@ -1074,6 +1140,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   key replaces the shared key's whole field, however deep either goes. For a tool, a tool
   choice, and what a message or a part says in `provider`, the shared key is no entry: the two
   APIs share no shape there, so only an API's own key is one, and without it the call fails
+- **A path nothing is served at is a 404 in an API's error shape, never plain text.** The shape
+  is that of the API whose paths it lies under; under none, Messages for a request that sends
+  `anthropic-version`, as only that API's clients do, and the OpenAI shape for any other. Cause:
+  a client whose base address lacked `/v1` was answered `Not found` as text, which its library
+  could not read as an error.
+- **A missing field is worded the same on every API.** Cause: a body with no model was told
+  "The body needs a model" on two APIs and "model must be a string" on the third, and neither
+  is an upstream's own wording, so nothing was kept by the difference.
   with `Unsupported`.
   Cause: which OpenAI API is spoken is the host's choice, so an author who wrote
   `openai.responses` had to know the host. Rejected: flat prefixed names, which work only where
