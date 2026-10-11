@@ -22,10 +22,13 @@ function given(body: Dict, key: string): Json | undefined {
   return value === null ? undefined : value;
 }
 
-function numeric(body: Dict, key: string): number | undefined {
-  const value = given(body, key);
-  if (value === undefined || typeof value === 'number') return value;
-  invalid(`${key} must be a number`);
+export function numberOf(
+  value: Json | undefined,
+  name: string,
+): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'number') return value;
+  invalid(`${name} must be a number`);
 }
 
 // Each needs state the server would hold between requests, and none is held.
@@ -88,6 +91,8 @@ function outputOf(format: Json | undefined): JsonOutput | undefined {
 
 function optionsOf(body: Dict): Options {
   const { tool_choice: choice, parallel_tool_calls: parallel } = body;
+  const { max_output_tokens, temperature: heat, top_p } = body;
+  const { presence_penalty, frequency_penalty } = body;
   const { effort, summary, generate_summary, ...thinking } = dict(
     given(body, 'reasoning'),
   );
@@ -107,12 +112,12 @@ function optionsOf(body: Dict): Options {
         : {}),
     };
   }
-  const maxTokens = numeric(body, 'max_output_tokens');
-  const temperature = numeric(body, 'temperature');
-  const topP = numeric(body, 'top_p');
+  const maxTokens = numberOf(max_output_tokens, 'max_output_tokens');
+  const temperature = numberOf(heat, 'temperature');
+  const topP = numberOf(top_p, 'top_p');
   const user = text(given(body, 'user'));
-  const presencePenalty = numeric(body, 'presence_penalty');
-  const frequencyPenalty = numeric(body, 'frequency_penalty');
+  const presencePenalty = numberOf(presence_penalty, 'presence_penalty');
+  const frequencyPenalty = numberOf(frequency_penalty, 'frequency_penalty');
   if (presencePenalty !== undefined) options.presencePenalty = presencePenalty;
   if (frequencyPenalty !== undefined) {
     options.frequencyPenalty = frequencyPenalty;

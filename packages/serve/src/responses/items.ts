@@ -198,7 +198,9 @@ export function inputOf(
   for (const [index, message] of messages.entries()) {
     left.without('message.name', message.name);
     if (message.parts !== undefined) {
-      input.push(...items(left, message, customNames, customCalls));
+      for (const item of items(left, message, customNames, customCalls)) {
+        input.push(item);
+      }
       continue;
     }
     const { instructions: leads, ...more } = carried(

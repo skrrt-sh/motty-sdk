@@ -1,5 +1,7 @@
 import type { Json, JsonOutput, Options } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
+import { numberOf } from '../responses/decode.ts';
+import { customNames } from '../responses/tools.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
@@ -14,12 +16,6 @@ type Given = Json | undefined;
 
 function absent(value: Given): value is null | undefined {
   return value === undefined || value === null;
-}
-
-function numberOf(value: Given, name: string): number | undefined {
-  if (absent(value)) return undefined;
-  if (typeof value === 'number') return value;
-  invalid(`${name} must be a number`);
 }
 
 function flagOf(value: Given, name: string): boolean | undefined {
@@ -191,11 +187,13 @@ export function decode(body: Json): Decoded {
   const output = outputOf(format);
   const muted = options.reasoning?.exclude === true;
   const { include_usage: usage } = dict(streaming);
+  const listed = list(tools).map(toolOf);
+  const custom = customNames(listed);
   return {
     request: {
       model,
       messages: messages.map(messageOf),
-      tools: list(tools).map(toolOf),
+      tools: listed,
       options,
       ...(output === undefined ? {} : { output }),
     },
@@ -206,8 +204,14 @@ export function decode(body: Json): Decoded {
         model,
         muted,
         usage: usage === true,
+        custom,
       }),
     collected: (events, finish, id) =>
-      collected(formedWhole(events, formless), finish, { id, model, muted }),
+      collected(formedWhole(events, formless), finish, {
+        id,
+        model,
+        muted,
+        custom,
+      }),
   };
 }

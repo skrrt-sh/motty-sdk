@@ -106,8 +106,8 @@ export function partsOf(raw: Json, at: string): Part[] {
   }
 }
 
-// Inline bytes of a named type go as a data address.
-function address(media: Media): string | undefined {
+// Both OpenAI APIs take inline bytes of a named type as a data address.
+export function address(media: Media): string | undefined {
   const { url, data, mediaType } = media;
   if (url !== undefined) return url;
   return data === undefined || mediaType === undefined

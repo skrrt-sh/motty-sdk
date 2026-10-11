@@ -1,23 +1,11 @@
 import type { Part } from '@mottyjs/core/host';
+import { address } from '../responses/content.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { type Dict, given } from '../wire/json.ts';
 import { filename } from '../wire/openai-file.ts';
 import { unsupported } from '../wire/refusals.ts';
 import type { Dialect } from './dialect.ts';
 import { hinted } from './family.ts';
-
-// This wire takes inline bytes of a named type as a data address.
-function address(media: {
-  url?: string;
-  data?: string;
-  mediaType?: string;
-}): string | undefined {
-  const { url, data, mediaType } = media;
-  if (url !== undefined) return url;
-  return data === undefined || mediaType === undefined
-    ? undefined
-    : `data:${mediaType};base64,${data}`;
-}
 
 export function image(
   left: Leaving,
@@ -54,7 +42,10 @@ export function audio(
   }
   const every = dialect.sound === 'any';
   const [, named] = /^audio\/(.+)$/.exec(mediaType) ?? [];
-  const format = formats[mediaType] ?? (every ? named : undefined);
+  const known = Object.hasOwn(formats, mediaType)
+    ? formats[mediaType]
+    : undefined;
+  const format = known ?? (every ? named : undefined);
   if (data === undefined || format === undefined) {
     unsupported(
       `Chat Completions cannot carry audio that is not inline${every ? '' : ' wav or mp3'}`,

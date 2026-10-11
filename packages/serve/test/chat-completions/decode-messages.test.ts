@@ -682,3 +682,20 @@ test.each([
     }),
   ).toEqual([message]);
 });
+
+test('reasoning under one name is read where the other name is null', () => {
+  expect(
+    messageOf({
+      role: 'assistant',
+      content: 'Hi',
+      reasoning: 'Hm.',
+      reasoning_content: null,
+    }),
+  ).toEqual({
+    role: 'assistant',
+    parts: [
+      { type: 'reasoning', text: 'Hm.' },
+      { type: 'text', text: 'Hi' },
+    ],
+  });
+});

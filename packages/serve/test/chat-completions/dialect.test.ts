@@ -1260,3 +1260,17 @@ test('a level the upstream has no word for is not said to be sent as another whe
 
   expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
 });
+
+test('a field of a detail named as the prototype is a field like any other', () => {
+  const [whole] = joined([
+    JSON.parse(
+      '{"type":"reasoning.text","index":0,"text":"Pa","__proto__":{"x":1}}',
+    ),
+    { type: 'reasoning.text', index: 0, text: 'ris' },
+  ]);
+
+  expect(JSON.stringify(whole)).toBe(
+    '{"type":"reasoning.text","index":0,"text":"Paris","__proto__":{"x":1}}',
+  );
+  expect(Object.getPrototypeOf(whole)).toBe(Object.prototype);
+});

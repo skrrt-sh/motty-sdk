@@ -42,10 +42,18 @@ test('a function tool is read and written back with the same meaning', () => {
 test('a function with no strictness named is read with none', () => {
   expect(
     toolOf({ type: 'function', name: 'a', parameters: null }, 'tools[0]'),
-  ).toEqual({ type: 'function', name: 'a', input: {} });
+  ).toEqual({
+    type: 'function',
+    name: 'a',
+    input: { type: 'object', properties: {} },
+  });
   expect(
     toolOf({ type: 'function', name: 'a', strict: null }, 'tools[0]'),
-  ).toEqual({ type: 'function', name: 'a', input: {} });
+  ).toEqual({
+    type: 'function',
+    name: 'a',
+    input: { type: 'object', properties: {} },
+  });
 });
 
 test('a function with no strictness named is sent with none', () => {
@@ -203,4 +211,12 @@ test('the custom tools are told from the functions by name', () => {
     ]),
   ).toEqual(new Set(['patch']));
   expect(customNames(undefined)).toEqual(new Set());
+});
+
+test('a function tool with no parameters is one that takes none', () => {
+  expect(toolOf({ type: 'function', name: 'now' }, 'tools[0]')).toEqual({
+    type: 'function',
+    name: 'now',
+    input: { type: 'object', properties: {} },
+  });
 });

@@ -47,7 +47,7 @@ function reader(dialect: Dialect) {
   function called(raw: Json): StreamEvent {
     const { index, id, type, function: fn, custom } = dict(raw);
     const at = number(index) ?? 0;
-    if (typeof id === 'string') ids.set(at, id);
+    if (typeof id === 'string' && id !== '') ids.set(at, id);
     const free = isDict(custom);
     const { name, arguments: source, input } = dict(free ? custom : fn);
     return {
@@ -104,7 +104,7 @@ function reader(dialect: Dialect) {
     const { content: tokens, refusal: refused } = dict(logprobs);
     const {
       reasoning,
-      reasoning_content: thought = reasoning,
+      reasoning_content: thought,
       reasoning_details: detailed,
       content,
       refusal,
@@ -115,7 +115,8 @@ function reader(dialect: Dialect) {
     } = dict(delta);
     const out: StreamEvent[] = [];
     const details = dialect.details === true ? list(detailed) : [];
-    const said = typeof thought === 'string' ? thought : '';
+    const mused = thought ?? reasoning;
+    const said = typeof mused === 'string' ? mused : '';
     // A signature comes with no text, on a chunk of its own.
     if (said !== '' || details.length > 0) {
       out.push({
@@ -220,7 +221,12 @@ export async function* events(
         return;
       }
       const { error, usage: reported, choices, service_tier } = chunk;
-      const raised = isDict(error) ? error : envelope?.(chunk);
+      // A failure may be a sentence where this family has an object.
+      const raised = isDict(error)
+        ? error
+        : typeof error === 'string' && error.trim() !== ''
+          ? { message: error }
+          : envelope?.(chunk);
       if (raised !== undefined) {
         yield* ended();
         yield {

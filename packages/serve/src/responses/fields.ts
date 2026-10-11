@@ -7,9 +7,8 @@ export function field(value: Json | undefined, key: string): Json | undefined {
 }
 
 export function without(fields: Dict, known: readonly string[]): Dict {
-  const rest: Dict = {};
-  for (const [key, value] of Object.entries(fields)) {
-    if (!known.includes(key)) rest[key] = value;
-  }
-  return rest;
+  // Made from entries, a key named as the prototype is a key like any other.
+  return Object.fromEntries(
+    Object.entries(fields).filter(([key]) => !known.includes(key)),
+  );
 }

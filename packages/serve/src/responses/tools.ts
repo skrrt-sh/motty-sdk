@@ -41,7 +41,10 @@ export function toolOf(raw: Json, at: string): Tool {
       type: 'function',
       name,
       ...described,
-      input: dict(parameters),
+      // No parameters given means a function that takes none.
+      input: isDict(parameters)
+        ? parameters
+        : { type: 'object', properties: {} },
       // Left out, the API picks strictness by the schema; saying either
       // for the caller could have a schema it accepts turned down.
       ...(typeof strict === 'boolean' ? { strict } : {}),

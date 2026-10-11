@@ -213,6 +213,12 @@ test.each<[string, Dialect, Part, string]>([
     'Chat Completions cannot carry audio that is not inline wav or mp3',
   ],
   [
+    'sound of a type named as what every object inherits',
+    { name: 'openai.chat' },
+    { type: 'audio', data: 'UklGRg==', mediaType: 'constructor' },
+    'Chat Completions cannot carry audio that is not inline wav or mp3',
+  ],
+  [
     'sound by address',
     { name: 'openai.chat' },
     { type: 'audio', url: 'https://x.test/a.wav', mediaType: 'audio/wav' },

@@ -38,7 +38,7 @@ export function pictured(
 }
 
 // One per reply: tool calls are numbered in the order their ids appear.
-export function pieces(muted: boolean) {
+export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
   const calls = new Map<string, { index: number; custom: boolean }>();
   let progress: number | undefined;
   let thinking = false;
@@ -96,7 +96,11 @@ export function pieces(muted: boolean) {
         if (event.hosted === true) return undefined;
         const known = calls.get(event.id);
         const { type } = hinted(event.provider);
-        const call = known ?? { index: calls.size, custom: type === 'custom' };
+        // An upstream of another API marks no call: the caller's tools say.
+        const call = known ?? {
+          index: calls.size,
+          custom: type === 'custom' || customs?.has(event.name ?? '') === true,
+        };
         calls.set(event.id, call);
         return {
           kind: 'call',

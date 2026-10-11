@@ -60,7 +60,13 @@ function logprobs(piece: Piece): Dict | null {
 
 export async function* streamed(
   events: RunStream,
-  given: { id: string; model: string; muted: boolean; usage: boolean },
+  given: {
+    id: string;
+    model: string;
+    muted: boolean;
+    usage: boolean;
+    custom?: ReadonlySet<string>;
+  },
 ): AsyncGenerator<ServerSentEvent, void, undefined> {
   const head = {
     id: `chatcmpl-${given.id}`,
@@ -70,7 +76,7 @@ export async function* streamed(
   };
   // A caller who asked for usage is sent the field on every chunk.
   const counted = given.usage ? { usage: null } : {};
-  const piece = pieces(given.muted);
+  const piece = pieces(given.muted, given.custom);
   let role: Dict = { role: 'assistant' };
   for await (const event of events) {
     if (event.type === 'error') {
