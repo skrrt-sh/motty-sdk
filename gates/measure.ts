@@ -81,12 +81,20 @@ const builds = {
 
 // Where the branch left the main branch, or the parent of a commit on it.
 // CI fetches no main branch and checks out a pull request merged into it,
-// so the parent is the base there too.
-export async function baseCommit() {
-  const head = (await $`git rev-parse HEAD`.text()).trim();
-  const left = await $`git merge-base HEAD origin/main`.nothrow().quiet();
+// so the parent is the base there too. A first commit has none.
+export async function baseCommit(folder = '.') {
+  const head = (await $`git rev-parse HEAD`.cwd(folder).text()).trim();
+  const left = await $`git merge-base HEAD origin/main`
+    .cwd(folder)
+    .nothrow()
+    .quiet();
   const commit = left.text().trim();
-  return left.exitCode !== 0 || commit === head ? `${head}^` : commit;
+  const base = left.exitCode !== 0 || commit === head ? `${head}^` : commit;
+  const found = await $`git rev-parse --verify --quiet ${`${base}^{commit}`}`
+    .cwd(folder)
+    .nothrow()
+    .quiet();
+  return found.exitCode === 0 ? base : undefined;
 }
 
 // The packages and the bench of a commit, and the path there of one bench
@@ -120,8 +128,9 @@ async function subjectsOf(commit: string, folder: string) {
 
 // Each subject as a share of the same subject on the base commit: the median
 // over samples the two take in turn in one process, neither always first.
-async function againstBase() {
+async function againstBase(): Promise<Record<string, number>> {
   const commit = await baseCommit();
+  if (commit === undefined) return {};
   const folder = await mkdtemp(join(tmpdir(), 'motty-base-'));
   try {
     const base = await subjectsOf(commit, folder);
