@@ -352,7 +352,8 @@ export function hosting(motty: Marked, options: HostOptions) {
   }
   const { auth, models = [], price } = options;
   const fixed = adapted(typeof models === 'function' ? [] : models);
-  const prefix = `${description.name}:`;
+  // A name may hold a colon: escaped, the first colon of a key ends the name.
+  const prefix = `${description.name.replace(/[%:]/g, encodeURIComponent)}:`;
   const { duration, ...rest } = options.limits ?? {};
   const limits = Object.freeze(rest);
   const settings =

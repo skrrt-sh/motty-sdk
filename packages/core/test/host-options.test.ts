@@ -446,6 +446,29 @@ test("the storage is handed over with the motty's name ahead of every key", asyn
   expect((await hosting(echo(), {})(asked())).host.storage).toBeUndefined();
 });
 
+test('two motties with different names never reach one stored key, a colon or a percent sign in a name or not', async () => {
+  const keys: string[] = [];
+  const storage = {
+    get: async () => undefined,
+    set: async (key: string) => {
+      keys.push(key);
+    },
+    delete: async () => {},
+  };
+  for (const { name, key } of [
+    { name: 'a', key: 'b:x' },
+    { name: 'a:b', key: 'x' },
+    { name: 'a%3Ab', key: 'x' },
+    { name: 'acme/coder', key: 'x' },
+  ]) {
+    const served = motty({ name }).handle(() => answer(''));
+    const { host } = await hosting(served, { storage })(asked());
+    await host.storage?.set(key, 1);
+  }
+
+  expect(keys).toEqual(['a:b:x', 'a%3Ab:x', 'a%253Ab:x', 'acme/coder:x']);
+});
+
 test("an increment is handed over with the motty's name ahead of its key, and its result comes back", async () => {
   const added: unknown[] = [];
   const { host } = await hosting(echo(), {

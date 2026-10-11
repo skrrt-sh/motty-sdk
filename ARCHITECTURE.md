@@ -664,6 +664,13 @@ core stays what every motty uses, and a plugin is proven possible by being writt
 - **Keys are namespaced per served motty,** by package id or, without a build, the root's `name`.
   The host adds that prefix before it hands the storage over: it knows the package id, and a part
   cannot see the root it is used under.
+- **Two served motties never share a stored key, whatever their names hold.** In the namespace a
+  colon and a percent sign are written percent-encoded, so the first colon of a stored key always
+  ends the namespace. Every other name is stored as written, `acme/coder` too. Cause: a name is
+  any string, and the motty `a` writing `b:x` reached the key `x` of the motty `a:b`. Rejected:
+  refusing a colon in a name at load, which forbids every part a character for the sake of the
+  root's storage and breaks motties that load today. Rejected: the name's length ahead of it, or
+  the whole name encoded, which changes every key already stored and which no person reads.
 - **Anything past key-value is the author's code,** a package the SDK neither wraps nor forbids.
 - **A decision model returns calibrated probabilities, not text,** in under half a second:
   TypeSafe's Jev, the open Laya.
