@@ -1035,7 +1035,21 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **The edge has the last boundary.** Whatever is thrown while a request is taken in is answered
   in the format of the path, and a path that cannot be read is the caller's mistake, a 400. Cause:
   such a path was answered with the server's own error page.
-- **Caller headers are not forwarded upstream.**
+- **Caller headers are not forwarded upstream, but for the ones that say what the body may
+  hold.** Such a header is the request's own as a body field is: it is read among its family's
+  hints under its own name, and written back as a header to an upstream of the same API. An
+  upstream of another API is sent none, and an author names one on a call the same way. A
+  request's header replaces a connection's of that name whole, as a body field does.
+  - Anthropic Messages: every `anthropic-*` header but the version, which the codec speaks one
+    of. The rule is the API's own names and no list of them, as Claude Code's gateway guide
+    asks: the betas change with each release, and a list would leave out the next.
+  - OpenRouter: `x-anthropic-beta`, from a hint or an option only.
+  - The two OpenAI APIs and the other providers document no such header, so they have none.
+  Cause: a body's own fields travelled without the header that turns them on, so the first
+  request of Claude Code was refused upstream for `context_management`. Rejected: sending on
+  every header but a denied list. A token for a service the motty calls is sent in a header no
+  API names a credential, and a list cannot know it, so it would reach the model provider; a
+  header left out fails aloud, and a secret sent on is never seen.
 
 ### Wire fidelity
 

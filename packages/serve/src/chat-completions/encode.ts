@@ -7,6 +7,7 @@ import type {
   ToolChoice,
 } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
+import { carrying } from '../wire/carried.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given } from '../wire/json.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
@@ -115,7 +116,15 @@ export function encode(
   const { toolChoice } = options;
   const left = leaving('chat', dialect.breakpoints);
   if (dialect.topK !== true) left.without('topK', options.topK);
-  const { hints, provider, leftOut } = addressed(options);
+  const said = addressed(options);
+  const { parted } = carrying(
+    (name) => dialect.carried?.includes(name) === true,
+  );
+  const hint = parted(said.hints);
+  const option = parted(said.provider);
+  const { rest: hints } = hint;
+  const { rest: provider } = option;
+  const { leftOut } = said;
   const reasoning = asked(
     left,
     dialect,
@@ -180,6 +189,9 @@ export function encode(
   return {
     path: '/chat/completions',
     headers: {
+      // An option outranks a hint, as with a body field.
+      ...hint.headers,
+      ...option.headers,
       'content-type': 'application/json',
       accept: 'text/event-stream',
     },

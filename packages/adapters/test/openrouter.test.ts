@@ -1225,3 +1225,56 @@ test.each([
     expect(events).toMatchObject([{ type: 'error', error: { message: told } }]);
   },
 );
+
+test('the betas of a Claude model go upstream in the router`s header, and not in the body', async () => {
+  const seen: { betas: string | null; body: unknown }[] = [];
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      seen.push({
+        betas: request.headers.get('x-anthropic-beta'),
+        body: await request.json(),
+      });
+      return new Response(
+        `data: {"id":"gen-1","model":"anthropic/claude-haiku-5-5","choices":[{"index":0,"delta":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}
+
+data: [DONE]
+
+`,
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
+    },
+  });
+  const { models } = adapted([
+    openrouter({ key: 'sk-or-host', address: `${upstream.url}api/v1` }),
+  ]);
+
+  await Array.fromAsync(
+    models(
+      'openrouter/anthropic/claude-haiku-5-5',
+      {
+        messages: [{ role: 'user', text: 'ping' }],
+        options: {
+          hints: {
+            'openai.chat': {
+              'x-anthropic-beta': 'structured-outputs-2025-11-13',
+            },
+          },
+        },
+      },
+      AbortSignal.timeout(5000),
+    ),
+  );
+
+  expect(seen).toEqual([
+    {
+      betas: 'structured-outputs-2025-11-13',
+      body: {
+        model: 'anthropic/claude-haiku-5-5',
+        messages: [{ role: 'user', content: 'ping' }],
+        stream: true,
+        stream_options: { include_usage: true },
+      },
+    },
+  ]);
+});

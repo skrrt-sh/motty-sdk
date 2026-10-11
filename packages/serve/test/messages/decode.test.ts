@@ -156,6 +156,40 @@ test('an API version with another stream format is rejected', () => {
   ).toThrow(InvalidRequest);
 });
 
+test('every header of this API`s own but its version is read with the body, and no other', () => {
+  expect(
+    decode(
+      {
+        model: 'coder',
+        max_tokens: 64,
+        messages: [{ role: 'user', content: 'Hi' }],
+        context_management: { edits: [{ type: 'clear_thinking_20251015' }] },
+      },
+      new Headers({
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'context-management-2025-06-27',
+        'anthropic-not-known-yet': 'on',
+        'x-api-key': 'sk-ant-callers-own',
+        'x-claude-code-session-id': 'b0c1af96',
+        'x-billing-token': 'a token for a service the motty calls',
+      }),
+    ).request.options,
+  ).toEqual({
+    maxTokens: 64,
+    provider: {
+      anthropic: {
+        context_management: { edits: [{ type: 'clear_thinking_20251015' }] },
+      },
+    },
+    hints: {
+      anthropic: {
+        'anthropic-beta': 'context-management-2025-06-27',
+        'anthropic-not-known-yet': 'on',
+      },
+    },
+  });
+});
+
 test('the reply shows progress only to a caller who asked for thinking', async () => {
   const turn = { role: 'user', content: 'Hi' };
   const asked = decode(

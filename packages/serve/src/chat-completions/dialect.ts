@@ -65,6 +65,9 @@ export type Dialect = {
   // of OpenAI's own models refuse, or a router's `cache_control`, which has
   // a lifetime.
   breakpoints?: true | 'cache_control';
+  // Headers that say what the body may hold, by name in lower case: sent
+  // from the hint or the option of that name, and never in the body.
+  carried?: readonly string[];
   // `native_finish_reason`: tells a stop sequence apart from a natural stop.
   native?: true;
   // Its own words for an ending, beside the ones OpenAI lists.
