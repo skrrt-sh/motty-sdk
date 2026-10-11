@@ -184,7 +184,7 @@ function because(cause: unknown): { cause?: string } {
 }
 
 // True of a call and of a whole request alike: either may be what ended.
-const stopped = 'The work was stopped';
+export const stopped = 'The work was stopped';
 const timedOut = 'The work timed out';
 
 function interrupted(
@@ -205,17 +205,15 @@ export function stopReason(reason: unknown, cause?: unknown): MottyError {
   return interrupted(reason, options) ?? new Aborted(stopped, options);
 }
 
-export function unexpected(thrown: unknown): ErrorFacts {
+type Quoted = Pick<ErrorFacts, 'message' | 'stack' | 'cause'>;
+
+function quoted(thrown: unknown): Quoted {
   const failed = thrown instanceof Error;
   return {
-    code: 'internal',
-    status: 500,
     message:
       failed && typeof thrown.message === 'string'
         ? thrown.message
         : `A value that is not an error was thrown: ${described(thrown)}`,
-    retryable: false,
-    unexpected: true,
     ...(failed && typeof thrown.stack === 'string'
       ? { stack: thrown.stack }
       : {}),
@@ -223,9 +221,30 @@ export function unexpected(thrown: unknown): ErrorFacts {
   };
 }
 
-export function toFacts(thrown: unknown): ErrorFacts {
+function sealed(said?: Quoted): ErrorFacts {
+  return {
+    code: 'internal',
+    status: 500,
+    message: internal,
+    retryable: false,
+    unexpected: true,
+    ...said,
+  };
+}
+
+// Reading what was thrown runs its own code, which may throw in its turn:
+// such a value is quoted in nothing.
+export function unexpected(thrown: unknown): ErrorFacts {
+  try {
+    return sealed(quoted(thrown));
+  } catch {
+    return sealed();
+  }
+}
+
+function told(thrown: unknown): ErrorFacts {
   const raised = interrupted(thrown);
-  if (raised === undefined) return unexpected(thrown);
+  if (raised === undefined) return sealed(quoted(thrown));
   const { code, status, message, retryable, retryAfterMs, provider, upstream } =
     raised;
   // The brand alone promises no field types, and JSON has no NaN or Infinity.
@@ -244,6 +263,14 @@ export function toFacts(thrown: unknown): ErrorFacts {
     ...(raised.unexpected === true ? { unexpected: true } : {}),
     ...because(raised.cause),
   };
+}
+
+export function toFacts(thrown: unknown): ErrorFacts {
+  try {
+    return told(thrown);
+  } catch {
+    return sealed();
+  }
 }
 
 // An error says what happened in its own words, an upstream's included. A

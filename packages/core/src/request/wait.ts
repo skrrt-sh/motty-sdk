@@ -1,4 +1,5 @@
-import { stopReason } from '../data/errors.ts';
+import { stopped, stopReason } from '../data/errors.ts';
+import { keyed } from '../data/message.ts';
 
 type Timer = ReturnType<typeof setTimeout>;
 
@@ -19,7 +20,7 @@ const waiters = Symbol('waiters');
 type Followed = AbortSignal & { [waiters]?: Waiters };
 
 // Shared by every stop with no reason given, so ending a phase makes no error.
-const noReason = new DOMException('The work was stopped', 'AbortError');
+const noReason = new DOMException(stopped, 'AbortError');
 
 // A timer given a longer delay than this fires after one millisecond.
 const timerMaxMs = 2 ** 31 - 1;
@@ -124,12 +125,7 @@ export function ownSignal(parent?: AbortSignal): {
 function isPending<Value>(
   given: Value | PromiseLike<Value>,
 ): given is PromiseLike<Value> {
-  return (
-    ((typeof given === 'object' && given !== null) ||
-      typeof given === 'function') &&
-    'then' in given &&
-    typeof given.then === 'function'
-  );
+  return keyed(given) && 'then' in given && typeof given.then === 'function';
 }
 
 export function wait<Value>(

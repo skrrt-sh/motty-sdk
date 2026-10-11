@@ -18,6 +18,7 @@ import {
   model,
 } from '../../src/request/model.ts';
 import { retry } from '../../src/request/retry.ts';
+import { fallback } from '../../src/request/switching.ts';
 import { timeout } from '../../src/request/timeout.ts';
 import { stubHost } from '../stub-host.ts';
 
@@ -658,7 +659,7 @@ test('retry doubles its backoff from 500 ms and holds it at 30 seconds, however 
   expect(jest.getTimerCount()).toBe(0);
 });
 
-test('retry honours a retry-after longer than its own backoff cap in full', async () => {
+test('retry gives up at once on a retry-after longer than its backoff cap, with the failure as it came, so a fallback moves on', async () => {
   jest.useFakeTimers();
   const host = stubHost({
     'acme/limited': [
@@ -668,7 +669,81 @@ test('retry honours a retry-after longer than its own backoff cap in full', asyn
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 3_600_000,
+          retryAfterMs: 30_001,
+          provider: { plan: 'free' },
+        },
+      },
+    ],
+    'acme/small': [
+      { type: 'text', text: 'Hello' },
+      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
+    ],
+  });
+
+  await enter(host, async () => {
+    const failed = await due(
+      retry(model('acme/limited'), 3)
+        .complete({ messages: [] })
+        .catch((thrown: unknown) => thrown),
+    );
+    const reply = await due(
+      fallback(retry(model('acme/limited'), 3), model('acme/small')).complete({
+        messages: [],
+      }),
+    );
+
+    expect(failed).toBeInstanceOf(RateLimited);
+    expect(failed).toMatchObject({
+      message: 'Slow down',
+      status: 429,
+      retryable: true,
+      retryAfterMs: 30_001,
+      provider: { plan: 'free' },
+    });
+    expect(await due(reply.text())).toBe('Hello');
+  });
+
+  expect(host.sent('acme/limited')).toHaveLength(2);
+  expect(jest.getTimerCount()).toBe(0);
+});
+
+test('retry gives up at once on a retry-after of a day or of longer than any timer runs', async () => {
+  jest.useFakeTimers();
+
+  for (const retryAfterMs of [86_400_000, 2 ** 40]) {
+    let tries = 0;
+    const failed = await enter(stubHost(), () =>
+      due(
+        retry(
+          callable(async () => {
+            tries += 1;
+            throw new RateLimited('Slow down', { retryAfterMs });
+          }),
+          20,
+        )
+          .complete({ messages: [] })
+          .catch((thrown: unknown) => thrown),
+      ),
+    );
+
+    expect(failed).toBeInstanceOf(RateLimited);
+    expect(tries).toBe(1);
+  }
+
+  expect(jest.getTimerCount()).toBe(0);
+});
+
+test('retry waits out a retry-after as long as its backoff cap', async () => {
+  jest.useFakeTimers();
+  const host = stubHost({
+    'acme/limited': [
+      {
+        type: 'error',
+        error: {
+          code: 'rate_limited',
+          status: 429,
+          message: 'Slow down',
+          retryAfterMs: 30_000,
         },
       },
     ],
@@ -679,64 +754,13 @@ test('retry honours a retry-after longer than its own backoff cap in full', asyn
       .complete({ messages: [] })
       .catch((thrown: unknown) => thrown);
     await settled();
-    jest.advanceTimersByTime(3_599_999);
+    jest.advanceTimersByTime(29_999);
     await settled();
     expect(current().calls.made).toHaveLength(1);
     jest.advanceTimersByTime(1);
     expect(await due(failed)).toBeInstanceOf(RateLimited);
     expect(current().calls.made).toHaveLength(2);
   });
-});
-
-test('retry holds a retry-after above the longest timer delay at that delay', async () => {
-  jest.useFakeTimers();
-  let tries = 0;
-
-  await enter(stubHost(), async () => {
-    const failed = retry(
-      callable(async () => {
-        tries += 1;
-        throw new RateLimited('Slow down', { retryAfterMs: 2 ** 40 });
-      }),
-      1,
-    )
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown);
-    await settled();
-    jest.advanceTimersByTime(2 ** 31 - 2);
-    await settled();
-    expect(tries).toBe(1);
-    jest.advanceTimersByTime(1);
-    expect(await due(failed)).toBeInstanceOf(RateLimited);
-  });
-
-  expect(tries).toBe(2);
-});
-
-test('retry waits on a retry-after above the longest timer delay instead of calling again at once', async () => {
-  const request = new AbortController();
-  let tries = 0;
-
-  const failed = await enter(
-    stubHost({}, { signal: request.signal }),
-    async () => {
-      const pending = retry(
-        callable(async () => {
-          tries += 1;
-          throw new RateLimited('Slow down', { retryAfterMs: 2 ** 40 });
-        }),
-        20,
-      )
-        .complete({ messages: [] })
-        .catch((thrown: unknown) => thrown);
-      await Bun.sleep(25);
-      request.abort();
-      return pending;
-    },
-  );
-
-  expect(failed).toBeInstanceOf(Aborted);
-  expect(tries).toBe(1);
 });
 
 test('retry backs off as if unhinted when the retry-after is negative or not a finite number', async () => {

@@ -1,11 +1,12 @@
 import type { ErrorFacts } from './data/errors.ts';
 import type { Finish, StreamEvent, Usage } from './data/event.ts';
-import type {
-  ChatRequest,
-  Json,
-  JsonOutput,
-  Prompt,
-  ReadonlyJson,
+import {
+  type ChatRequest,
+  type Json,
+  type JsonOutput,
+  keyed,
+  type Prompt,
+  type ReadonlyJson,
 } from './data/message.ts';
 
 // From the global registry, so a bundle's SDK copy and the host's agree on it.
@@ -127,9 +128,5 @@ export type Contract = {
 export type Marked = { readonly [mark]: Contract };
 
 export function isMarked(value: unknown): value is Marked {
-  return (
-    ((typeof value === 'object' && value !== null) ||
-      typeof value === 'function') &&
-    mark in value
-  );
+  return keyed(value) && mark in value;
 }

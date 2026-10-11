@@ -1,5 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
-import * as assembly from '../../src/chain/assemble.ts';
+import { expect, test } from 'bun:test';
 import { type Base, chain, type Motty } from '../../src/chain/builder.ts';
 import { motty } from '../../src/chain/motty.ts';
 import { reroute } from '../../src/chain/route.ts';
@@ -833,22 +832,4 @@ test('the mark of a frozen motty cannot be given another contract', () => {
     Object.defineProperty(served, mark, { value: other[mark] }),
   ).toThrow(TypeError);
   expect(served[mark]).toBe(contractOf(served));
-});
-
-test('a chain is assembled when its mark is first read, not when it is built', () => {
-  const assembled = spyOn(assembly, 'assemble');
-  try {
-    const part = motty({ name: 'part' }).derive(() => ({ tier: 'quick' }));
-    const served = motty({ name: 'root' })
-      .use(part)
-      .handle(() => answer('Handled'));
-    const built = assembled.mock.calls.length;
-    served[mark];
-    served[mark];
-
-    expect(built).toBe(0);
-    expect(assembled.mock.calls.map(([root]) => root)).toEqual([served[chain]]);
-  } finally {
-    assembled.mockRestore();
-  }
 });

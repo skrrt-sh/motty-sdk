@@ -76,15 +76,15 @@ function limited(limits: Limits | null | undefined): State['limits'] {
   if (typeof limits !== 'object') {
     throw new Error('The host must supply limits as an object');
   }
-  const calls = bound('limits.calls', limits.calls, 'whole');
-  const afterResponseMs = bound(
-    'limits.afterResponseMs',
-    limits.afterResponseMs,
-  );
-  return Object.freeze({
-    ...(calls === undefined ? {} : { calls }),
-    ...(afterResponseMs === undefined ? {} : { afterResponseMs }),
-  });
+  const held: Limits = {};
+  for (const [name, kind] of [
+    ['calls', 'whole'],
+    ['afterResponseMs', 'finite'],
+  ] as const) {
+    const limit = bound(`limits.${name}`, limits[name], kind);
+    if (limit !== undefined) held[name] = limit;
+  }
+  return Object.freeze(held);
 }
 
 function checked(host: Host): State['limits'] {

@@ -1,4 +1,4 @@
-import type { EventStream } from '../contract.ts';
+import { bound, type EventStream } from '../contract.ts';
 import { stopReason, TimedOut, toFacts } from '../data/errors.ts';
 import { isTerminal, type StreamEvent } from '../data/event.ts';
 import { callable, callOf, type Model, type Read, stopEvent } from './model.ts';
@@ -26,10 +26,6 @@ type Watch =
   | { at: 'ended'; owed?: Read };
 
 const late = Symbol('late');
-
-function invalid(amount?: number): boolean {
-  return amount !== undefined && !(Number.isFinite(amount) && amount >= 0);
-}
 
 async function firstOrLate(
   opening: Promise<Upstream>,
@@ -176,13 +172,12 @@ export function timeout(
   if (
     typeof limits !== 'object' ||
     limits === null ||
-    Object.getPrototypeOf(limits) !== Object.prototype ||
-    invalid(limits.firstMs) ||
-    invalid(limits.stallMs)
+    Object.getPrototypeOf(limits) !== Object.prototype
   ) {
     throw new Error('timeout() needs limits of zero or more milliseconds');
   }
-  const { firstMs, stallMs } = limits;
+  const firstMs = bound('firstMs', limits.firstMs);
+  const stallMs = bound('stallMs', limits.stallMs);
   if (firstMs === undefined && stallMs === undefined) return model;
   return callable(async (prompt, signal) => {
     if (signal.aborted) throw stopReason(signal.reason);

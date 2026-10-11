@@ -34,9 +34,12 @@ function backoffMs(failure: unknown, retried: number): number | undefined {
     return undefined;
   }
   const hint = failure.retryAfterMs;
-  return hint !== undefined && Number.isFinite(hint) && hint >= 0
-    ? hint
-    : Math.min(500 * 2 ** retried, backoffCapMs);
+  if (hint === undefined || !Number.isFinite(hint) || hint < 0) {
+    return Math.min(500 * 2 ** retried, backoffCapMs);
+  }
+  // An upstream that asks for longer than any backoff lasts is not waited
+  // for, and not called sooner than it asked either.
+  return hint > backoffCapMs ? undefined : hint;
 }
 
 async function paused(ms: number, left: Promise<unknown>): Promise<void> {

@@ -1,10 +1,11 @@
 import { Unsupported } from '../data/errors.ts';
-import type {
-  Json,
-  JsonOutput,
-  JsonSchema,
-  Prompt,
-  StandardSchema,
+import {
+  type Json,
+  type JsonOutput,
+  type JsonSchema,
+  keyed,
+  type Prompt,
+  type StandardSchema,
 } from '../data/message.ts';
 import { isStandard } from './structured-output.ts';
 
@@ -67,11 +68,7 @@ function described(schema: StandardSchema): JsonSchema {
 }
 
 function holdsStandard(schema: unknown): boolean {
-  return (
-    ((typeof schema === 'object' && schema !== null) ||
-      typeof schema === 'function') &&
-    '~standard' in schema
-  );
+  return keyed(schema) && '~standard' in schema;
 }
 
 function isWire(prompt: Prompt): prompt is Prompt<JsonOutput> {

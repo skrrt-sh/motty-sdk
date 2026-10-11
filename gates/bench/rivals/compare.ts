@@ -1,5 +1,5 @@
 import { $ } from 'bun';
-import { build } from '../../measure.ts';
+import { build, median } from '../../measure.ts';
 import { programs } from './programs.ts';
 import { answering, type replies, upstream } from './upstream.ts';
 
@@ -21,11 +21,6 @@ export const scenarios = {
 };
 
 export const rivals = Object.keys(programs).filter((name) => name !== 'motty');
-
-function median(taken: number[]) {
-  const sorted = taken.toSorted((left, right) => left - right);
-  return sorted.at(sorted.length >> 1) ?? Number.NaN;
-}
 
 function tokens(text: string) {
   return text.split('token').length - 1;

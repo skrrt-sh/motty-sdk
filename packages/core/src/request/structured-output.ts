@@ -1,12 +1,9 @@
 import { InvalidOutput } from '../data/errors.ts';
-import type { OutputSchema, StandardSchema } from '../data/message.ts';
-
-// Some validator libraries make their schemas callable.
-function keyed(value: unknown): value is object {
-  return (
-    (typeof value === 'object' && value !== null) || typeof value === 'function'
-  );
-}
+import {
+  keyed,
+  type OutputSchema,
+  type StandardSchema,
+} from '../data/message.ts';
 
 export function isStandard(schema: unknown): schema is StandardSchema {
   if (!keyed(schema) || !('~standard' in schema)) return false;

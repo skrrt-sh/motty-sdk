@@ -1410,13 +1410,20 @@ test('a limit that is not a number or a plain object of numbers is a mistake at 
     undefined,
     new Date(0),
     () => 5,
-    { firstMs: '5' },
-    { stallMs: null },
   ]) {
     expect(() =>
       Reflect.apply(timeout, undefined, [model('acme/small'), limit]),
     ).toThrow('timeout() needs limits of zero or more milliseconds');
   }
+  expect(() =>
+    Reflect.apply(timeout, undefined, [model('acme/small'), { firstMs: '5' }]),
+  ).toThrow('firstMs must be a finite number of zero or more');
+  expect(() =>
+    Reflect.apply(timeout, undefined, [model('acme/small'), { stallMs: null }]),
+  ).toThrow('stallMs must be a finite number of zero or more');
+  expect(() => timeout(model('acme/small'), -1)).toThrow(
+    'firstMs must be a finite number of zero or more',
+  );
   expect(() => timeout(model('acme/small'), 0)).not.toThrow();
   expect(() =>
     timeout(model('acme/small'), { firstMs: 0, stallMs: 5 }),
