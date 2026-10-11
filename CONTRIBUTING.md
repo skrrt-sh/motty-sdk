@@ -61,6 +61,11 @@ core's own plan goes into [CORE.md](CORE.md) the same way.
   under the `next` tag, any other under `latest`.
 - No token is stored. npm trusts the release workflow by its identity, and the job that publishes
   runs no code of the repository.
+- The publishing job runs in the `npm-publish` environment, which takes only `v*` tags and waits
+  for a maintainer's approval.
+- npm can trust the workflow only for a package that exists. A new package's first version is
+  published by a maintainer with the npm CLI, from the tarball the release run packed. The
+  maintainer then adds the release workflow as that package's trusted publisher.
 
 ## Licence
 

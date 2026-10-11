@@ -4,6 +4,10 @@ A plugin of the Motty SDK. A decision model answers typed questions about a text
 probabilities, where a chat model would have to be asked for prose and parsed. `decision(name)`
 names one, and `choice`, `score` and `noul` are the questions it is asked.
 
+```sh
+bun add @mottyjs/decision
+```
+
 ```ts
 import { choice, decision, noul, score } from "@mottyjs/decision";
 ```

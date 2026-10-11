@@ -7,8 +7,7 @@ Report it privately, through GitHub's private vulnerability reporting: on this r
 for it. Say what is affected, how to reproduce it, and what a motty, a caller or another origin
 came to hold that it should not.
 
-The packages are pre-release, at version `0.0.0`. A fix is made on `main`; no older version is
-maintained.
+A fix is made on `main` and goes out in the next release. Only the latest version is maintained.
 
 ## In scope
 

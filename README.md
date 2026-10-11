@@ -46,14 +46,30 @@ A motty is not an agent framework. It has no agent loop and runs no tools.
 
 ## Status
 
-Pre-release. Every package is at version `0.0.0` and none is published to npm yet. It runs
-on Bun only, since `serve`, the adapters, the bundler and the test runner are Bun's. A motty's
-own code uses web-standard APIs and the async context. No other runtime is promised.
+The packages are on npm under the `@mottyjs` scope, all at one version. Until `1.0.0` a minor
+version may break an API. The SDK runs on Bun only, since `serve`, the adapters, the bundler and
+the test runner are Bun's. A motty's own code uses web-standard APIs and the async context. No
+other runtime is promised.
+
+| Package | What it holds |
+| --- | --- |
+| [`@mottyjs/core`](packages/core) | The builder, model calls, `fallback`, `race`, `retry` and `timeout`, the errors and the types |
+| [`@mottyjs/serve`](packages/serve) | The host side, which serves a motty over the Chat Completions, Responses and Messages APIs |
+| [`@mottyjs/adapters`](packages/adapters) | Model providers, Redis storage, and jwt and bearer auth for the host |
+| [`@mottyjs/decision`](packages/decision) | Decision models and their choice, score and noul questions |
+| [`@mottyjs/store`](packages/store) | Key-value storage kept in whatever the host supplies |
+| [`@mottyjs/settings`](packages/settings) | Typed settings with defaults in code and overrides from the host |
+| [`@mottyjs/auth`](packages/auth) | A part that requires a caller the host has identified |
+| [`@mottyjs/test`](packages/test) | Scripted models, in-memory storage and a `run` function for any test runner |
 
 ## Quick start
 
-Until the packages are published, a motty is written inside this repository, as a workspace member
-beside the examples.
+A motty needs the core. Its host needs `serve` and the adapters, and its tests need the test kit:
+
+```sh
+bun add @mottyjs/core @mottyjs/serve @mottyjs/adapters
+bun add --dev @mottyjs/test
+```
 
 A motty is a default export. This one sends a request without tools to the first of two small
 models to answer, and any other to a strong model, retried twice, with a second one behind it:

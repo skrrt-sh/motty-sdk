@@ -7,6 +7,10 @@ each. Model providers: `openai`, `anthropic`, `openrouter`, `deepseek`, `moonsho
 credential stays inside the adapter the host made and never enters a motty's code. This package is
 never in a motty's bundle.
 
+```sh
+bun add @mottyjs/adapters
+```
+
 ```ts
 import { openai } from "@mottyjs/adapters/openai";
 ```

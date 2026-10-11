@@ -4,6 +4,10 @@ A plugin of the Motty SDK. `auth()` is a part that puts the caller on the contex
 request the host could not identify. It holds no check of its own: the host's auth adapter proves
 the caller, and the key or token that proved it never reaches the motty.
 
+```sh
+bun add @mottyjs/auth
+```
+
 ```ts
 import { auth } from "@mottyjs/auth";
 ```
