@@ -824,8 +824,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
     anthropic({ key: ANTHROPIC_KEY }),
     typesafe({ key: TYPESAFE_KEY }),
   ],
-  storage: redis({ address: REDIS_URL }),
-  auth: jwt({ jwksAddress: JWKS_URL }),
+  storage: redis({ url: REDIS_URL }),
+  auth: jwt({ jwks: JWKS_URL }),
   limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
   report: (record) => console.log(JSON.stringify(record)),
 }));
@@ -845,10 +845,6 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   cannot be copied as plain data fail when the options are read, named by group, without the
   value. Cause: a motty that wrote into the shared overrides changed them for every later
   request.
-- **Every network address an adapter takes is named `address`,** alone or as the end of a longer
-  name: `redis({ address })`, `jwt({ jwksAddress })`, and the same word on every model adapter.
-  Cause: the storage adapter's was `url` and the key set's `jwks`, beside the model adapters'
-  `address`, three words for one thing.
 - **A model adapter's `address` is the API's base with its version segment,** as in
   `https://api.typesafe.ai/v1` or a local Laya's `http://localhost:8000/v1`; every path is relative
   to it and a trailing slash is accepted. Cause: one adapter took the root and two the versioned base.
@@ -1034,8 +1030,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   be fitted to its own. Rejected: a helper that makes an adapter, a name for a plain object.
 - **A signed token is verified by `jwt`,** which is `jose` and supports what `jose` supports: a
   key set, a public key or a shared secret, exactly one of them, returning `sub` as the caller's id
-  with no `store` and no lookup. They are `jwksAddress`, `publicKey` and `secret`, and the types
-  take no two together. Unlike Elysia's jwt plugin, the key sits with the host, never in
+  with no `store` and no lookup. Unlike Elysia's jwt plugin, the key sits with the host, never in
   the motty.
 - **Every check of a signed token beyond its signature is the host's to name.** Beside the way of
   verifying, `jwt` takes the checks `jose` takes, all of them optional and handed on as given:
@@ -1094,9 +1089,6 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   at once, bare milliseconds in the limits and the edge, an `Ms` suffix in the adapters, the
   errors and `timeout`, and seconds in `store`. Rejected: a suffix on every name, which says
   the same thing in each of them once there is one unit.
-- **`key` is an API key in every adapter, and the public key `jwt` takes is `publicKey`.** Cause:
-  `key` meant an API key in every model adapter and a public key in `jwt`. No earlier name is
-  kept beside the new one: one way to say each.
 - **`settings` overrides the motty's defaults,** any subset, typed. Rejected: mapping environment
   variables onto settings by name: flat strings onto typed groups, and a second way to set a value.
 - **The overrides are typed by the motty they are given with:** any of the groups its settings

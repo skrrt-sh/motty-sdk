@@ -21,8 +21,8 @@ export default serve(
       }),
       typesafe({ key: TYPESAFE_KEY }),
     ],
-    storage: redis({ address: REDIS_URL }),
-    auth: jwt({ jwksAddress: JWKS_URL }),
+    storage: redis({ url: REDIS_URL }),
+    auth: jwt({ jwks: JWKS_URL }),
     // The worst request triages, tries both strong models, reroutes, compacts and tries again
     limits: { duration: 90_000, calls: 12, afterResponse: 10_000 },
     settings: {

@@ -12,8 +12,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
     anthropic({ key: ANTHROPIC_KEY }),
     typesafe({ key: TYPESAFE_KEY }),
   ],
-  storage: redis({ address: REDIS_URL }),
-  auth: jwt({ jwksAddress: JWKS_URL }),
+  storage: redis({ url: REDIS_URL }),
+  auth: jwt({ jwks: JWKS_URL }),
   limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
   report: (record) => console.log(JSON.stringify(record)),
 }));

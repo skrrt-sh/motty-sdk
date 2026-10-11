@@ -47,22 +47,20 @@ end
 return text
 `;
 
-export function redis(options: { address: string | undefined }): Storage {
-  const { address } = options;
-  if (address === undefined || address === '') {
-    throw new Error('The redis adapter was given no address');
+export function redis(options: { url: string | undefined }): Storage {
+  const { url } = options;
+  if (url === undefined || url === '') {
+    throw new Error('The redis adapter was given no url');
   }
   // The client takes text that is no address and fails on the first call.
-  // The address is not quoted: it may hold a password.
-  if (!URL.canParse(address)) {
-    throw new Error(
-      'The redis adapter was given an address that cannot be parsed',
-    );
+  // The url is not quoted: it may hold a password.
+  if (!URL.canParse(url)) {
+    throw new Error('The redis adapter was given a url that cannot be parsed');
   }
   // The client's own reconnecting holds a call for half a minute while the
   // server is down and never recovers after; connecting again on the next
   // call fails at once and recovers. Pipelining is off: one call, one command.
-  const client = new RedisClient(address, {
+  const client = new RedisClient(url, {
     autoReconnect: false,
     enableAutoPipelining: false,
   });

@@ -27,21 +27,21 @@ export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL })
     // A customer's message goes through a router only to providers that keep none of it
     openrouter({ key: OPENROUTER_KEY, body: { provider: { data_collection: "deny" } } }),
   ],
-  storage: redis({ address: REDIS_URL }),
-  auth: jwt({ jwksAddress: JWKS_URL }),
+  storage: redis({ url: REDIS_URL }),
+  auth: jwt({ jwks: JWKS_URL }),
 }));
 ```
 
-`jwt` verifies a signed token against exactly one of a key set address (`jwksAddress`), a public
-key in PEM (`publicKey`) or a shared secret (`secret`), and gives its `sub` as the caller's id. By
-default it checks the signature and the times the token itself states, and a token that states no
-expiry is accepted. Every further check is the host's to add: beside the way of verifying, `jwt`
-takes the options of `jose`'s `jwtVerify`, all optional. A host whose identity provider signs
-tokens for several applications with one key set should name the issuer and the audience:
+`jwt` verifies a signed token against exactly one of a key set address (`jwks`), a public key in
+PEM (`key`) or a shared secret (`secret`), and gives its `sub` as the caller's id. By default it
+checks the signature and the times the token itself states, and a token that states no expiry is
+accepted. Every further check is the host's to add: beside the way of verifying, `jwt` takes the
+options of `jose`'s `jwtVerify`, all optional. A host whose identity provider signs tokens for
+several applications with one key set should name the issuer and the audience:
 
 ```ts
 jwt({
-  jwksAddress: JWKS_URL,
+  jwks: JWKS_URL,
   issuer: "https://id.acme.example/",
   audience: "desk",
   requiredClaims: ["exp"],

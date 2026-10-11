@@ -5,13 +5,13 @@ import * as entry from '../src/redis.ts';
 import { redis } from '../src/redis.ts';
 
 // biome-ignore lint/complexity/useLiteralKeys: the compiler wants the bracket
-const address = process.env['REDIS_URL'];
+const url = process.env['REDIS_URL'];
 // A run's keys are its own, since the server may be one a developer shares.
 const run = `motty-test:${crypto.randomUUID()}`;
 
-describe.skipIf(address === undefined)('against a server', () => {
+describe.skipIf(url === undefined)('against a server', () => {
   test('every kind of JSON value is read back as it was set', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
     const kinds = {
       text: 'deep',
       empty: '',
@@ -43,11 +43,11 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a key never set reads as nothing', async () => {
-    expect(await redis({ address }).get(`${run}:never`)).toBeUndefined();
+    expect(await redis({ url }).get(`${run}:never`)).toBeUndefined();
   });
 
   test('a value is gone once deleted, and deleting nothing is no error', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     await storage.set(`${run}:gone`, { tier: 'deep' });
     await storage.delete(`${run}:gone`);
@@ -57,7 +57,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a value set again replaces the first and drops its time to live', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     await storage.set(`${run}:again`, 'fast', { ttl: 1_000 });
     await storage.set(`${run}:again`, 'deep');
@@ -69,7 +69,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('what is read back is a copy of what was set', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
     const turns = [1, 2];
 
     await storage.set(`${run}:copy`, turns);
@@ -81,7 +81,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a value set with a time to live is gone after that many milliseconds', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     await storage.set(`${run}:ttl`, 'deep', { ttl: 1_000 });
     const before = await storage.get(`${run}:ttl`);
@@ -93,7 +93,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a time to live may be shorter than a second', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     await storage.set(`${run}:part`, 'deep', { ttl: 200 });
     const before = await storage.get(`${run}:part`);
@@ -105,7 +105,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a time to live that is no count is refused, and the old value stays', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     await storage.set(`${run}:none`, 'old');
     const refused = await Promise.allSettled(
@@ -127,8 +127,8 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a stored value that is not JSON fails the read and is left as it is', async () => {
-    const storage = redis({ address });
-    const other = new RedisClient(address);
+    const storage = redis({ url });
+    const other = new RedisClient(url);
     await other.set(`${run}:foreign`, 'not json');
 
     const read = await storage.get(`${run}:foreign`).catch((error) => error);
@@ -144,8 +144,8 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a key that holds another kind of structure fails the read', async () => {
-    const storage = redis({ address });
-    const other = new RedisClient(address);
+    const storage = redis({ url });
+    const other = new RedisClient(url);
     await other.send('RPUSH', [`${run}:queue`, 'job']);
 
     const read = await storage.get(`${run}:queue`).catch((error) => error);
@@ -156,7 +156,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('an increment of a key never set starts from zero, and the total is read back as a number', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     const total = await storage.increment?.(`${run}:fresh`, 2.5);
     const held = await storage.get(`${run}:fresh`);
@@ -167,7 +167,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('an increment adds to the number held, and takes away with an amount below zero', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
     await storage.set(`${run}:spent`, 4);
 
     const totals = [
@@ -192,7 +192,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   ])(
     '%s add up to the total the same additions give in the test store',
     async (_name, amounts) => {
-      const stores = [redis({ address }), memory()];
+      const stores = [redis({ url }), memory()];
       const key = `${run}:sum:${crypto.randomUUID()}`;
 
       const totals = [];
@@ -217,7 +217,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   ])(
     'a held %p and an increment of %p give the total they give in the test store',
     async (held, by) => {
-      const stores = [redis({ address }), memory()];
+      const stores = [redis({ url }), memory()];
       const key = `${run}:held:${crypto.randomUUID()}`;
 
       const totals = [];
@@ -237,7 +237,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   );
 
   test('a total past the largest number is refused as the test store refuses it, and the value stays', async () => {
-    const stores = [redis({ address }), memory()];
+    const stores = [redis({ url }), memory()];
     const key = `${run}:past:${crypto.randomUUID()}`;
 
     const seen = [];
@@ -271,7 +271,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   ])(
     'a set %p is read back as %p, the value its JSON text holds, as in the test store',
     async (value, held) => {
-      const stores = [redis({ address }), memory()];
+      const stores = [redis({ url }), memory()];
       const key = `${run}:text:${crypto.randomUUID()}`;
 
       const read = [];
@@ -288,8 +288,8 @@ describe.skipIf(address === undefined)('against a server', () => {
   test.each([' 5', '5\n', '5.0', '5e0', '500E-2', '-0'])(
     'an increment adds to a number another writer stored as %p, as a read gives it',
     async (text) => {
-      const storage = redis({ address });
-      const other = new RedisClient(address);
+      const storage = redis({ url });
+      const other = new RedisClient(url);
       const key = `${run}:written:${crypto.randomUUID()}`;
       await other.set(key, text);
 
@@ -318,8 +318,8 @@ describe.skipIf(address === undefined)('against a server', () => {
   ])(
     'an increment of %p, which is no JSON number, is refused, and the text stays',
     async (text) => {
-      const storage = redis({ address });
-      const other = new RedisClient(address);
+      const storage = redis({ url });
+      const other = new RedisClient(url);
       const key = `${run}:foreign:${crypto.randomUUID()}`;
       await other.set(key, text);
 
@@ -338,8 +338,8 @@ describe.skipIf(address === undefined)('against a server', () => {
   );
 
   test('a JSON number too large to hold is refused, and the text stays', async () => {
-    const storage = redis({ address });
-    const other = new RedisClient(address);
+    const storage = redis({ url });
+    const other = new RedisClient(url);
     await other.set(`${run}:vast`, '1e999');
 
     const thrown = await storage
@@ -358,7 +358,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('a set number that is not finite is held as null, so an increment of it is refused', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
     await storage.set(`${run}:nan`, Number.NaN);
 
     const thrown = await storage
@@ -372,7 +372,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('increments made at once from two adapters are all kept', async () => {
-    const adapters = [redis({ address }), redis({ address })];
+    const adapters = [redis({ url }), redis({ url })];
 
     const totals = await Promise.all(
       Array.from({ length: 40 }, (_, at) =>
@@ -389,7 +389,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('the time to live is set by the increment that made the key and left alone by the ones after', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     await storage.increment?.(`${run}:window`, 1, { ttl: 1_000 });
     await Bun.sleep(600);
@@ -404,7 +404,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('an increment with a time to live gives none to a key that was set without one', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
     await storage.set(`${run}:kept`, 4);
 
     await storage.increment?.(`${run}:kept`, 1, { ttl: 200 });
@@ -416,7 +416,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('an increment keeps the time to live the key was set with', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
     await storage.set(`${run}:brief`, 4, { ttl: 200 });
 
     const total = await storage.increment?.(`${run}:brief`, 1);
@@ -430,7 +430,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   test.each(['deep', '5', true, null, { spent: 1 }])(
     'an increment of a held %p is refused, and the value stays',
     async (value) => {
-      const storage = redis({ address });
+      const storage = redis({ url });
       const key = `${run}:refused:${crypto.randomUUID()}`;
       await storage.set(key, value);
 
@@ -448,8 +448,8 @@ describe.skipIf(address === undefined)('against a server', () => {
   );
 
   test('an increment of a key that holds another kind of structure fails', async () => {
-    const storage = redis({ address });
-    const other = new RedisClient(address);
+    const storage = redis({ url });
+    const other = new RedisClient(url);
     await other.send('RPUSH', [`${run}:jobs`, 'job']);
 
     const added = await storage
@@ -462,8 +462,8 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('two adapters on one server see each other’s keys', async () => {
-    const first = redis({ address });
-    const second = redis({ address });
+    const first = redis({ url });
+    const second = redis({ url });
 
     await first.set(`${run}:shared`, { tier: 'deep' });
     const seen = await second.get(`${run}:shared`);
@@ -474,7 +474,7 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 
   test('calls made at once each get their own answer', async () => {
-    const storage = redis({ address });
+    const storage = redis({ url });
 
     await Promise.all([
       storage.set(`${run}:a`, 'first'),
@@ -491,29 +491,29 @@ describe.skipIf(address === undefined)('against a server', () => {
   });
 });
 
-test('with no address it fails when made', () => {
-  expect(() => redis({ address: undefined })).toThrow(
-    'The redis adapter was given no address',
+test('with no url it fails when made', () => {
+  expect(() => redis({ url: undefined })).toThrow(
+    'The redis adapter was given no url',
   );
-  expect(() => redis({ address: '' })).toThrow(
-    'The redis adapter was given no address',
+  expect(() => redis({ url: '' })).toThrow(
+    'The redis adapter was given no url',
   );
 });
 
 test('an address that is not a redis one fails when made', () => {
-  expect(() => redis({ address: 'https://cache.example' })).toThrow();
+  expect(() => redis({ url: 'https://cache.example' })).toThrow();
 });
 
-test('an address that cannot be parsed fails when made, and is not quoted', () => {
-  expect(() => redis({ address: 'not-an-address' })).toThrow(
-    'The redis adapter was given an address that cannot be parsed',
+test('a url that cannot be parsed fails when made, and is not quoted', () => {
+  expect(() => redis({ url: 'not-a-url' })).toThrow(
+    'The redis adapter was given a url that cannot be parsed',
   );
 });
 
 test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
   'a time to live of %d milliseconds is named as the mistake before any call',
   async (ttl) => {
-    const storage = redis({ address: 'redis://127.0.0.1:1' });
+    const storage = redis({ url: 'redis://127.0.0.1:1' });
 
     const thrown = await storage
       .set('tier:c1', 'deep', { ttl })
@@ -530,7 +530,7 @@ test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
 test.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
   'an increment by %d is named as the mistake before any call',
   async (by) => {
-    const storage = redis({ address: 'redis://127.0.0.1:1' });
+    const storage = redis({ url: 'redis://127.0.0.1:1' });
 
     const thrown = await storage
       .increment?.('spent:c1', by)
@@ -545,7 +545,7 @@ test.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
 test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
   'an increment with a time to live of %d milliseconds is named as the mistake before any call',
   async (ttl) => {
-    const storage = redis({ address: 'redis://127.0.0.1:1' });
+    const storage = redis({ url: 'redis://127.0.0.1:1' });
 
     const thrown = await storage
       .increment?.('spent:c1', 1, { ttl })
@@ -560,7 +560,7 @@ test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
 );
 
 test('a server that is down fails every call at once, and keeps failing', async () => {
-  const storage = redis({ address: 'redis://127.0.0.1:1' });
+  const storage = redis({ url: 'redis://127.0.0.1:1' });
   const started = performance.now();
 
   const calls = await Promise.allSettled([
