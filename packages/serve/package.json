@@ -71,6 +71,14 @@
   "dependencies": {
     "@mottyjs/core": "workspace:*"
   },
+  "peerDependencies": {
+    "@types/bun": ">=1.4.2"
+  },
+  "peerDependenciesMeta": {
+    "@types/bun": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@mottyjs/auth": "workspace:*",
     "@mottyjs/settings": "workspace:*",

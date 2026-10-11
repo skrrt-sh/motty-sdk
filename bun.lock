@@ -107,6 +107,12 @@
         "@mottyjs/test": "workspace:*",
         "zod": "catalog:",
       },
+      "peerDependencies": {
+        "@types/bun": ">=1.4.2",
+      },
+      "optionalPeers": [
+        "@types/bun",
+      ],
     },
     "packages/settings": {
       "name": "@mottyjs/settings",
