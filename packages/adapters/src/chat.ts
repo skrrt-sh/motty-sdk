@@ -8,6 +8,7 @@ import {
   endpoint,
   moved,
   prefixed,
+  spent,
   told,
 } from './connection.ts';
 
@@ -64,12 +65,19 @@ export function chat(upstream: Upstream): ModelAdapter {
     for (const [name, value] of Object.entries(encoded.headers)) {
       headers.set(name, value);
     }
+    // The signal is the call's, and whoever ends a call may fire it as soon
+    // as the last event is handed over, before this generator is closed. The
+    // request has a signal of its own, which hears the call's only until then.
+    const request = new AbortController();
+    const stop = () => request.abort(signal.reason);
+    signal.addEventListener('abort', stop);
+    if (signal.aborted) stop();
     try {
       const response = await fetch(endpoint(address, encoded.path), {
         method: 'POST',
         headers,
         body: JSON.stringify(encoded.body),
-        signal,
+        signal: request.signal,
         redirect: 'manual',
       });
       if (response.status >= 300 && response.status < 400) {
@@ -97,15 +105,30 @@ export function chat(upstream: Upstream): ModelAdapter {
         return;
       }
       const { leftOut } = encoded;
-      for await (const event of codec.events(parsed(response.body), clean)) {
-        // What the prompt lost on its way out is said where the call ends,
-        // after whatever the upstream warned of itself.
-        yield event.type === 'finish' && leftOut.length > 0
-          ? { ...event, warnings: [...(event.warnings ?? []), ...leftOut] }
-          : event;
+      const { body } = response;
+      let ended = false;
+      try {
+        // The body is the call's to end, so leaving the stream cancels none.
+        const stream = parsed(body.values({ preventCancel: true }));
+        for await (const event of codec.events(stream, clean)) {
+          ended = event.type === 'finish' || event.type === 'error';
+          if (ended) signal.removeEventListener('abort', stop);
+          // What the prompt lost on its way out is said where the call ends,
+          // after whatever the upstream warned of itself.
+          yield event.type === 'finish' && leftOut.length > 0
+            ? { ...event, warnings: [...(event.warnings ?? []), ...leftOut] }
+            : event;
+        }
+      } finally {
+        // Neither is waited for: the last event is the caller's at once. A
+        // call left before it is one that was stopped, so its body is too,
+        // and a body that broke or was stopped has no end left to read.
+        (ended ? spent(body) : body.cancel()).catch(() => {});
       }
     } catch (thrown) {
       yield { type: 'error', error: broken(signal, thrown, clean) };
+    } finally {
+      signal.removeEventListener('abort', stop);
     }
   };
 

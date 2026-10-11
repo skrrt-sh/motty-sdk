@@ -979,6 +979,18 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   stream and the usage in it, and `store` on Responses, where no state is held.
 - **A chat connection takes no time limit.** Retry and time limits are the motty's combinators,
   and a second pair underneath would multiply them.
+- **A stream that said its last event is read to the end of its body, so its connection is
+  kept.** The reading goes on behind the call, for 65,536 bytes or one second at the most. A
+  call stopped before its last event is cancelled as before, and a signal fired after it stops
+  nothing, since whoever ends a request fires it for every call that request made. Cause: an
+  upstream that ends its body in a later write than its last event was left before that end,
+  which cost the connection, and 350 calls in a row opened 303 of them where a body passed
+  through whole opened 2. On the Workers runtime every call opened one, and behind a local
+  Workers runtime a call to a real provider reached its first byte about 300 ms sooner once the
+  connection was kept. Rejected:
+  cancelling at the last event, which pays for a new connection on every call; holding the last
+  event until the body ends, where an upstream that holds its body open would hold the answer;
+  and reading on with no bound, which an upstream that never ends its body would leak.
 - **A decision server's own request fields are the host's to state, on the adapter, never the
   author's on a call.** `typesafe` takes them as `body`, beside `headers`, in the server's own
   names. Laya takes controls Jev refuses outright, a longer state limit, a confidence floor, a
