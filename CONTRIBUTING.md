@@ -51,11 +51,16 @@ core's own plan goes into [CORE.md](CORE.md) the same way.
 
 ## Releases
 
-- All packages carry one version. A release bumps it in every package in one pull request.
+- All packages carry one version. A release bumps it in every package in one pull request, with
+  `bun run bump X.Y.Z`, which also brings the lockfile along. A package is packed with the versions
+  the lockfile records, so a lockfile left behind fails the checks.
 - A release is an annotated `vX.Y.Z` tag on `main`, or `vX.Y.Z-rc.N` for a pre-release. A tag is
   never moved. The release workflow refuses a tag that is lightweight or of neither form.
-- Pushing the tag publishes the packages to npm: a pre-release under the `next` tag, any other
-  under `latest`.
+- Pushing the tag runs the checks on it and packs the packages once. After a maintainer approves,
+  those same tarballs are published to npm and attached to the GitHub release. A pre-release goes
+  under the `next` tag, any other under `latest`.
+- No token is stored. npm trusts the release workflow by its identity, and the job that publishes
+  runs no code of the repository.
 
 ## Licence
 
