@@ -54,7 +54,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY }) => ({
     openai({ key: OPENAI_KEY }),
     anthropic({ key: ANTHROPIC_KEY }),
   ],
-  limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
+  limits: { durationMs: 120_000, calls: 10, afterResponseMs: 30_000 },
   report: (record) => console.log(JSON.stringify(record)),
 }));
 ```
@@ -138,7 +138,7 @@ ahead:
 | [`@mottyjs/settings`](packages/settings) | Plugin | Typed settings a host may override |
 | [`@mottyjs/test`](packages/test) | Test kit | Scripted models, in-memory storage, `run` |
 | [`@mottyjs/serve`](packages/serve) | Host side | `serve`, `mount` and the three wire APIs. Never in a bundle |
-| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, JWT auth |
+| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, and auth: `jwt`, `bearer`, or the host's own object with a `verify` function |
 
 Only the core has no dependencies. Plugins compile into the motty's bundle; the host side never
 does.

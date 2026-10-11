@@ -154,7 +154,7 @@ export default motty({ name: "coder" })
 - **A failure in after-response work reaches no boundary.** The caller already has the answer, so
   the failure goes in the record.
 - **Ending early.** A caller leaving or the host's time limit fires `signal`: `"aborted"`. Passing
-  `limits.calls` throws `LimitReached`. After-response work has `limits.afterResponse` for its
+  `limits.calls` throws `LimitReached`. After-response work has `limits.afterResponseMs` for its
   time, and its calls still count against `limits.calls`.
 - **After-response work is limited to thirty seconds unless the host sets another limit.**
   Rejected: no limit by default. One hook that never returned then meant no record was ever sent.
@@ -599,8 +599,8 @@ How whatever runs a motty, `serve` or the Hub, calls it. Both sides are written 
   make the two disagree.
 - **The record also tells the host that the request is over.** A serverless host is stopped by its
   platform soon after the response ends, so it must ask the platform to wait until the record
-  arrives. Platforms limit that wait, so the host sets `limits.afterResponse` below the platform's
-  limit.
+  arrives. Platforms limit that wait, so the host sets `limits.afterResponseMs` below the
+  platform's limit.
 - **Running never throws.** A mistake in what the host supplied, such as a limit that is not a
   whole number, comes back as a stream with one error and a record, like any failed request. So a
   host handles failure in one place.
@@ -652,10 +652,10 @@ core stays what every motty uses, and a plugin is proven possible by being writt
   no check: it throws `Unauthenticated`, 401, when the host knows no caller, else adds `caller`.
 - **`caller.id` is extracted and validated, never read raw.** The motty never sees the key or token.
 - **Without `auth()` a motty is open** to whoever reaches its host.
-- **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttl }` in seconds,
+- **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttlMs }`,
   `delete`, and `increment`. It adds a key prefix only: one call is one command, no cache, no
   batching.
-- **`increment(key, by, { ttl })` adds to a number in one step of the database and returns the
+- **`increment(key, by, { ttlMs })` adds to a number in one step of the database and returns the
   new value.** A key that is absent starts from zero, and the time to live is set when the key
   is made, not on each addition. A value that is no number fails the call. Cause: a counter kept
   with `get` and `set` lost additions whenever two requests of one caller ran at once, which is
@@ -756,9 +756,10 @@ test("an off-topic opening gets a canned reply and no route", async () => {
 - **Host options are optional, each with a test default:** no models, everyone admitted as
   `tester` unless an `auth` adapter is passed, no limits, in-memory storage per run unless a
   `memory()` is passed. With an `auth` adapter the credential is read from `authorization`.
-- **`memory()` refuses what `redis` refuses.** A time to live that is not a positive, finite
-  number of seconds is rejected by both with the same message. Cause: the test store read zero as
-  already gone and infinity as forever, so a motty passed its tests and failed on a real store.
+- **`memory()` refuses what `redis` refuses.** A time to live that is not a positive, whole
+  number of milliseconds is rejected by both with the same message. Cause: the test store read
+  zero as already gone and infinity as forever, so a motty passed its tests and failed on a real
+  store.
 - **`memory()` holds what JSON text reads back as:** negative zero is zero, and a number that is
   not finite is null. `increment` adds only to a JSON number, in both stores.
 - **A test declares no types of its own;** SDK types may be imported. A scripted reply is typed by
@@ -803,9 +804,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
     anthropic({ key: ANTHROPIC_KEY }),
     typesafe({ key: TYPESAFE_KEY }),
   ],
-  storage: redis({ url: REDIS_URL }),
-  auth: jwt({ jwks: JWKS_URL }),
-  limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
+  storage: redis({ address: REDIS_URL }),
+  auth: jwt({ jwksAddress: JWKS_URL }),
+  limits: { durationMs: 120_000, calls: 10, afterResponseMs: 30_000 },
   report: (record) => console.log(JSON.stringify(record)),
 }));
 ```
@@ -824,6 +825,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   cannot be copied as plain data fail when the options are read, named by group, without the
   value. Cause: a motty that wrote into the shared overrides changed them for every later
   request.
+- **Every network address an adapter takes is named `address`,** alone or as the end of a longer
+  name: `redis({ address })`, `jwt({ jwksAddress })`, and the same word on every model adapter.
+  Cause: the storage adapter's was `url` and the key set's `jwks`, beside the model adapters'
+  `address`, three words for one thing.
 - **A model adapter's `address` is the API's base with its version segment,** as in
   `https://api.typesafe.ai/v1` or a local Laya's `http://localhost:8000/v1`; every path is relative
   to it and a trailing slash is accepted. Cause: one adapter took the root and two the versioned base.
@@ -965,7 +970,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   and a warm, local Laya in 10 to 250. A Laya checkpoint that is not preloaded took 14.6 s on
   its first call, which the limit ends as a timeout: the host preloads its checkpoints or
   raises `timeoutMs`. Rejected: a longer default for a local server, which would hide a server
-  that is not ready behind a wait no route can afford.
+  that is not ready behind a wait no route can afford. A `timeoutMs` that is no finite number
+  of zero or more fails when the adapter is made.
 - **What a router's provider said is told after the router's own message.** A router may say only
   that its provider refused and put the provider's words beside that; the most specific message
   there is, is the one a caller can act on.
@@ -1006,7 +1012,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   be fitted to its own. Rejected: a helper that makes an adapter, a name for a plain object.
 - **A signed token is verified by `jwt`,** which is `jose` and supports what `jose` supports: a
   key set, a public key or a shared secret, exactly one of them, returning `sub` as the caller's id
-  with no `store` and no lookup. Unlike Elysia's jwt plugin, the key sits with the host, never in
+  with no `store` and no lookup. They are `jwksAddress`, `publicKey` and `secret`, and the types
+  take no two together. Unlike Elysia's jwt plugin, the key sits with the host, never in
   the motty.
 - **Every check of a signed token beyond its signature is the host's to name.** Beside the way of
   verifying, `jwt` takes the checks `jose` takes, all of them optional and handed on as given:
@@ -1058,6 +1065,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **`limits` caps a request's duration, its model calls, its after-response work and its body.**
   The host enforces the duration by firing the stop signal; the bundle enforces the calls and
   the after-response work; the edge enforces the body, which no other host has.
+- **An option that has a unit carries it in its name, and each kind has one unit:** every time
+  is milliseconds and ends in `Ms`, every size is bytes and ends in `Bytes`, and a count has
+  neither. So the limits are `durationMs`, `afterResponseMs`, `bodyBytes` and `calls`, the
+  edge's times `keepAliveMs`, `drainMs` and `receiveMs`, and a stored value's time to live
+  `ttlMs`. Cause: three conventions stood at once, bare milliseconds in the limits and the
+  edge, `timeoutMs` in the adapters and seconds in `store`; and `key` meant an API key in every
+  model adapter and a public key in `jwt`, which is now `publicKey`. No earlier name is kept
+  beside the new one: one way to say each.
 - **`settings` overrides the motty's defaults,** any subset, typed. Rejected: mapping environment
   variables onto settings by name: flat strings onto typed groups, and a second way to set a value.
 - **The overrides are typed by the motty they are given with:** any of the groups its settings
@@ -1078,9 +1093,15 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   handler and stops no listener. `serve` is for a serve file, whose default export Bun starts: it
   also drains on a stop signal, stops the listener and ends the process. Cause: with one function
   for both, a host that mounted two motties lost its own shutdown to ours.
+- **In development a serve file is reloaded by Bun's own `--watch`,** which starts the process
+  again when the motty or a file it imports changes; the SDK adds nothing for it. Rejected:
+  `--hot`, which evaluates the file again in the same process, so the handlers of earlier
+  evaluations pile up and a Ctrl-C no longer drains the requests in flight: after 31 reloads
+  there were 31 SIGINT handlers, and a request in flight was reset on Ctrl-C. Rejected: a
+  watcher of the SDK's own, a copy of what the runtime has.
 - **A server passed to `fetch` means one thing:** this request is taken off its idle timeout,
   once its body has arrived whole. Until then the server's idle timeout stands.
-- **A body has a time to arrive in, the edge's own `receive`, sixty seconds unless the host
+- **A body has a time to arrive in, the edge's own `receiveMs`, sixty seconds unless the host
   says otherwise.** It is counted from the request's arrival to the body's last byte, under `serve`
   and under `mount` alike, and a body that is late is answered 408 and the connection closed.
   Cause: a socket that sent the headers of a chat request with a length of 1000, nine bytes
@@ -1093,7 +1114,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   does not have; starting the duration limit at arrival, since that limit is optional and is
   the time the motty may run, which a slow upload would then spend. A path that is not chat
   reads no body, so the server's own timeout is all that holds its socket.
-- **A body is at most `limits.body` bytes, 32 MB unless the host says otherwise.** A stated
+- **A body is at most `limits.bodyBytes`, 32 MB unless the host says otherwise.** A stated
   length over the limit is refused before a byte is read; the bytes are counted as they are
   read as well, so a body with no stated length, or more of it than was stated, ends at the
   limit. The answer is a 413 in the API's own error shape, `request_too_large` on Messages,
@@ -1107,12 +1128,15 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   the smallest limit an upstream served here has: what is over it one of the three refuses
   anyway, and a host that sends more to another raises it. Rejected: a megabyte or a few, the
   proxy's habit, which refuses one photograph; no default, which is the defect.
-- **`limits.body` or `receive` that is no finite number of zero or more fails when the host is
-  made,** in words that name the option. Cause: a body limit that was no number refused
-  nothing, with no word of it, and these two are what an anonymous request is bounded by.
-  Rejected: reading such a value as the default, which hides the host's mistake. The other
-  limits are not checked there: the bundle checks the two it enforces on each request, and
-  the duration and the edge's other two times are not checked at all.
+- **Every limit and every time of the edge is checked once, when the host is made,** in words
+  that name the option: a time is a finite number of zero or more, the body limit and the call
+  limit whole numbers of zero or more. Cause: a body limit that was no number refused nothing,
+  with no word of it; and only the body limit and the time to receive were checked there, the
+  call limit and the after-response time on each request, and the duration and the edge's
+  other two times never, so a mistake in one of those was told to a caller or to nobody.
+  Rejected: reading such a value as the default, which hides the host's mistake. A host that
+  speaks the contract without these steps is still checked by the bundle, on each request, for
+  the two limits the bundle enforces.
 - **What the headers alone settle is settled before the body is read:** that the server is
   shutting down, the content type, and the stated length. Whether a caller is needed is not
   among them. A motty says it needs a caller with a part in its chain, which may stand on one

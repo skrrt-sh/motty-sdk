@@ -28,7 +28,7 @@ export async function previousTier(request: ChatRequest): Promise<Tier | undefin
 
 export async function remember(request: ChatRequest, tier: Tier): Promise<void> {
   const key = tierKey(request);
-  if (key) await store.set(key, tier, { ttl: 24 * 60 * 60 });
+  if (key) await store.set(key, tier, { ttlMs: 24 * 60 * 60 * 1000 });
 }
 ```
 

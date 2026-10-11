@@ -11,8 +11,7 @@ never in a motty's bundle.
 import { openai } from "@mottyjs/adapters/openai";
 ```
 
-The adapters of a serve file. Which providers are proven against the live API is listed in the
-root README:
+The adapters of a serve file:
 
 ```ts
 import { serve } from "@mottyjs/serve";
@@ -28,21 +27,21 @@ export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL })
     // A customer's message goes through a router only to providers that keep none of it
     openrouter({ key: OPENROUTER_KEY, body: { provider: { data_collection: "deny" } } }),
   ],
-  storage: redis({ url: REDIS_URL }),
-  auth: jwt({ jwks: JWKS_URL }),
+  storage: redis({ address: REDIS_URL }),
+  auth: jwt({ jwksAddress: JWKS_URL }),
 }));
 ```
 
-`jwt` verifies a signed token against exactly one of a key set address (`jwks`), a public key in
-PEM (`key`) or a shared secret (`secret`), and gives its `sub` as the caller's id. By default it
-checks the signature and the times the token itself states, and a token that states no expiry is
-accepted. Every further check is the host's to add: beside the way of verifying, `jwt` takes the
-options of `jose`'s `jwtVerify`, all optional. A host whose identity provider signs tokens for
-several applications with one key set should name the issuer and the audience:
+`jwt` verifies a signed token against exactly one of a key set address (`jwksAddress`), a public
+key in PEM (`publicKey`) or a shared secret (`secret`), and gives its `sub` as the caller's id. By
+default it checks the signature and the times the token itself states, and a token that states no
+expiry is accepted. Every further check is the host's to add: beside the way of verifying, `jwt`
+takes the options of `jose`'s `jwtVerify`, all optional. A host whose identity provider signs
+tokens for several applications with one key set should name the issuer and the audience:
 
 ```ts
 jwt({
-  jwks: JWKS_URL,
+  jwksAddress: JWKS_URL,
   issuer: "https://id.acme.example/",
   audience: "desk",
   requiredClaims: ["exp"],
@@ -77,6 +76,12 @@ export default serve(desk, ({ OPENAI_KEY }) => ({
   },
 }));
 ```
+
+How far each model provider's adapter is proven differs. `openai`, `anthropic`, `openrouter` and
+`typesafe` are proven against the live API, by tests that make real calls and run under
+`bun run test:live`. The others are proven only against stubs written from each provider's own
+documents; `mistral`, `together` and `fireworks` have a live test that runs once that provider's
+key is set.
 
 The SDK as a whole is described in the
 [root README](https://github.com/skrrt-sh/motty-sdk#readme), and the reasons behind its design in

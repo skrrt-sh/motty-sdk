@@ -293,8 +293,8 @@ Baselines are recorded at the first milestone; each gate fails a change, not a r
 - **Serving:** a served request on each of the three APIs, streamed, and one whole, each timed
   against the same path built from the base commit, in one process, the two taking turns. A
   quarter over fails, one limit for all: the same code against itself read 0.95 to 1.06, and a
-  path made half again slower never read below 1.43. It measures nothing until the base commit
-  holds the host side.
+  path made half again slower never read below 1.43. It measures nothing where there is no base
+  commit.
 - **Rivals:** the same work through motty and through the Vercel AI SDK, Mastra, LangChain JS
   and TanStack AI, on one stubbed upstream, the SDKs taking turns: time per call, cold start
   and bundle size. A rival must take more than 1.1 times motty's time and more than its bytes.
@@ -336,6 +336,6 @@ Two and three share no scope and run in parallel.
 ## Deliberately out
 
 - A functional library or a result type for the public API: errors are thrown, as decided.
-- Build-time generation of the flattened chain: only if the lifecycle benchmark asks for it.
+- Build-time generation of the flattened chain: only if a measurement of assembly at first use asks for it.
 - A release tool of our own, a custom test helper layer, a benchmark framework beyond one script.
 - Splitting the core into more packages: the layers are files, and the bundler drops what is unused.
