@@ -1,5 +1,6 @@
 import type { Motty } from './chain/builder.ts';
 import {
+  bound,
   type Caller,
   type DecisionCall,
   type EventStream,
@@ -307,8 +308,7 @@ function refused(error: ErrorFacts): RequestRecord {
     entries: [],
     calls: [],
     usage: {},
-    answerMs: 0,
-    totalMs: 0,
+    time: { answer: 0, total: 0 },
     afterResponse: { failed: [], skipped: [], unreached: [] },
   };
 }
@@ -368,6 +368,10 @@ export function hosting(motty: Marked, options: HostOptions) {
   // A name may hold a colon: escaped, the first colon of a key ends the name.
   const prefix = `${description.name.replace(/[%:]/g, encodeURIComponent)}:`;
   const { duration, body, ...rest } = options.limits ?? {};
+  bound('limits.duration', duration);
+  bound('limits.body', body, 'whole');
+  bound('limits.calls', rest.calls, 'whole');
+  bound('limits.afterResponse', rest.afterResponse);
   const limits = Object.freeze(rest);
   const settings =
     options.settings === undefined ? unset : copied(options.settings);
@@ -443,7 +447,9 @@ export function hosting(motty: Marked, options: HostOptions) {
     // time limit's own reason ends it as timed out.
     const signals = [stop.signal];
     if (asked.signal !== undefined) signals.push(asked.signal);
-    if (duration !== undefined) signals.push(AbortSignal.timeout(duration));
+    if (duration !== undefined) {
+      signals.push(AbortSignal.timeout(duration));
+    }
     signal = AbortSignal.any(signals);
     // A price that throws leaves the call as the upstream told it: what was
     // spent is counted, and the host reads of its price on the report.

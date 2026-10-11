@@ -17,36 +17,37 @@ function isStructured(value: unknown): boolean {
   );
 }
 
-function mayBeNumber(value: unknown): boolean {
-  return value === undefined || typeof value === 'number';
+function isNumber(value: unknown): boolean {
+  return typeof value === 'number';
 }
 
 // What Laya adds and Jev leaves out, so each may be absent; one that is
-// there is what an author is typed to read. Named is the first that is not.
+// there is what an author is typed to read.
+const added: { readonly [field: string]: (value: unknown) => boolean } = {
+  answer_confidence: isNumber,
+  action: (action) => {
+    const { act_probability: act } = isFields(action) ? action : {};
+    return isNumber(act);
+  },
+  low_confidence: (low) => low === true,
+  abstention: (abstention) =>
+    abstention === 'passed' ||
+    abstention === 'abstained' ||
+    abstention === 'unevaluated',
+  abstention_threshold: isNumber,
+  confidence: isNumber,
+  x_jev_confidence: isNumber,
+};
+
+// Named is the first that is not. Jev gives a noul no confidence of its own,
+// so one of any type is passed over.
 function mistypedIn(question: Question, answer: Fields): string | undefined {
-  const {
-    answer_confidence: sure,
-    action,
-    low_confidence: low,
-    abstention,
-    abstention_threshold: threshold,
-  } = answer;
-  const { act_probability: act } = isFields(action) ? action : {};
-  if (!mayBeNumber(sure)) return 'answer_confidence';
-  if (action !== undefined && typeof act !== 'number') return 'action';
-  if (low !== undefined && low !== true) return 'low_confidence';
-  if (
-    abstention !== undefined &&
-    abstention !== 'passed' &&
-    abstention !== 'abstained' &&
-    abstention !== 'unevaluated'
-  ) {
-    return 'abstention';
-  }
-  if (!mayBeNumber(threshold)) return 'abstention_threshold';
-  // Jev gives a noul no confidence, so Laya's own stands where Jev's would.
-  const field = question.type === 'noul' ? 'confidence' : 'x_jev_confidence';
-  return mayBeNumber(answer[field]) ? undefined : field;
+  return Object.entries(added).find(
+    ([field, typed]) =>
+      answer[field] !== undefined &&
+      !typed(answer[field]) &&
+      (field !== 'x_jev_confidence' || question.type !== 'noul'),
+  )?.[0];
 }
 
 function mistakeIn(question: Question, answer: Fields): string | undefined {
@@ -67,10 +68,17 @@ function mistakeIn(question: Question, answer: Fields): string | undefined {
       }
       break;
     }
-    case 'score':
-      if (typeof score !== 'number') return 'has no score';
+    case 'score': {
+      const levels = question.criteria;
+      if (typeof score !== 'number' || !Number.isFinite(score)) {
+        return 'has no score';
+      }
+      if (score < 0 || score > levels.length - 1) {
+        return 'has a score outside the levels of the question';
+      }
       if (
         !isFields(probabilities) ||
+        !levels.every((_, level) => isProbability(probabilities[level])) ||
         !Object.values(probabilities).every(isProbability)
       ) {
         return 'lacks a probability for each level';
@@ -79,13 +87,14 @@ function mistakeIn(question: Question, answer: Fields): string | undefined {
         return 'has no legend';
       }
       break;
+    }
     case 'noul':
       if (!isProbability(noul)) return 'has no probability';
       break;
     default:
       return question satisfies never;
   }
-  if (question.type !== 'noul' && typeof confidence !== 'number') {
+  if (question.type !== 'noul' && !Number.isFinite(confidence)) {
     return 'has no confidence';
   }
   const field = mistypedIn(question, answer);

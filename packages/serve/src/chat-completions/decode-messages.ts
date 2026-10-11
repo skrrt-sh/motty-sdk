@@ -1,5 +1,5 @@
 import type { Json, Message, Part, Role } from '@mottyjs/core/host';
-import { cacheOf } from '../messages/cache.ts';
+import { cacheOf } from '../wire/cache-control.ts';
 import { inline } from '../wire/data-url.ts';
 import {
   type Dict,
@@ -178,7 +178,7 @@ export function messageOf(raw: Json): Message {
     refusal,
     audio,
     reasoning,
-    reasoning_content: thought = reasoning,
+    reasoning_content: thought,
     reasoning_details: details,
     images,
     function_call: legacy,
@@ -202,9 +202,10 @@ export function messageOf(raw: Json): Message {
   // Details are what the model goes on from, so they stay with the
   // reasoning, and where no text was sent beside them theirs is read.
   const kept = marked(given({ reasoning_details: details }));
+  const mused = thought ?? reasoning;
   const thinking =
-    typeof thought === 'string'
-      ? thought
+    typeof mused === 'string'
+      ? mused
       : list(details)
           .map((detail) => {
             const { text: said } = dict(detail);
@@ -214,15 +215,15 @@ export function messageOf(raw: Json): Message {
   if (thinking !== '' || kept.provider !== undefined) {
     parts.push({ type: 'reasoning', text: thinking, ...kept });
   }
-  parts.push(...said);
+  for (const part of said) parts.push(part);
   if (typeof refusal === 'string') {
     parts.push({ type: 'refusal', text: refusal });
   }
   if (typeof heard === 'string') {
     parts.push({ type: 'audio', id: heard, ...noted(sound) });
   }
-  parts.push(...picturesOf(images));
-  if (Array.isArray(calls)) parts.push(...calls.map(callOf));
+  for (const picture of picturesOf(images)) parts.push(picture);
+  for (const call of list(calls)) parts.push(callOf(call));
   return typeof content === 'string' && parts.length === said.length
     ? { ...base, text: content }
     : { ...base, parts };

@@ -111,3 +111,12 @@ test('a copy is made of a value as deep as any that is read', () => {
 
   expect(copied(deep)).toEqual(deep);
 });
+
+test('a given field named as the prototype is a field, and nothing is read through it', () => {
+  const kept = given(dict(parsed('{"__proto__":{"planted":true},"a":1}')));
+  const { planted } = kept;
+
+  expect(Object.keys(kept)).toEqual(['__proto__', 'a']);
+  expect(Object.getPrototypeOf(kept)).toBe(Object.prototype);
+  expect(planted).toBeUndefined();
+});

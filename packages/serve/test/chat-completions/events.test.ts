@@ -802,3 +802,70 @@ test('what the adapter cuts is cut from a failure a stream tells, and from no se
     ],
   ]);
 });
+
+test('a failure a chunk tells as a sentence ends the stream in an error, and a blank one is none', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sent(
+          '{"choices":[{"index":0,"delta":{"content":"Hel"},"finish_reason":null}]}',
+          '{"error":"upstream overloaded"}',
+          '[DONE]',
+        ),
+      ),
+    ),
+  ).toMatchObject([
+    { type: 'text', text: 'Hel' },
+    { type: 'error', error: { message: 'upstream overloaded' } },
+  ]);
+  expect(
+    await Array.fromAsync(
+      events(
+        sent(
+          '{"error":" ","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":"stop"}]}',
+          '[DONE]',
+        ),
+      ),
+    ),
+  ).toEqual([
+    { type: 'text', text: 'Hello' },
+    { type: 'finish', reason: 'stop', rawReason: 'stop' },
+  ]);
+});
+
+test('a fragment with an empty id belongs to the call its index names', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sent(
+          '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"weather","arguments":""}}]},"finish_reason":null}]}',
+          '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"","type":"function","function":{"name":"","arguments":"{\\"city\\":\\"Oslo\\"}"}}]},"finish_reason":null}]}',
+          '{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}',
+          '[DONE]',
+        ),
+      ),
+    ),
+  ).toMatchObject([
+    { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+    { type: 'tool_call', id: 'call_a', arguments: '{"city":"Oslo"}' },
+    { type: 'finish', reason: 'tool_calls' },
+  ]);
+});
+
+test('reasoning under one name is read where the other name is null', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sent(
+          '{"choices":[{"index":0,"delta":{"reasoning":"Hm.","reasoning_content":null},"finish_reason":null}]}',
+          '{"choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":"stop"}]}',
+          '[DONE]',
+        ),
+      ),
+    ),
+  ).toEqual([
+    { type: 'reasoning', text: 'Hm.' },
+    { type: 'text', text: 'Hi' },
+    { type: 'finish', reason: 'stop', rawReason: 'stop' },
+  ]);
+});

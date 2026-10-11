@@ -11,8 +11,7 @@ never in a motty's bundle.
 import { openai } from "@mottyjs/adapters/openai";
 ```
 
-The adapters of a serve file. Which providers are proven against the live API is listed in the
-root README:
+The adapters of a serve file:
 
 ```ts
 import { serve } from "@mottyjs/serve";
@@ -77,6 +76,12 @@ export default serve(desk, ({ OPENAI_KEY }) => ({
   },
 }));
 ```
+
+How far each model provider's adapter is proven differs. `openai`, `anthropic`, `openrouter` and
+`typesafe` are proven against the live API, by tests that make real calls and run under
+`bun run test:live`. The others are proven only against stubs written from each provider's own
+documents; `mistral`, `together` and `fireworks` have a live test that runs once that provider's
+key is set.
 
 The SDK as a whole is described in the
 [root README](https://github.com/skrrt-sh/motty-sdk#readme), and the reasons behind its design in

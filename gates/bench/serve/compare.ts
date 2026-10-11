@@ -8,12 +8,6 @@ import type { subjects } from './subjects.ts';
 
 const packages = ['core', 'serve', 'adapters'];
 
-// A commit from before the host side has nothing to time against.
-export async function serves(commit: string) {
-  const found = await $`git ls-tree --name-only ${commit} packages/`.text();
-  return packages.every((name) => found.includes(`packages/${name}\n`));
-}
-
 // The base's packages name each other as packages do, so each name has to
 // lead to the base's own copy and not to this tree's.
 async function linked(folder: string) {

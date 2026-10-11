@@ -86,7 +86,7 @@ test('a JSON value is sent as its text', async () => {
 });
 
 test('an SDK error is sent as its facts', async () => {
-  const models = fake(on(small, new Overloaded('busy', { retryAfterMs: 200 })));
+  const models = fake(on(small, new Overloaded('busy', { retryAfter: 200 })));
 
   const events = await Array.fromAsync(
     models.call(
@@ -104,7 +104,7 @@ test('an SDK error is sent as its facts', async () => {
         status: 503,
         message: 'busy',
         retryable: true,
-        retryAfterMs: 200,
+        retryAfter: 200,
       },
     },
   ]);

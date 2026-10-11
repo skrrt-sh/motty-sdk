@@ -79,7 +79,7 @@ function hung(signals: AbortSignal[] = []): Model {
 }
 
 // Resolves at once, then leaves a gap before each later event.
-function spaced(inner: Model, gapMs: number, signals: AbortSignal[] = []) {
+function spaced(inner: Model, gap: number, signals: AbortSignal[] = []) {
   return callable(async (prompt, signal) => {
     signals.push(signal);
     const events = await callOf(inner)(prompt, signal);
@@ -87,7 +87,7 @@ function spaced(inner: Model, gapMs: number, signals: AbortSignal[] = []) {
       for await (const event of events) {
         yield event;
         if (event.type !== 'finish' && event.type !== 'error') {
-          await paused(gapMs, signal);
+          await paused(gap, signal);
         }
       }
     })();
@@ -146,10 +146,10 @@ test('a negative or non-finite count of retries or milliseconds is a mistake at 
   for (const amount of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
     expect(() => retry(model('acme/small'), amount)).toThrow(Error);
     expect(() => timeout(model('acme/small'), amount)).toThrow(Error);
-    expect(() => timeout(model('acme/small'), { firstMs: amount })).toThrow(
+    expect(() => timeout(model('acme/small'), { first: amount })).toThrow(
       Error,
     );
-    expect(() => timeout(model('acme/small'), { stallMs: amount })).toThrow(
+    expect(() => timeout(model('acme/small'), { stall: amount })).toThrow(
       Error,
     );
   }
@@ -216,7 +216,7 @@ test('timeout rejects with TimedOut exactly when the first chunk is late, and gi
   const signals: AbortSignal[] = [];
 
   await enter(stubHost(), async () => {
-    const pending = callOf(timeout(hung(signals), { firstMs: 5 }))(
+    const pending = callOf(timeout(hung(signals), { first: 5 }))(
       { messages: [] },
       current().signal,
     );
@@ -257,7 +257,7 @@ test('timeout rejects with the call’s own failure before the first chunk and l
   await enter(stubHost(), async () =>
     expect(
       await due(
-        timeout(model('acme/missing'), { firstMs: 1000, stallMs: 1000 })
+        timeout(model('acme/missing'), { first: 1000, stall: 1000 })
           .complete({ messages: [] })
           .catch((thrown: unknown) => thrown),
       ),
@@ -272,7 +272,7 @@ test('timeout rejects with Aborted when the request is stopped before the first 
   const request = new AbortController();
 
   await enter(stubHost({}, { signal: request.signal }), async () => {
-    const failed = timeout(hung(), { firstMs: 1000, stallMs: 1000 })
+    const failed = timeout(hung(), { first: 1000, stall: 1000 })
       .complete({
         messages: [],
       })
@@ -298,7 +298,7 @@ test('timeout with only a first-chunk limit lets later events take their time', 
   const text = await enter(host, async () => {
     const reply = await due(
       timeout(spaced(model('acme/slow'), 1000), {
-        firstMs: 5,
+        first: 5,
       }).complete({ messages: [] }),
     );
     await settled();
@@ -323,7 +323,7 @@ test('timeout with only a stall limit lets the first chunk take its time', async
 
   const text = await enter(host, async () => {
     const pending = timeout(held(model('acme/small'), 1000), {
-      stallMs: 5,
+      stall: 5,
     }).complete({ messages: [] });
     await settled();
     jest.advanceTimersByTime(1000);
@@ -349,7 +349,7 @@ test('timeout restarts its stall clock at each event and stops it at the termina
   const events = await enter(host, async () => {
     const stream = await due(
       callOf(
-        timeout(spaced(model('acme/steady'), 30), { firstMs: 50, stallMs: 50 }),
+        timeout(spaced(model('acme/steady'), 30), { first: 50, stall: 50 }),
       )({ messages: [] }, current().signal),
     );
     const reading = Array.fromAsync(stream);
@@ -387,7 +387,7 @@ test('timeout ends a stalled stream with a TimedOut error after the events it ha
   const [events, after, calls, stopped] = await enter(host, async () => {
     const stream = await due(
       callOf(
-        timeout(spaced(model('acme/stalling'), 1000, signals), { stallMs: 50 }),
+        timeout(spaced(model('acme/stalling'), 1000, signals), { stall: 50 }),
       )({ messages: [] }, current().signal),
     );
     const reader = stream[Symbol.asyncIterator]();
@@ -435,8 +435,8 @@ test('timeout makes a stalled answer fail with TimedOut where it is read', async
 
   await enter(host, async () => {
     const reply = await timeout(spaced(model('acme/stalling'), 1000), {
-      firstMs: 5,
-      stallMs: 5,
+      first: 5,
+      stall: 5,
     }).complete({ messages: [] });
     await expect(reply.text()).rejects.toBeInstanceOf(TimedOut);
   });
@@ -452,7 +452,7 @@ test('an answer a time limit ended by itself names no model', async () => {
 
   await enter(host, async () => {
     const reply = await timeout(spaced(model('acme/stalling'), 1000), {
-      stallMs: 5,
+      stall: 5,
     }).complete({ messages: [] });
     await expect(reply.finish()).rejects.toBeInstanceOf(TimedOut);
     expect(await reply.model()).toBeUndefined();
@@ -469,7 +469,7 @@ test('timeout does not count a slow reader as a stall', async () => {
   });
 
   const types = await enter(host, async () => {
-    const stream = await callOf(timeout(model('acme/small'), { stallMs: 3 }))(
+    const stream = await callOf(timeout(model('acme/small'), { stall: 3 }))(
       { messages: [] },
       current().signal,
     );
@@ -498,7 +498,7 @@ test('timeout gives the call up and clears its clock when the reader stops early
   const calls = await enter(host, async () => {
     const stream = await due(
       callOf(
-        timeout(spaced(model('acme/slow'), 1000, signals), { stallMs: 5000 }),
+        timeout(spaced(model('acme/slow'), 1000, signals), { stall: 5000 }),
       )({ messages: [] }, current().signal),
     );
     for await (const _ of stream) break;
@@ -522,7 +522,7 @@ test('timeout gives the call up when its stream is returned before it was read',
 
   await enter(host, async () => {
     const stream = await callOf(
-      timeout(spaced(model('acme/slow'), 1000, signals), { stallMs: 5000 }),
+      timeout(spaced(model('acme/slow'), 1000, signals), { stall: 5000 }),
     )({ messages: [] }, current().signal);
     await stream[Symbol.asyncIterator]().return?.();
     await Bun.sleep(1);
@@ -547,7 +547,7 @@ test('timeout passes on the upstream’s own ending when the request is stopped 
 
   const events = await enter(host, async () => {
     const stream = await due(
-      callOf(timeout(spaced(model('acme/slow'), 1000), { stallMs: 5000 }))(
+      callOf(timeout(spaced(model('acme/slow'), 1000), { stall: 5000 }))(
         { messages: [] },
         current().signal,
       ),
@@ -577,7 +577,7 @@ test('timeout ends where an upstream stream ends without a terminal event', asyn
               yield { type: 'text' as const, text: 'Cut' };
             })(),
           ),
-          { firstMs: 50, stallMs: 50 },
+          { first: 50, stall: 50 },
         ),
       )({ messages: [] }, current().signal),
     );
@@ -609,7 +609,7 @@ test('timeout closes the upstream at its terminal event, though the reader never
               }
             })(),
           ),
-          { stallMs: 50 },
+          { stall: 50 },
         ),
       )({ messages: [] }, current().signal),
     );
@@ -643,8 +643,8 @@ test('timeout holds a limit above the longest timer delay instead of timing out 
       2 ** 31,
     ).complete({ messages: [] });
     const both = await timeout(spaced(held(model('acme/small'), 10), 10), {
-      firstMs: 2 ** 40,
-      stallMs: 2 ** 40,
+      first: 2 ** 40,
+      stall: 2 ** 40,
     }).complete({ messages: [] });
     return [await first.text(), await both.text()];
   });
@@ -717,7 +717,7 @@ test('timeout ends at the upstream’s finish and closes it without reading on o
           0,
           signals,
         ),
-        { firstMs: 1000, stallMs: 1000 },
+        { first: 1000, stall: 1000 },
       ),
     )({ messages: [] }, current().signal);
     const reader = stream[Symbol.asyncIterator]();
@@ -745,11 +745,11 @@ test('timeout does not abort the upstream after a normal finish, read to its end
 
   const calls = await enter(host, async () => {
     const whole = await callOf(
-      timeout(held(model('acme/small'), 0, signals), { stallMs: 1000 }),
+      timeout(held(model('acme/small'), 0, signals), { stall: 1000 }),
     )({ messages: [] }, current().signal);
     await Array.fromAsync(whole);
     const left = await callOf(
-      timeout(held(model('acme/small'), 0, signals), { stallMs: 1000 }),
+      timeout(held(model('acme/small'), 0, signals), { stall: 1000 }),
     )({ messages: [] }, current().signal);
     for await (const event of left) {
       if (event.type === 'finish') break;
@@ -776,7 +776,7 @@ test('timeout ends a stalled stream that never ends without waiting for it, and 
           log,
           () => new Promise(() => {}),
         ),
-        { stallMs: 5 },
+        { stall: 5 },
       ),
     )({ messages: [] }, current().signal);
     const events = await orHung(Array.fromAsync(stream));
@@ -800,7 +800,7 @@ test('timeout gives up a stream that never ends when its reader stops early, thr
       timeout(
         held(scripted([{ type: 'text', text: 'Hel' }], log), 0, signals),
         {
-          firstMs: 1000,
+          first: 1000,
         },
       ),
     )({ messages: [] }, current().signal);
@@ -853,7 +853,7 @@ test('timeout enters a generator-backed stream once and closes it when the reade
             }
           },
         })),
-        { stallMs: 1000 },
+        { stall: 1000 },
       ),
     )({ messages: [] }, current().signal);
     for await (const _ of stream) break;
@@ -880,7 +880,7 @@ test('timeout gives up a web stream through the reader it holds, never asking th
               },
             }),
         ),
-        { stallMs: 1000 },
+        { stall: 1000 },
       ),
     )({ messages: [] }, current().signal);
     for await (const _ of stream) break;
@@ -911,13 +911,13 @@ test('timeout swallows an upstream close that throws or rejects, at the terminal
             log,
             closed,
           ),
-          { stallMs: 1000 },
+          { stall: 1000 },
         ),
       )({ messages: [] }, current().signal);
       for await (const event of ended) events.push(event);
       const left = await callOf(
         timeout(scripted([{ type: 'text', text: 'Hel' }], log, closed), {
-          stallMs: 1000,
+          stall: 1000,
         }),
       )({ messages: [] }, current().signal);
       for await (const _ of left) break;
@@ -948,7 +948,7 @@ test('timeout’s stream reports done after it was returned, whether unread, mid
     const after: IteratorResult<StreamEvent>[] = [];
     for (const reads of [0, 1, 3, 4]) {
       const stream = await callOf(
-        timeout(model('acme/small'), { firstMs: 1000, stallMs: 1000 }),
+        timeout(model('acme/small'), { first: 1000, stall: 1000 }),
       )({ messages: [] }, current().signal);
       const reader = stream[Symbol.asyncIterator]();
       for (let read = 0; read < reads; read += 1) await reader.next();
@@ -973,7 +973,7 @@ test('a pull in flight when timeout’s stream is returned reports done, not the
 
   const [pulled, calls] = await enter(host, async () => {
     const stream = await callOf(
-      timeout(spaced(model('acme/slow'), 1000), { stallMs: 5000 }),
+      timeout(spaced(model('acme/slow'), 1000), { stall: 5000 }),
     )({ messages: [] }, current().signal);
     const reader = stream[Symbol.asyncIterator]();
     await reader.next();
@@ -1049,7 +1049,7 @@ test('timeout ends a read in flight and clears its stall clock when the reader r
     const stream = await due(
       callOf(
         timeout(scripted([{ type: 'text', text: 'Hel' }], log), {
-          stallMs: 5000,
+          stall: 5000,
         }),
       )({ messages: [] }, request.signal),
     );
@@ -1091,7 +1091,7 @@ test('timeout ends a read in flight with Aborted when the request is stopped, th
               signal,
             );
           }),
-          { firstMs: 5000, stallMs: 5000 },
+          { first: 5000, stall: 5000 },
         ),
       )({ messages: [] }, request.signal),
     );
@@ -1140,7 +1140,7 @@ test('timeout owes Aborted to the next read when the request is stopped between 
               ],
               log,
             ),
-            { stallMs: 5000 },
+            { stall: 5000 },
           ),
         )({ messages: [] }, request.signal),
       );
@@ -1184,15 +1184,16 @@ test('timeout drops its listener from the signal when its stream finishes or sta
             { type: 'text', text: 'Hel' },
             { type: 'finish', reason: 'stop' },
           ]),
-          { stallMs: 50 },
+          { stall: 50 },
         ),
       )({ messages: [] }, request.signal),
     );
     await due(Array.fromAsync(finished));
     const stalling = await due(
-      callOf(
-        timeout(scripted([{ type: 'text', text: 'Hel' }]), { stallMs: 50 }),
-      )({ messages: [] }, request.signal),
+      callOf(timeout(scripted([{ type: 'text', text: 'Hel' }]), { stall: 50 }))(
+        { messages: [] },
+        request.signal,
+      ),
     );
     const stalled = Array.fromAsync(stalling);
     await settled();
@@ -1231,7 +1232,7 @@ test('timeout throws Aborted, the call’s failure as its cause, once the signal
         callable(async () => {
           throw own;
         }),
-        { firstMs: 1000, stallMs: 1000 },
+        { first: 1000, stall: 1000 },
       )
         .complete({ messages: [] })
         .catch((thrown: unknown) => thrown),
@@ -1240,7 +1241,7 @@ test('timeout throws Aborted, the call’s failure as its cause, once the signal
           request.abort();
           throw failure;
         }),
-        { firstMs: 1000, stallMs: 1000 },
+        { first: 1000, stall: 1000 },
       )
         .complete({ messages: [] })
         .catch((thrown: unknown) => thrown),
@@ -1283,7 +1284,7 @@ test('timeout ends for good where an upstream is done without a terminal event, 
               },
             }),
           })),
-          { stallMs: 50 },
+          { stall: 50 },
         ),
       )({ messages: [] }, request.signal),
     );
@@ -1334,7 +1335,7 @@ test('timeout hands concurrent reads their events in order, one upstream read at
               }),
             };
           }),
-          { stallMs: 50 },
+          { stall: 50 },
         ),
       )({ messages: [] }, current().signal),
     );
@@ -1375,7 +1376,7 @@ test('timeout rejects the read whose upstream read throws, then is done, with no
             callable(async () => ({
               [Symbol.asyncIterator]: () => ({ next }),
             })),
-            { stallMs: 50 },
+            { stall: 50 },
           ),
         )({ messages: [] }, request.signal),
       );
@@ -1410,16 +1411,23 @@ test('a limit that is not a number or a plain object of numbers is a mistake at 
     undefined,
     new Date(0),
     () => 5,
-    { firstMs: '5' },
-    { stallMs: null },
   ]) {
     expect(() =>
       Reflect.apply(timeout, undefined, [model('acme/small'), limit]),
     ).toThrow('timeout() needs limits of zero or more milliseconds');
   }
+  expect(() =>
+    Reflect.apply(timeout, undefined, [model('acme/small'), { first: '5' }]),
+  ).toThrow('first must be a finite number of zero or more');
+  expect(() =>
+    Reflect.apply(timeout, undefined, [model('acme/small'), { stall: null }]),
+  ).toThrow('stall must be a finite number of zero or more');
+  expect(() => timeout(model('acme/small'), -1)).toThrow(
+    'first must be a finite number of zero or more',
+  );
   expect(() => timeout(model('acme/small'), 0)).not.toThrow();
   expect(() =>
-    timeout(model('acme/small'), { firstMs: 0, stallMs: 5 }),
+    timeout(model('acme/small'), { first: 0, stall: 5 }),
   ).not.toThrow();
 });
 
@@ -1456,7 +1464,7 @@ test('accepted: a close issued while a read is in flight waits behind that read,
             signal.addEventListener('abort', () => log.push('aborted'));
             return source(gate.promise);
           }),
-          { stallMs: 1000 },
+          { stall: 1000 },
         ),
       )({ messages: [] }, current().signal);
       const reader = stream[Symbol.asyncIterator]();

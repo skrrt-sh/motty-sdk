@@ -60,6 +60,16 @@ function keySet(address: string): JWTVerifyGetKey {
     });
 }
 
+// What a runtime says of text it cannot read may quote it, and a host may
+// have set a private key here by mistake, so the refusal is our own words.
+function pem(text: string) {
+  try {
+    return createPublicKey(text);
+  } catch {
+    throw new Error('The jwt adapter was given a public key that is no PEM');
+  }
+}
+
 // A token that states no expiry is accepted: whether tokens expire is the
 // issuer's to decide, and one that states an expiry is held to it.
 export function jwt(options: JwtOptions): AuthAdapter {
@@ -74,7 +84,7 @@ export function jwt(options: JwtOptions): AuthAdapter {
     'jwks' in options
       ? keySet(given('jwt', 'key set address', jwks))
       : 'key' in options
-        ? createPublicKey(given('jwt', 'public key', key))
+        ? pem(given('jwt', 'public key', key))
         : new TextEncoder().encode(given('jwt', 'secret', secret));
   return {
     verify: async (sent) => {
@@ -108,9 +118,10 @@ export function bearer(options: {
       'The bearer adapter was given a secret no header can carry: a bearer token holds letters, digits and - . _ ~ + / and may end in =',
     );
   }
+  const id = given('bearer', 'id', options.id);
   const held = digest(secret);
   return {
     verify: (sent) =>
-      timingSafeEqual(digest(sent), held) ? { id: options.id } : undefined,
+      timingSafeEqual(digest(sent), held) ? { id } : undefined,
   };
 }

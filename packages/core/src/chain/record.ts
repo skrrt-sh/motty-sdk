@@ -70,10 +70,10 @@ export function recorded(trace: Trace | undefined, calls: Calls): void {
     ...(part === undefined ? {} : { part }),
     calls: calls.made.map((call): RequestRecord['calls'][number] => ({
       ...call,
+      time: { ...call.time },
     })),
     usage: { ...calls.total },
-    answerMs: ms,
-    totalMs: performance.now() - trace.begun,
+    time: { answer: ms, total: performance.now() - trace.begun },
     afterResponse: trace.afterResponse,
   };
   try {

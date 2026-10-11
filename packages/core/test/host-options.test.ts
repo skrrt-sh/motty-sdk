@@ -435,12 +435,12 @@ test("the storage is handed over with the motty's name ahead of every key", asyn
   })(asked());
 
   expect(await host.storage?.get('seen')).toBe(4);
-  await host.storage?.set('seen', 5, { ttl: 60 });
+  await host.storage?.set('seen', 5, { ttl: 60_000 });
   await host.storage?.delete('seen');
 
   expect(keys).toEqual([
     'get coder:seen',
-    'set coder:seen 5 60',
+    'set coder:seen 5 60000',
     'delete coder:seen',
   ]);
   expect((await hosting(echo(), {})(asked())).host.storage).toBeUndefined();
@@ -483,8 +483,8 @@ test("an increment is handed over with the motty's name ahead of its key, and it
     },
   })(asked());
 
-  expect(await host.storage?.increment?.('spent', 2, { ttl: 60 })).toBe(7);
-  expect(added).toEqual([['coder:spent', 2, { ttl: 60 }]]);
+  expect(await host.storage?.increment?.('spent', 2, { ttl: 60_000 })).toBe(7);
+  expect(added).toEqual([['coder:spent', 2, { ttl: 60_000 }]]);
 });
 
 test('a storage that is an instance of a class is asked to increment as its own method', async () => {
@@ -910,6 +910,40 @@ test("the edge's body limit is kept out of the limits the motty reads, as the du
   })(asked());
 
   expect(host.limits).toEqual({ calls: 3 });
+});
+
+test.each([
+  [{ calls: 1.5 }, 'limits.calls must be a whole number'],
+  [{ calls: -1 }, 'limits.calls must be a whole number'],
+  [{ calls: Number.NaN }, 'limits.calls must be a whole number'],
+  [{ body: 0.5 }, 'limits.body must be a whole number'],
+  [{ body: Number.POSITIVE_INFINITY }, 'limits.body must be a whole number'],
+  [{ duration: -1 }, 'limits.duration must be a finite number'],
+  [{ duration: Number.NaN }, 'limits.duration must be a finite number'],
+  [
+    { duration: Number.POSITIVE_INFINITY },
+    'limits.duration must be a finite number',
+  ],
+  [{ afterResponse: -1 }, 'limits.afterResponse must be a finite number'],
+  [
+    { afterResponse: Number.NaN },
+    'limits.afterResponse must be a finite number',
+  ],
+])(
+  'a limit that is no number of zero or more is refused when the host is made, by its name: %o',
+  (limits, said) => {
+    expect(() => hosting(echo(), { limits })).toThrow(
+      `${said} of zero or more`,
+    );
+  },
+);
+
+test('a limit of zero, and a time limit of part of a millisecond, are taken when the host is made', async () => {
+  const { host } = await hosting(echo(), {
+    limits: { calls: 0, body: 0, duration: 0.5, afterResponse: 0.5 },
+  })(asked());
+
+  expect(host.limits).toEqual({ calls: 0, afterResponse: 0.5 });
 });
 
 test("the stop follows the caller's own signal, and is fired with the host's reason", async () => {
@@ -1400,7 +1434,7 @@ test('an SDK error a model adapter throws mid-stream ends the stream as it is, a
         serves: () => true,
         call: async function* () {
           yield { type: 'text', text: 'Half' };
-          throw new Overloaded('Too busy', { retryAfterMs: 30 });
+          throw new Overloaded('Too busy', { retryAfter: 30 });
         },
       },
     ],
@@ -1412,7 +1446,7 @@ test('an SDK error a model adapter throws mid-stream ends the stream as it is, a
 
   expect(events.at(-1)).toMatchObject({
     type: 'error',
-    error: { code: 'overloaded', message: 'Too busy', retryAfterMs: 30 },
+    error: { code: 'overloaded', message: 'Too busy', retryAfter: 30 },
   });
   expect(reports[0]).not.toHaveProperty('failed');
 });
@@ -1621,8 +1655,7 @@ test('what the auth adapter throws that is no SDK error is reported as a request
       entries: [],
       calls: [],
       usage: {},
-      answerMs: 0,
-      totalMs: 0,
+      time: { answer: 0, total: 0 },
       afterResponse: { failed: [], skipped: [], unreached: [] },
       failed: [
         {

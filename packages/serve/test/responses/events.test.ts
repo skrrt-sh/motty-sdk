@@ -962,3 +962,56 @@ test.each([
     cost,
   );
 });
+
+test('a message sent whole, with no deltas before it, keeps its annotations', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'Oslo.',
+                  annotations: [
+                    {
+                      type: 'url_citation',
+                      url: 'https://x.test',
+                      title: 'Docs',
+                      start_index: 0,
+                      end_index: 4,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    { type: 'text', text: 'Oslo.', block: 0 },
+    {
+      type: 'citation',
+      url: 'https://x.test',
+      title: 'Docs',
+      block: 0,
+      provider: {
+        'openai.responses': {
+          type: 'url_citation',
+          url: 'https://x.test',
+          title: 'Docs',
+          start_index: 0,
+          end_index: 4,
+        },
+      },
+    },
+    { type: 'finish', reason: 'stop', rawReason: 'completed' },
+  ]);
+});

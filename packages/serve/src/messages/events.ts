@@ -10,9 +10,10 @@ import {
   parsed,
 } from '../wire/json.ts';
 import type { Clean } from '../wire/upstream-failure.ts';
-import { streamFailure } from './errors.ts';
+import { failed } from './errors.ts';
 import { family, marked } from './family.ts';
 import { countsOf, merged, reasonOf } from './finish.ts';
+import { cited } from './parts.ts';
 
 type Placed = { block?: number };
 
@@ -97,17 +98,7 @@ function continued(
         : undefined;
     case 'citations_delta': {
       const { citation } = delta;
-      if (!isDict(citation)) return undefined;
-      const { cited_text: quoted, document_title: document, url } = citation;
-      const { title = document } = citation;
-      return {
-        type: 'citation',
-        ...(typeof title === 'string' ? { title } : {}),
-        ...(typeof url === 'string' ? { url } : {}),
-        ...(typeof quoted === 'string' ? { text: quoted } : {}),
-        ...placed,
-        provider: { [family]: citation },
-      };
+      return isDict(citation) ? { ...cited(citation), ...placed } : undefined;
     }
     default:
       return undefined;
@@ -141,6 +132,9 @@ export async function* events(
   clean?: Clean,
 ): AsyncGenerator<StreamEvent, void, undefined> {
   const calls = new Map<number | undefined, string>();
+  // The calls that have said no input yet. One that ends so takes nothing,
+  // which the two OpenAI APIs write as an empty object and never as no text.
+  const bare = new Map<number | undefined, string>();
   let start: Dict = {};
   let stop: Dict = {};
   let counts: Dict = {};
@@ -162,14 +156,28 @@ export async function* events(
       }
       case 'content_block_start': {
         for (const chunk of started(dict(block), placed)) {
-          if (chunk.type === 'tool_call') calls.set(at, chunk.id);
+          if (chunk.type === 'tool_call') {
+            calls.set(at, chunk.id);
+            if (chunk.arguments === '') bare.set(at, chunk.id);
+          }
           yield chunk;
         }
         break;
       }
       case 'content_block_delta': {
         const chunk = continued(dict(delta), placed, calls.get(at));
-        if (chunk !== undefined) yield chunk;
+        if (chunk === undefined) break;
+        if (chunk.type === 'tool_call' && chunk.arguments !== '') {
+          bare.delete(at);
+        }
+        yield chunk;
+        break;
+      }
+      case 'content_block_stop': {
+        const id = bare.get(at);
+        if (id === undefined) break;
+        bare.delete(at);
+        yield { type: 'tool_call', id, arguments: '{}', ...placed };
         break;
       }
       case 'message_delta':
@@ -180,9 +188,10 @@ export async function* events(
         yield ended(start, stop, counts);
         return;
       case 'error':
+        // Told inside a stream it has no status: only its own name tells it.
         yield {
           type: 'error',
-          error: streamFailure(event, clean),
+          error: failed(event, clean),
           usage: countsOf(counts),
         };
         return;

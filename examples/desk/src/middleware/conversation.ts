@@ -21,9 +21,9 @@ async function rememberedCase(request: ChatRequest): Promise<Case | undefined> {
   return key ? Case.safeParse(await store.get(key)).data : undefined;
 }
 
-export async function remember(request: ChatRequest, held: Case, seconds: number): Promise<void> {
+export async function remember(request: ChatRequest, held: Case, remembered: number): Promise<void> {
   const key = caseKey(request);
-  if (key) await store.set(key, held, { ttl: seconds });
+  if (key) await store.set(key, held, { ttl: remembered });
 }
 
 export const conversation = motty({ name: "conversation" }).derive(async ({ request }) => ({

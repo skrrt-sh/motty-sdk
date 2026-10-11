@@ -282,9 +282,9 @@ test('the retry facts a provider`s reader states outrank the headers', () => {
       },
       503,
       20_000,
-      () => ({ code: 'overloaded', retryable: true, retryAfterMs: 1500 }),
+      () => ({ code: 'overloaded', retryable: true, retryAfter: 1500 }),
     ),
-  ).toMatchObject({ code: 'overloaded', retryable: true, retryAfterMs: 1500 });
+  ).toMatchObject({ code: 'overloaded', retryable: true, retryAfter: 1500 });
 });
 
 test('the upstream`s own word on another try replaces the kind`s', () => {
@@ -388,9 +388,9 @@ test('the wait the upstream asked for is kept', () => {
       { code: undefined, message: undefined, record: { up: {} } },
       429,
       1500,
-    ).retryAfterMs,
+    ).retryAfter,
   ).toBe(1500);
-  expect(unnamed(429)).not.toHaveProperty('retryAfterMs');
+  expect(unnamed(429)).not.toHaveProperty('retryAfter');
 });
 
 test('all an error states beside its message is kept for the record', () => {

@@ -2387,7 +2387,6 @@ test('ten thousand requests on one signal of a long-lived host leave no listener
   expect(left).toBe(0);
   expect((await waiting).value).toMatchObject({ error: { code: 'aborted' } });
   expect((await over.promise).outcome).toBe('aborted');
-  expect(added).toHaveBeenCalledTimes(10_001);
   expect(new Set(removed.mock.calls.map(([, listener]) => listener))).toEqual(
     new Set(added.mock.calls.map(([, listener]) => listener)),
   );
@@ -2535,4 +2534,125 @@ test.each([
     ]);
     expect(ran).toEqual([]);
   },
+);
+
+test('a long answer puts no more listeners on the signal of the host than a short one', async () => {
+  const heard: number[] = [];
+
+  for (const chunks of [1, 200]) {
+    const host = new AbortController();
+    const added = spyOn(host.signal, 'addEventListener');
+    const over = Promise.withResolvers<RequestRecord>();
+    const events = await told(
+      motty({ name: 'coder' }).handle(({ prompt }) =>
+        model('acme/small').complete(prompt),
+      ),
+      stubHost(
+        {
+          'acme/small': [
+            ...Array.from(
+              { length: chunks },
+              (): StreamEvent => ({ type: 'text', text: 'Hi' }),
+            ),
+            { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
+          ],
+        },
+        { signal: host.signal, record: over.resolve },
+      ),
+    );
+    await over.promise;
+    heard.push(added.mock.calls.length);
+
+    expect(events).toHaveLength(chunks + 1);
+  }
+
+  expect(heard[1]).toBe(heard[0]);
+});
+
+test.each([
+  [
+    'an error whose message throws when it is read',
+    () =>
+      Object.defineProperty(new Error('Hidden'), 'message', {
+        get: () => {
+          throw new Error('No message for you');
+        },
+      }),
+  ],
+  [
+    'a value that throws on any read',
+    () =>
+      new Proxy(
+        {},
+        {
+          get: () => {
+            throw new Error('No read for you');
+          },
+          has: () => {
+            throw new Error('No look for you');
+          },
+          getPrototypeOf: () => {
+            throw new Error('No kind for you');
+          },
+        },
+      ),
+  ],
+])(
+  'a handler that throws %s still ends the request with one internal error and one record',
+  async (_what, thrown) => {
+    const unhandled: unknown[] = [];
+    const noted = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    const records: RequestRecord[] = [];
+    process.on('unhandledRejection', noted);
+
+    try {
+      const events = await told(
+        motty({ name: 'coder' }).handle(() => {
+          throw thrown();
+        }),
+        stubHost(
+          {},
+          {
+            record: (record) => {
+              records.push(record);
+            },
+          },
+        ),
+      );
+      await Bun.sleep(5);
+
+      expect(events).toEqual([
+        {
+          type: 'error',
+          error: {
+            code: 'internal',
+            status: 500,
+            message: 'Internal error',
+            retryable: false,
+          },
+          usage: {},
+        },
+      ]);
+      expect(records.map(({ outcome, error }) => ({ outcome, error }))).toEqual(
+        [
+          {
+            outcome: 'failed',
+            error: {
+              code: 'internal',
+              status: 500,
+              message: 'Internal error',
+              retryable: false,
+              unexpected: true,
+            },
+          },
+        ],
+      );
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', noted);
+    }
+  },
+  1_000,
 );

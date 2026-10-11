@@ -1,5 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { Host, Limits, RequestRecord, Storage } from '../contract.ts';
+import {
+  bound,
+  type Host,
+  type Limits,
+  type RequestRecord,
+  type Storage,
+} from '../contract.ts';
 import {
   disclosed,
   LimitReached,
@@ -13,7 +19,7 @@ import { ownSignal, wait } from './wait.ts';
 type Made = RequestRecord['calls'][number];
 
 // What a call says of itself when it ends; the rest of its entry is measured.
-type Reported = Omit<Made, 'model' | 'latencyMs' | 'firstEventMs'>;
+type Reported = Omit<Made, 'model' | 'time'>;
 
 export type Calls = {
   readonly made: readonly Readonly<Made>[];
@@ -71,13 +77,12 @@ function limited(limits: Limits | null | undefined): State['limits'] {
     throw new Error('The host must supply limits as an object');
   }
   const held: Limits = {};
-  for (const name of ['calls', 'afterResponse'] as const) {
-    const limit = limits[name];
-    if (limit === undefined) continue;
-    if (!Number.isInteger(limit) || limit < 0) {
-      throw new Error(`limits.${name} must be a whole number of zero or more`);
-    }
-    held[name] = limit;
+  for (const [name, kind] of [
+    ['calls', 'whole'],
+    ['afterResponse', 'finite'],
+  ] as const) {
+    const limit = bound(`limits.${name}`, limits[name], kind);
+    if (limit !== undefined) held[name] = limit;
   }
   return Object.freeze(held);
 }
@@ -263,19 +268,21 @@ export function openCall(name: string, under?: AbortSignal): OpenCall {
   live.begun += 1;
   live.open += 1;
   const from = performance.now();
-  let firstEventMs: number | undefined;
+  let firstEvent: number | undefined;
   let entry: Readonly<Made> | undefined;
   return {
     signal,
     markFirstEvent: () => {
-      firstEventMs ??= performance.now() - from;
+      firstEvent ??= performance.now() - from;
     },
     close: (reported) => {
-      const latencyMs = performance.now() - from;
-      const call: Made =
-        firstEventMs === undefined
-          ? { model: name, latencyMs }
-          : { model: name, latencyMs, firstEventMs };
+      const total = performance.now() - from;
+      const call: Made = {
+        model: name,
+        time: Object.freeze(
+          firstEvent === undefined ? { total } : { total, firstEvent },
+        ),
+      };
       entry = call;
       count(live, call, reported);
     },

@@ -3,13 +3,12 @@ import type { Json, ReadonlyJson, Storage } from '@mottyjs/core/host';
 // Refused as a real store refuses it, in the same words, so a motty that
 // passes here does not fail there.
 function milliseconds(ttl: number | undefined): number | undefined {
-  const ms = ttl === undefined ? undefined : Math.ceil(ttl * 1000);
-  if (ms !== undefined && (!(ms >= 1) || !Number.isSafeInteger(ms))) {
+  if (ttl !== undefined && (!(ttl >= 1) || !Number.isSafeInteger(ttl))) {
     throw new Error(
-      `A time to live is a positive, finite number of seconds, and ${ttl} is not`,
+      `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
     );
   }
-  return ms;
+  return ttl;
 }
 
 function isList(value: ReadonlyJson): value is readonly ReadonlyJson[] {

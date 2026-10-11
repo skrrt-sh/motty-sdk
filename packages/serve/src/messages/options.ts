@@ -2,18 +2,12 @@ import type { Json, JsonOutput, Options } from '@mottyjs/core/host';
 import type { Codec, Taken } from '../codec.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, isDict } from '../wire/json.ts';
+import { numberOf } from '../wire/number.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { effortless, sampling } from '../wire/taken.ts';
 import { hinted, marked, noted, own, parted } from './family.ts';
 import { reasoningOf, reasoningTo, unsaid } from './reasoning.ts';
 import { choiceOf, choiceTo } from './tools.ts';
-
-function numeric(value: Json | undefined, name: string): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  return typeof value === 'number'
-    ? value
-    : invalid(`${name} must be a number`);
-}
 
 function stopOf(value: Json | undefined): readonly string[] | undefined {
   if (value === undefined || value === null) return undefined;
@@ -83,9 +77,9 @@ export function optionsOf(
     }),
   };
   const sampled = {
-    temperature: numeric(temperature, 'temperature'),
-    topP: numeric(topP, 'top_p'),
-    topK: numeric(topK, 'top_k'),
+    temperature: numberOf(temperature, 'temperature'),
+    topP: numberOf(topP, 'top_p'),
+    topK: numberOf(topK, 'top_k'),
   };
   if (sampled.temperature !== undefined) {
     options.temperature = sampled.temperature;

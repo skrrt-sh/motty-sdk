@@ -22,8 +22,9 @@ function fields(given: Fields): { readonly [key: string]: ReadonlyJson } {
 }
 
 function json(value: Loose): ReadonlyJson {
-  if (typeof value !== 'object' || value === null) return value;
-  return isList(value) ? value.map(json) : fields(value);
+  return typeof value !== 'object' || value === null
+    ? value
+    : structured(value);
 }
 
 export function structured(state: State): Structured {

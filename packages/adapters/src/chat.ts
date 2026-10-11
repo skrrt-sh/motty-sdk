@@ -7,6 +7,7 @@ import {
   credentials,
   endpoint,
   moved,
+  prefixed,
   told,
 } from './connection.ts';
 
@@ -33,8 +34,8 @@ export type Connection = {
 // and a second pair underneath would multiply them.
 export function chat(upstream: Upstream): ModelAdapter {
   const { codec } = upstream;
+  const prefix = `${prefixed(upstream.prefix)}/`;
   const address = addressed(upstream.prefix, upstream.address);
-  const prefix = `${upstream.prefix}/`;
   const { headers: held, clean } = credentials(
     upstream.prefix,
     upstream.key,

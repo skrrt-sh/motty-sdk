@@ -212,6 +212,8 @@ function buffering(
   return made;
 }
 
+export const endedEarly = 'The stream ended without a finish or an error';
+
 async function upstream(events: EventStream, into: Intake): Promise<void> {
   try {
     for await (const event of events) {
@@ -222,9 +224,7 @@ async function upstream(events: EventStream, into: Intake): Promise<void> {
   }
   into.closeUnlessEnded({
     at: 'failed',
-    error: once(
-      () => new MottyError('The stream ended without a finish or an error'),
-    ),
+    error: once(() => new MottyError(endedEarly)),
   });
 }
 

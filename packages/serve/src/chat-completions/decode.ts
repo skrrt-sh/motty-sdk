@@ -1,7 +1,10 @@
 import type { Json, JsonOutput, Options } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
+import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
+import { numberOf } from '../wire/number.ts';
+import { customNames } from '../wire/openai-tools.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { messageOf } from './decode-messages.ts';
 import { choiceOf, toolOf } from './decode-tools.ts';
@@ -14,12 +17,6 @@ type Given = Json | undefined;
 
 function absent(value: Given): value is null | undefined {
   return value === undefined || value === null;
-}
-
-function numberOf(value: Given, name: string): number | undefined {
-  if (absent(value)) return undefined;
-  if (typeof value === 'number') return value;
-  invalid(`${name} must be a number`);
 }
 
 function flagOf(value: Given, name: string): boolean | undefined {
@@ -39,21 +36,9 @@ function stopOf(value: Given): string[] | undefined {
 }
 
 function effortOf(value: Given): NonNullable<Options['reasoning']>['effort'] {
-  switch (value) {
-    case undefined:
-    case null:
-      return undefined;
-    case 'none':
-    case 'minimal':
-    case 'low':
-    case 'medium':
-    case 'high':
-    case 'xhigh':
-    case 'max':
-      return value;
-    default:
-      invalid(`Unknown reasoning effort: ${JSON.stringify(value)}`);
-  }
+  if (absent(value)) return undefined;
+  if (isEffort(value)) return value;
+  invalid(`Unknown reasoning effort: ${JSON.stringify(value)}`);
 }
 
 // Both spellings are read: the API's own field, and the object that routers
@@ -191,11 +176,13 @@ export function decode(body: Json): Decoded {
   const output = outputOf(format);
   const muted = options.reasoning?.exclude === true;
   const { include_usage: usage } = dict(streaming);
+  const listed = list(tools).map(toolOf);
+  const custom = customNames(listed);
   return {
     request: {
       model,
       messages: messages.map(messageOf),
-      tools: list(tools).map(toolOf),
+      tools: listed,
       options,
       ...(output === undefined ? {} : { output }),
     },
@@ -206,8 +193,14 @@ export function decode(body: Json): Decoded {
         model,
         muted,
         usage: usage === true,
+        custom,
       }),
     collected: (events, finish, id) =>
-      collected(formedWhole(events, formless), finish, { id, model, muted }),
+      collected(formedWhole(events, formless), finish, {
+        id,
+        model,
+        muted,
+        custom,
+      }),
   };
 }

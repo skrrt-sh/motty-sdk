@@ -59,7 +59,7 @@ describe.skipIf(url === undefined)('against a server', () => {
   test('a value set again replaces the first and drops its time to live', async () => {
     const storage = redis({ url });
 
-    await storage.set(`${run}:again`, 'fast', { ttl: 1 });
+    await storage.set(`${run}:again`, 'fast', { ttl: 1_000 });
     await storage.set(`${run}:again`, 'deep');
     await Bun.sleep(1200);
     const held = await storage.get(`${run}:again`);
@@ -80,10 +80,10 @@ describe.skipIf(url === undefined)('against a server', () => {
     expect(held).toEqual([1, 2]);
   });
 
-  test('a value set with a time to live is gone after that many seconds', async () => {
+  test('a value set with a time to live is gone after that many milliseconds', async () => {
     const storage = redis({ url });
 
-    await storage.set(`${run}:ttl`, 'deep', { ttl: 1 });
+    await storage.set(`${run}:ttl`, 'deep', { ttl: 1_000 });
     const before = await storage.get(`${run}:ttl`);
     await Bun.sleep(1200);
     const after = await storage.get(`${run}:ttl`);
@@ -92,10 +92,10 @@ describe.skipIf(url === undefined)('against a server', () => {
     expect(after).toBeUndefined();
   });
 
-  test('a time to live may be part of a second', async () => {
+  test('a time to live may be shorter than a second', async () => {
     const storage = redis({ url });
 
-    await storage.set(`${run}:part`, 'deep', { ttl: 0.2 });
+    await storage.set(`${run}:part`, 'deep', { ttl: 200 });
     const before = await storage.get(`${run}:part`);
     await Bun.sleep(400);
     const after = await storage.get(`${run}:part`);
@@ -109,7 +109,7 @@ describe.skipIf(url === undefined)('against a server', () => {
 
     await storage.set(`${run}:none`, 'old');
     const refused = await Promise.allSettled(
-      [0, -1, Number.NaN, Number.POSITIVE_INFINITY].map((ttl) =>
+      [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY].map((ttl) =>
         storage.set(`${run}:none`, 'new', { ttl }),
       ),
     );
@@ -117,6 +117,7 @@ describe.skipIf(url === undefined)('against a server', () => {
     await storage.delete(`${run}:none`);
 
     expect(refused.map(({ status }) => status)).toEqual([
+      'rejected',
       'rejected',
       'rejected',
       'rejected',
@@ -390,9 +391,9 @@ describe.skipIf(url === undefined)('against a server', () => {
   test('the time to live is set by the increment that made the key and left alone by the ones after', async () => {
     const storage = redis({ url });
 
-    await storage.increment?.(`${run}:window`, 1, { ttl: 1 });
+    await storage.increment?.(`${run}:window`, 1, { ttl: 1_000 });
     await Bun.sleep(600);
-    await storage.increment?.(`${run}:window`, 1, { ttl: 60 });
+    await storage.increment?.(`${run}:window`, 1, { ttl: 60_000 });
     const before = await storage.get(`${run}:window`);
     await Bun.sleep(600);
     const after = await storage.get(`${run}:window`);
@@ -406,7 +407,7 @@ describe.skipIf(url === undefined)('against a server', () => {
     const storage = redis({ url });
     await storage.set(`${run}:kept`, 4);
 
-    await storage.increment?.(`${run}:kept`, 1, { ttl: 0.2 });
+    await storage.increment?.(`${run}:kept`, 1, { ttl: 200 });
     await Bun.sleep(400);
     const held = await storage.get(`${run}:kept`);
     await storage.delete(`${run}:kept`);
@@ -416,7 +417,7 @@ describe.skipIf(url === undefined)('against a server', () => {
 
   test('an increment keeps the time to live the key was set with', async () => {
     const storage = redis({ url });
-    await storage.set(`${run}:brief`, 4, { ttl: 0.2 });
+    await storage.set(`${run}:brief`, 4, { ttl: 200 });
 
     const total = await storage.increment?.(`${run}:brief`, 1);
     await Bun.sleep(400);
@@ -509,8 +510,8 @@ test('a url that cannot be parsed fails when made, and is not quoted', () => {
   );
 });
 
-test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
-  'a time to live of %d seconds is named as the mistake before any call',
+test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+  'a time to live of %d milliseconds is named as the mistake before any call',
   async (ttl) => {
     const storage = redis({ url: 'redis://127.0.0.1:1' });
 
@@ -520,7 +521,7 @@ test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
 
     expect(thrown).toEqual(
       new Error(
-        `A time to live is a positive, finite number of seconds, and ${ttl} is not`,
+        `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
       ),
     );
   },
@@ -541,8 +542,8 @@ test.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
   },
 );
 
-test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
-  'an increment with a time to live of %d seconds is named as the mistake before any call',
+test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+  'an increment with a time to live of %d milliseconds is named as the mistake before any call',
   async (ttl) => {
     const storage = redis({ url: 'redis://127.0.0.1:1' });
 
@@ -552,7 +553,7 @@ test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
 
     expect(thrown).toEqual(
       new Error(
-        `A time to live is a positive, finite number of seconds, and ${ttl} is not`,
+        `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
       ),
     );
   },
@@ -565,7 +566,7 @@ test('a server that is down fails every call at once, and keeps failing', async 
   const calls = await Promise.allSettled([
     storage.get('tier:c1'),
     storage.set('tier:c1', 'deep'),
-    storage.set('tier:c1', 'deep', { ttl: 60 }),
+    storage.set('tier:c1', 'deep', { ttl: 60_000 }),
     storage.delete('tier:c1'),
     storage.increment?.('tier:c1', 1),
   ]);

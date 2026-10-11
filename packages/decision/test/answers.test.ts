@@ -172,9 +172,80 @@ test.each([
     { type: 'score', score: 1, probabilities: { '0': 'high' }, confidence: 1 },
   ],
   [
+    'no probability for one of its levels',
+    'lacks a probability for each level',
+    {
+      type: 'score',
+      score: 1,
+      probabilities: { '1': 1 },
+      legend: { '0': 'Low', '1': 'High' },
+      confidence: 1,
+    },
+  ],
+  [
+    'no probabilities at all',
+    'lacks a probability for each level',
+    {
+      type: 'score',
+      score: 1,
+      probabilities: {},
+      legend: { '0': 'Low', '1': 'High' },
+      confidence: 1,
+    },
+  ],
+  [
+    'its score above the highest level',
+    'has a score outside the levels of the question',
+    {
+      type: 'score',
+      score: 7,
+      probabilities: { '0': 0, '1': 1 },
+      legend: { '0': 'Low', '1': 'High' },
+      confidence: 1,
+    },
+  ],
+  [
+    'its score below the lowest level',
+    'has a score outside the levels of the question',
+    {
+      type: 'score',
+      score: -0.5,
+      probabilities: { '0': 1, '1': 0 },
+      legend: { '0': 'Low', '1': 'High' },
+      confidence: 1,
+    },
+  ],
+  [
+    'no finite number as its score',
+    'has no score',
+    {
+      type: 'score',
+      score: Number.NaN,
+      probabilities: { '0': 0, '1': 1 },
+      legend: { '0': 'Low', '1': 'High' },
+      confidence: 1,
+    },
+  ],
+  [
+    'no finite number as its confidence',
+    'has no confidence',
+    {
+      type: 'score',
+      score: 1,
+      probabilities: { '0': 0, '1': 1 },
+      legend: { '0': 'Low', '1': 'High' },
+      confidence: Number.POSITIVE_INFINITY,
+    },
+  ],
+  [
     'no legend',
     'has no legend',
-    { type: 'score', score: 1, probabilities: { '0': 1 }, confidence: 1 },
+    {
+      type: 'score',
+      score: 1,
+      probabilities: { '0': 0, '1': 1 },
+      confidence: 1,
+    },
   ],
   [
     'a legend entry that is neither text nor structured',
@@ -182,7 +253,7 @@ test.each([
     {
       type: 'score',
       score: 1,
-      probabilities: { '0': 1 },
+      probabilities: { '0': 0, '1': 1 },
       legend: { '0': 7 },
       confidence: 1,
     },
@@ -193,7 +264,7 @@ test.each([
     {
       type: 'score',
       score: 1,
-      probabilities: { '0': 1 },
+      probabilities: { '0': 0, '1': 1 },
       legend: { '0': 'Low' },
     },
   ],

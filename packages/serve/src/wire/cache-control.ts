@@ -1,6 +1,6 @@
 import type { Cache, Json } from '@mottyjs/core/host';
-import { type Dict, given, isDict } from '../wire/json.ts';
-import { invalid } from '../wire/refusals.ts';
+import { type Dict, given, isDict } from './json.ts';
+import { invalid } from './refusals.ts';
 
 export function cacheOf(control: Json | undefined): { cache?: Cache } {
   if (control === undefined || control === null) return {};

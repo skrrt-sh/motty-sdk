@@ -4,7 +4,7 @@ import type { Chain, Step, Target } from './builder.ts';
 
 type HookRun = Extract<Step, { kind: 'route' }>['choose'];
 
-export type Boundary = {
+type Boundary = {
   readonly run: Extract<Step, { kind: 'onError' }>['run'];
   readonly owner: string;
 };
@@ -52,7 +52,7 @@ export type Lifecycle = {
   readonly afterResponse: readonly Late[];
 };
 
-export type Assembled = {
+type Assembled = {
   readonly lifecycle: Lifecycle;
   readonly description: Description;
 };

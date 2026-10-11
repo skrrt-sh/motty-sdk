@@ -5,13 +5,12 @@ import { parsed } from './json.ts';
 // The server counts whole milliseconds and refuses none. A time that is no
 // count is the caller's mistake, so it is named before any call.
 function milliseconds(ttl: number): number {
-  const ms = Math.ceil(ttl * 1000);
-  if (!(ms >= 1) || !Number.isSafeInteger(ms)) {
+  if (!(ttl >= 1) || !Number.isSafeInteger(ttl)) {
     throw new Error(
-      `A time to live is a positive, finite number of seconds, and ${ttl} is not`,
+      `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
     );
   }
-  return ms;
+  return ttl;
 }
 
 // Run by the server as one step, so no other command comes between the read

@@ -59,8 +59,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY }) => ({
 }));
 ```
 
-`bun run src/serve.ts` starts it. A client of any of the three APIs then points its base URL at
-the server and calls it as it would a model.
+`bun run src/serve.ts` starts it. Every time in the SDK is in milliseconds and every size in
+bytes. A client of any of the three APIs then points its base URL at the server and calls it as
+it would a model.
 
 A test scripts the models and runs the whole request without the wire:
 
@@ -138,7 +139,7 @@ ahead:
 | [`@mottyjs/settings`](packages/settings) | Plugin | Typed settings a host may override |
 | [`@mottyjs/test`](packages/test) | Test kit | Scripted models, in-memory storage, `run` |
 | [`@mottyjs/serve`](packages/serve) | Host side | `serve`, `mount` and the three wire APIs. Never in a bundle |
-| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, JWT auth |
+| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, and auth: `jwt`, `bearer`, or the host's own object with a `verify` function |
 
 Only the core has no dependencies. Plugins compile into the motty's bundle; the host side never
 does.

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { error, failure, streamFailure } from '../../src/messages/errors.ts';
+import { error, failed, failure } from '../../src/messages/errors.ts';
 
 function body(type: string, message: string) {
   return JSON.stringify({
@@ -232,20 +232,17 @@ test("a body that is not this API's error is named by its status", () => {
 test('the wait an upstream asks for is read from its headers', () => {
   const limited = body('rate_limit_error', 'Slow down.');
   expect(
-    failure(429, new Headers({ 'retry-after': '12' }), limited).retryAfterMs,
+    failure(429, new Headers({ 'retry-after': '12' }), limited).retryAfter,
   ).toBe(12000);
   expect(
-    failure(429, new Headers({ 'retry-after-ms': '250' }), limited)
-      .retryAfterMs,
+    failure(429, new Headers({ 'retry-after-ms': '250' }), limited).retryAfter,
   ).toBe(250);
-  expect(failure(429, new Headers(), limited)).not.toHaveProperty(
-    'retryAfterMs',
-  );
+  expect(failure(429, new Headers(), limited)).not.toHaveProperty('retryAfter');
 });
 
 test('a failure told inside a stream is named by its type alone', () => {
   expect(
-    streamFailure({
+    failed({
       type: 'error',
       error: { type: 'overloaded_error', message: 'Overloaded' },
     }),
@@ -255,7 +252,7 @@ test('a failure told inside a stream is named by its type alone', () => {
     provider: { anthropic: { type: 'overloaded_error' } },
     upstream: true,
   });
-  expect(streamFailure({ type: 'error' })).toEqual({
+  expect(failed({ type: 'error' })).toEqual({
     code: 'upstream_failed',
     message: 'The upstream answered with an error',
     retryable: false,
@@ -419,7 +416,7 @@ test('a router`s failure with nothing beside it keeps its own message', () => {
 
 test('a failure told inside a stream is named by the same table', () => {
   expect(
-    streamFailure({
+    failed({
       type: 'error',
       error: {
         type: 'rate_limit_error',
@@ -429,7 +426,7 @@ test('a failure told inside a stream is named by the same table', () => {
     }).code,
   ).toBe('quota_exceeded');
   expect(
-    streamFailure({
+    failed({
       type: 'error',
       error: { type: 'not_found_error', message: 'Not found' },
     }),
@@ -540,7 +537,7 @@ test.each([
       failure(429, new Headers(), body('rate_limit_error', said)).message,
     ).toBe(told);
     expect(
-      streamFailure({
+      failed({
         type: 'error',
         error: { type: 'rate_limit_error', message: said },
       }),

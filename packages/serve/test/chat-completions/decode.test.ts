@@ -333,3 +333,95 @@ test('an option of the wrong type is refused by name', () => {
   expect(() => read({ response_format: 'json' })).toThrow(InvalidRequest);
   expect(() => read({ n: 'two' })).toThrow('n must be a number');
 });
+
+test('a call to a custom tool the caller declared is answered as a custom call, whoever the upstream was', async () => {
+  const { collected, streamed } = decode({
+    model: 'coder',
+    messages: [{ role: 'user', content: 'List the files.' }],
+    tools: [
+      { type: 'custom', custom: { name: 'shell' } },
+      { type: 'function', function: { name: 'weather' } },
+    ],
+  });
+
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'call_1', name: 'shell', arguments: 'ls -la' },
+        { type: 'tool_call', id: 'call_2', name: 'weather', arguments: '{}' },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      'req_1',
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'custom',
+              custom: { name: 'shell', input: 'ls -la' },
+            },
+            {
+              id: 'call_2',
+              type: 'function',
+              function: { name: 'weather', arguments: '{}' },
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  const [first] = await Array.fromAsync(
+    streamed(
+      (async function* () {
+        yield {
+          type: 'tool_call',
+          id: 'call_1',
+          name: 'shell',
+          arguments: 'ls -la',
+        } as const;
+        yield { type: 'finish', reason: 'tool_calls' } as const;
+      })(),
+      'req_1',
+    ),
+  );
+  expect(JSON.parse(first?.data ?? '')).toMatchObject({
+    choices: [
+      {
+        delta: {
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call_1',
+              type: 'custom',
+              custom: { name: 'shell', input: 'ls -la' },
+            },
+          ],
+        },
+      },
+    ],
+  });
+});
+
+test('a million content parts, pictures or calls in one message are read, not a stack too deep', () => {
+  const many = (one: string) =>
+    JSON.parse(`[${`${one},`.repeat(999_999)}${one}]`);
+  const { request } = decode({
+    model: 'coder',
+    messages: [
+      {
+        role: 'assistant',
+        content: many('{"type":"text","text":"a"}'),
+        images: many('{"image_url":{"url":"https://x.test/a.png"}}'),
+        tool_calls: many(
+          '{"id":"c","type":"function","function":{"name":"f","arguments":"{}"}}',
+        ),
+      },
+    ],
+  });
+
+  expect(request.messages[0]?.parts).toHaveLength(3_000_000);
+});

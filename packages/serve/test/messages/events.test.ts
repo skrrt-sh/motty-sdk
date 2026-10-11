@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { Json } from '@mottyjs/core/host';
 import { events } from '../../src/messages/events.ts';
+import { partsOf } from '../../src/messages/parts.ts';
 
 async function read(...wire: Json[]) {
   async function* upstream() {
@@ -247,6 +248,46 @@ test('input JSON deltas are fragments of the tool call they belong to', async ()
     rawReason: 'tool_use',
   });
 });
+
+test.each([
+  ['tool_use', {}],
+  ['server_tool_use', { hosted: true }],
+])(
+  'a %s block that ends with no input said is told as an empty object, once',
+  async (type, hosted) => {
+    const chunks = await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type, id: 'toolu_01', name: 'get_time', input: {} },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '' },
+      },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_stop', index: 0 },
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'text', text: '' },
+      },
+      { type: 'content_block_stop', index: 1 },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'tool_use', stop_sequence: null },
+      },
+      { type: 'message_stop' },
+    );
+    expect(chunks.slice(0, -1)).toMatchObject([
+      { type: 'tool_call', id: 'toolu_01', name: 'get_time', ...hosted },
+      { type: 'tool_call', id: 'toolu_01', arguments: '', block: 0 },
+      { type: 'tool_call', id: 'toolu_01', arguments: '{}', block: 0 },
+    ]);
+    expect(chunks).toHaveLength(4);
+  },
+);
 
 test("a citation delta is a citation with the upstream's own form kept", async () => {
   const citation = {
@@ -570,4 +611,53 @@ test('blocks with malformed fields are skipped, not guessed', async () => {
       { type: 'message_stop' },
     ),
   ).toMatchObject([{ type: 'finish' }]);
+});
+
+test('an ending said under a key named as the prototype is no ending', async () => {
+  async function* upstream() {
+    yield {
+      data: '{"type":"message_delta","delta":{"__proto__":{"stop_reason":"max_tokens"}},"usage":{"__proto__":{"output_tokens":999}}}',
+    };
+  }
+  expect(await Array.fromAsync(events(upstream()))).toEqual([
+    {
+      type: 'error',
+      error: {
+        code: 'upstream_failed',
+        message: 'The upstream closed the stream before it finished',
+        retryable: true,
+        upstream: true,
+      },
+      usage: {},
+    },
+  ]);
+});
+
+test('a streamed citation whose title is null is titled by its document, as one sent whole is', async () => {
+  const citation = {
+    type: 'char_location',
+    cited_text: 'It grew 4%.',
+    document_index: 0,
+    document_title: 'Annual report',
+    title: null,
+    start_char_index: 0,
+    end_char_index: 11,
+  };
+  const [streamed] = await read({
+    type: 'content_block_delta',
+    index: 0,
+    delta: { type: 'citations_delta', citation },
+  });
+  const [, whole] = partsOf({
+    type: 'text',
+    text: 'It grew.',
+    citations: [citation],
+  });
+  const told = {
+    title: 'Annual report',
+    text: 'It grew 4%.',
+    provider: { anthropic: citation },
+  };
+  expect(whole).toEqual({ type: 'citation', ...told });
+  expect(streamed).toEqual({ type: 'citation', ...told, block: 0 });
 });

@@ -1,4 +1,5 @@
 export {
+  bound,
   type Caller,
   type Contract,
   type DecisionCall,

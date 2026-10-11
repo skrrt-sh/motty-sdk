@@ -1,9 +1,9 @@
 import type { Cache, Media, Part } from '@mottyjs/core/host';
+import { cacheTo } from '../wire/cache-control.ts';
 import { inline } from '../wire/data-url.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, given } from '../wire/json.ts';
 import { a, unsupported } from '../wire/refusals.ts';
-import { cacheTo } from './cache.ts';
 import { hinted, own } from './family.ts';
 
 // A plain-text document is sent as the text it is, so bytes that are not
@@ -114,7 +114,8 @@ function blockOf(
       left.without('audio', part);
       return undefined;
     case 'tool_call':
-      if (part.input === undefined) {
+      // The two OpenAI APIs may say a call with no arguments as no text.
+      if (part.input === undefined && part.raw !== '') {
         unsupported(
           'Anthropic Messages cannot carry tool input that is not JSON',
         );
@@ -123,7 +124,7 @@ function blockOf(
         type: part.hosted === true ? 'server_tool_use' : 'tool_use',
         id: part.id,
         name: part.name,
-        input: copied(part.input),
+        input: part.input === undefined ? {} : copied(part.input),
         ...extra,
         ...cache,
       };
@@ -145,17 +146,15 @@ function blockOf(
 
 // A citation annotates the text before it. Only this family's own form can
 // be written: its location fields have no neutral counterpart.
-function cited(left: Leaving, blocks: Dict[], part: Part): Dict[] {
+function cited(left: Leaving, blocks: Dict[], part: Part): void {
   const citation = hinted(part.provider);
   const last = blocks.at(-1);
   const { type, citations } = last ?? {};
   const own = Object.keys(citation).length > 0;
   if (last === undefined || type !== 'text' || !own) {
     left.without('citation', part);
-    return blocks;
-  }
-  const held = Array.isArray(citations) ? citations : [];
-  return [...blocks.slice(0, -1), { ...last, citations: [...held, citation] }];
+  } else if (Array.isArray(citations)) citations.push(citation);
+  else blocks.splice(-1, 1, { ...last, citations: [citation] });
 }
 
 // The cache marker of a whole message sits on its last block.
@@ -164,10 +163,10 @@ export function blocksOf(
   parts: readonly Part[],
   cache?: Cache,
 ): Dict[] {
-  let blocks: Dict[] = [];
+  const blocks: Dict[] = [];
   for (const part of parts) {
     if (part.type === 'citation') {
-      blocks = cited(left, blocks, part);
+      cited(left, blocks, part);
       continue;
     }
     const block = blockOf(left, part);

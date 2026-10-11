@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { InvalidRequest } from '@mottyjs/core';
 import { decode } from '../../src/messages/decode.ts';
+import { encode } from '../../src/messages/encode.ts';
 import { parsed } from '../../src/wire/json.ts';
 
 test('a plain request is decoded with its model, turns and limit', () => {
@@ -308,4 +309,31 @@ test('each thinking setting decides whether the reply shows progress', async () 
       ),
     ).toMatchObject({ content: kinds.map((type) => ({ type })) });
   }
+});
+
+test('a field named as the prototype is a field like any other, from the body to the upstream', () => {
+  const { request } = decode(
+    parsed(
+      '{"model":"coder","max_tokens":1024,"__proto__":{"polluted":"yes"},"messages":[{"role":"user","__proto__":{"polluted":"yes"},"content":[{"type":"text","text":"Hello","__proto__":{"polluted":"yes"}}]}]}',
+    ) ?? null,
+    new Headers(),
+  );
+  const [message] = request.messages;
+  const [part] = message?.parts ?? [];
+  for (const provider of [
+    request.options.provider,
+    message?.provider,
+    part?.type === 'text' ? part.provider : undefined,
+    structuredClone(request.options.provider),
+  ]) {
+    const { anthropic } = provider ?? {};
+    expect(Object.keys(anthropic ?? {})).toEqual(['__proto__']);
+    expect(Object.getPrototypeOf(anthropic)).toBe(Object.prototype);
+  }
+  expect(JSON.stringify(request.options.provider)).toBe(
+    '{"anthropic":{"__proto__":{"polluted":"yes"}}}',
+  );
+  expect(JSON.stringify(encode('claude-haiku-5-5', request).body)).toBe(
+    '{"__proto__":{"polluted":"yes"},"max_tokens":1024,"model":"claude-haiku-5-5","messages":[{"role":"user","content":[{"type":"text","text":"Hello","__proto__":{"polluted":"yes"}}],"__proto__":{"polluted":"yes"}}],"stream":true}',
+  );
 });

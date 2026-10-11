@@ -27,15 +27,17 @@ export function refused(
   id?: string,
 ): Response {
   const { status, body } = codec.error(facts, id);
+  const { retryAfter: wait } = facts;
   return Response.json(body, {
     status,
     headers: {
       ...named(codec, id),
       // The official client libraries read this before they look at a status.
       'x-should-retry': String(facts.retryable === true),
-      ...(facts.retryAfterMs === undefined
-        ? {}
-        : { 'retry-after': String(Math.ceil(facts.retryAfterMs / 1000)) }),
+      // Facts another host made promise no wait a client can count down.
+      ...(wait !== undefined && Number.isFinite(wait) && wait >= 0
+        ? { 'retry-after': String(Math.ceil(wait / 1000)) }
+        : {}),
     },
   });
 }

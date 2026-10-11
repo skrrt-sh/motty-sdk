@@ -3,7 +3,6 @@ import { InvalidRequest, Unsupported } from '@mottyjs/core';
 import {
   choiceBody,
   choiceOf,
-  customNames,
   toolBody,
   toolOf,
 } from '../../src/responses/tools.ts';
@@ -42,10 +41,18 @@ test('a function tool is read and written back with the same meaning', () => {
 test('a function with no strictness named is read with none', () => {
   expect(
     toolOf({ type: 'function', name: 'a', parameters: null }, 'tools[0]'),
-  ).toEqual({ type: 'function', name: 'a', input: {} });
+  ).toEqual({
+    type: 'function',
+    name: 'a',
+    input: { type: 'object', properties: {} },
+  });
   expect(
     toolOf({ type: 'function', name: 'a', strict: null }, 'tools[0]'),
-  ).toEqual({ type: 'function', name: 'a', input: {} });
+  ).toEqual({
+    type: 'function',
+    name: 'a',
+    input: { type: 'object', properties: {} },
+  });
 });
 
 test('a function with no strictness named is sent with none', () => {
@@ -195,12 +202,10 @@ test('a choice that is neither a mode nor an object is refused', () => {
   ).toThrow(Unsupported);
 });
 
-test('the custom tools are told from the functions by name', () => {
-  expect(
-    customNames([
-      { type: 'function', name: 'weather', input: {} },
-      { type: 'custom', name: 'patch' },
-    ]),
-  ).toEqual(new Set(['patch']));
-  expect(customNames(undefined)).toEqual(new Set());
+test('a function tool with no parameters is one that takes none', () => {
+  expect(toolOf({ type: 'function', name: 'now' }, 'tools[0]')).toEqual({
+    type: 'function',
+    name: 'now',
+    input: { type: 'object', properties: {} },
+  });
 });

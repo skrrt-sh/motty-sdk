@@ -197,7 +197,7 @@ function hostile(kept: unknown[], after: unknown[], name: string) {
         },
         () => decisions?.(name, { state: 'hi', questions: {} }, signal),
         () => storage?.get('key'),
-        () => storage?.set('key', 1, { ttl: 5 }),
+        () => storage?.set('key', 1, { ttl: 5000 }),
         () => storage?.delete('key'),
         () => storage?.increment?.('key', 1),
       ]) {

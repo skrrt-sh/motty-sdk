@@ -5,6 +5,7 @@ import {
   Unsupported,
 } from '@mottyjs/core';
 import {
+  bound,
   type HostOptions,
   hosting,
   type Marked,
@@ -47,15 +48,6 @@ function shuttingDown(): Overloaded {
   return new Overloaded('The server is shutting down');
 }
 
-// A bound that is no number would refuse nothing, with no word of it.
-function bound(name: string, given: number | undefined, unset: number): number {
-  const held = given ?? unset;
-  if (!(Number.isFinite(held) && held >= 0)) {
-    throw new Error(`${name} must be a finite number of zero or more`);
-  }
-  return held;
-}
-
 // The edge alone, for a host with a server of its own: nothing here touches
 // the process or a listener.
 export function mount<
@@ -67,13 +59,16 @@ export function mount<
   const started = new Date();
   const { begin, landed, stopAll } = flights();
   const given = options(Bun.env);
+  // Made first: it refuses a limit that is no number, the body's among them.
+  const admit = hosting(motty, given);
+  const drain = bound('drain', edge.drain) ?? 25_000;
   const serving = {
-    admit: hosting(motty, given),
+    admit,
     run,
-    keepAlive: edge.keepAlive ?? 15_000,
+    keepAlive: bound('keepAlive', edge.keepAlive) ?? 15_000,
     body: {
-      size: bound('limits.body', given.limits?.body, 32 * 1024 * 1024),
-      time: bound('receive', edge.receive, 60_000),
+      size: given.limits?.body ?? 32 * 1024 * 1024,
+      time: bound('receive', edge.receive) ?? 60_000,
     },
     begin,
   };
@@ -84,7 +79,7 @@ export function mount<
   // record says so, and is given a moment to hand that record over.
   async function close(): Promise<void> {
     closing = true;
-    if (!(await landed(edge.drain ?? 25_000))) {
+    if (!(await landed(drain))) {
       stopAll(shuttingDown());
       await landed(1_000);
     }

@@ -15,6 +15,8 @@ decided in the architecture document; this one decides only its inside.
 - **A file past 300 lines is two concepts.** Split it by concept, never into a part one and two.
   Rejected by example: Elysia's 8,000-line builder, the AI SDK's 3,500-line stream file.
 - **Types live with the scope that owns them.** No shared types file, no utilities file.
+- **What two codecs share lives in one shared place, and no codec imports another.** Cause: three
+  copies of the number reader, and a codec reading another's internals.
 - **A layer imports only layers listed above it in the scopes table, and no import forms a cycle.**
   Checked by lint.
 - **Two hand-written entry files, one for authors and one for hosts, with named exports only.** A
@@ -241,6 +243,10 @@ a model adapter, host code written against the contract.
 - **A credential's headers are built once, when an adapter is made, not per call.**
 - **The link rule and the cuts are linear in the length of what the upstream said.** Measured,
   a 200 kB rate-limit body of sentence breaks took 686 milliseconds and takes 3.
+- **Encoding to Anthropic Messages is linear in the turns and the citations it gathers.**
+  Measured, 80,000 consecutive tool messages, a body of 4.3 MB and well inside the body limit,
+  held the single-threaded host for 9.5 seconds, and one text with 80,000 citations for 3.6;
+  they take 26 and 14 milliseconds.
 
 ## Bun by layer
 
@@ -293,8 +299,8 @@ Baselines are recorded at the first milestone; each gate fails a change, not a r
 - **Serving:** a served request on each of the three APIs, streamed, and one whole, each timed
   against the same path built from the base commit, in one process, the two taking turns. A
   quarter over fails, one limit for all: the same code against itself read 0.95 to 1.06, and a
-  path made half again slower never read below 1.43. It measures nothing until the base commit
-  holds the host side.
+  path made half again slower never read below 1.43. It measures nothing where there is no base
+  commit.
 - **Rivals:** the same work through motty and through the Vercel AI SDK, Mastra, LangChain JS
   and TanStack AI, on one stubbed upstream, the SDKs taking turns: time per call, cold start
   and bundle size. A rival must take more than 1.1 times motty's time and more than its bytes.
@@ -336,6 +342,6 @@ Two and three share no scope and run in parallel.
 ## Deliberately out
 
 - A functional library or a result type for the public API: errors are thrown, as decided.
-- Build-time generation of the flattened chain: only if the lifecycle benchmark asks for it.
+- Build-time generation of the flattened chain: only if a measurement of assembly at first use asks for it.
 - A release tool of our own, a custom test helper layer, a benchmark framework beyond one script.
 - Splitting the core into more packages: the layers are files, and the bundler drops what is unused.

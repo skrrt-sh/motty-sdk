@@ -284,3 +284,19 @@ test('a collected reply is a response object with the request id', () => {
     model: 'coder',
   });
 });
+
+test('a million content parts in one message are read, not a stack too deep', () => {
+  const one = '{"type":"output_text","text":"a"}';
+  const { request } = decode({
+    model: 'coder',
+    input: [
+      {
+        type: 'message',
+        role: 'assistant',
+        content: JSON.parse(`[${`${one},`.repeat(999_999)}${one}]`),
+      },
+    ],
+  });
+
+  expect(request.messages[0]?.parts).toHaveLength(1_000_000);
+});

@@ -27,7 +27,7 @@ export default serve(
     limits: { duration: 90_000, calls: 12, afterResponse: 10_000 },
     settings: {
       triage: { abuseProbability: 0.9 },
-      conversation: { rememberedSeconds: 7 * 24 * 60 * 60 },
+      conversation: { remembered: 7 * 24 * 60 * 60 * 1000 },
     },
     report: (record) => console.log(JSON.stringify(record)),
   }),

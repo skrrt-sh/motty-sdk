@@ -31,10 +31,19 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, REDIS_URL, JWKS_URL })
 }));
 ```
 
-A request body is at most `limits.body` bytes, 32 MB unless stated, and has the edge's `receive`
-milliseconds to arrive, 60 000 unless stated in the third argument beside `keepAlive` and `drain`:
-`serve(coder, options, { receive: 30_000 })`. Every reply to a request that was let in carries
-the id of its report, in `x-request-id` on the two OpenAI APIs and in `request-id` on Messages.
+Every time is in milliseconds and every size in bytes. A request body is at most `limits.body`,
+32 MB unless stated, and has the edge's `receive` to arrive, 60 000 unless stated in the third
+argument beside `keepAlive` and `drain`: `serve(coder, options, { receive: 30_000 })`. Every limit
+and every time of the edge is checked when the host is made. Every reply to a request that was
+let in carries the id of its report, in `x-request-id` on the two OpenAI APIs and in `request-id`
+on Messages.
+
+In development, start the serve file with `bun --watch src/serve.ts`, the examples'
+`bun run dev`. Bun starts the process again on the same port whenever the motty or a file it
+imports changes, so the next request is answered by the new code, about 0.1 to 0.3 s later. An
+edit that does not load prints its error and leaves nothing listening until the file is fixed,
+when the server comes back by itself. This is for development only: a restart does not drain, and
+a request in flight is cut off, so a deployed host runs the serve file plainly.
 
 The SDK as a whole is described in the
 [root README](https://github.com/skrrt-sh/motty-sdk#readme), and the reasons behind its design in

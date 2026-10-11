@@ -151,7 +151,7 @@ test.each([
           expected === 'upstream_refused'
             ? "The upstream refused the host's credentials or account"
             : 'The upstream said why',
-        retryAfterMs: 3000,
+        retryAfter: 3000,
         upstream: true,
       },
     },

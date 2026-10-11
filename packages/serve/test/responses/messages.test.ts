@@ -348,3 +348,23 @@ test('a cache breakpoint on input content is read as a cache marker', () => {
     },
   ]);
 });
+
+test('function arguments that are a bare string stay as written, never a custom tool`s input', () => {
+  expect(
+    messagesOf([
+      {
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'shell',
+        arguments: '"ls -la"',
+      },
+    ]),
+  ).toEqual([
+    {
+      role: 'assistant',
+      parts: [
+        { type: 'tool_call', id: 'call_1', name: 'shell', raw: '"ls -la"' },
+      ],
+    },
+  ]);
+});

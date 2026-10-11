@@ -337,16 +337,35 @@ test('with no key set, key or secret it fails when made', () => {
   expect(() => jwt({ key: undefined })).toThrow(
     'The jwt adapter was given no public key',
   );
+  expect(() => jwt({ key: '' })).toThrow(
+    'The jwt adapter was given no public key',
+  );
   expect(() => jwt({ secret: undefined })).toThrow(
     'The jwt adapter was given no secret',
   );
   expect(() => jwt({ secret: '' })).toThrow(
     'The jwt adapter was given no secret',
   );
-  expect(() => jwt({ key: 'not a key' })).toThrow();
 });
 
-test('two ways to verify cannot be given at once, in the types or past them', () => {
+test('a public key that is no PEM fails when made, in words that hold none of it', () => {
+  expect(() => jwt({ key: 'held-in-the-option' })).toThrow(
+    /^The jwt adapter was given a public key that is no PEM$/,
+  );
+});
+
+test('a source read from the environment, which may be missing, is an option, and fails when made if it is', () => {
+  const env: { JWKS_URL?: string; JWT_PUBLIC_KEY?: string } = {};
+
+  expect(() => jwt({ jwks: env.JWKS_URL })).toThrow(
+    'The jwt adapter was given no key set address',
+  );
+  expect(() =>
+    jwt({ key: env.JWT_PUBLIC_KEY, issuer: 'https://id.example' }),
+  ).toThrow('The jwt adapter was given no public key');
+});
+
+test('two sources cannot be given at once, nor none, in the types or past them', () => {
   const both: { secret: string; key: string } = {
     secret: 'host-secret',
     key: 'not read',
@@ -356,8 +375,20 @@ test('two ways to verify cannot be given at once, in the types or past them', ()
   expect(() => jwt(both)).toThrow(
     'The jwt adapter takes exactly one of a key set address, a public key and a secret',
   );
+  // @ts-expect-error nor are a key set address and a secret
+  expect(() => jwt({ jwks: 'https://id.example', secret: 'a' })).toThrow(
+    'The jwt adapter takes exactly one of a key set address, a public key and a secret',
+  );
+  // @ts-expect-error nor a key set address and a public key
+  expect(() => jwt({ jwks: undefined, key: 'b' })).toThrow(
+    'The jwt adapter takes exactly one of a key set address, a public key and a secret',
+  );
   // @ts-expect-error nor is none of them
   expect(() => jwt({})).toThrow('The jwt adapter takes exactly one of');
+  // @ts-expect-error nor the checks alone
+  expect(() => jwt({ issuer: 'https://id.example' })).toThrow(
+    'The jwt adapter takes exactly one of',
+  );
 });
 
 test('the plain secret gives the caller the host named', async () => {
@@ -380,6 +411,12 @@ test('a wrong plain secret of any length means no caller', async () => {
 test('with no plain secret it fails when made', () => {
   expect(() => bearer({ secret: undefined, id: 'ops' })).toThrow(
     'The bearer adapter was given no secret',
+  );
+});
+
+test('with no id for its caller it fails when made', () => {
+  expect(() => bearer({ secret: 'host-secret', id: '' })).toThrow(
+    'The bearer adapter was given no id',
   );
 });
 

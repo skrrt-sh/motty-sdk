@@ -8,7 +8,8 @@ The host puts the motty's name ahead of every key.
 import { store } from "@mottyjs/store";
 ```
 
-Remembering which tier answered a conversation, for a day:
+Remembering which tier answered a conversation, for a day. A time to live is a whole number of
+milliseconds:
 
 ```ts
 import type { ChatRequest } from "@mottyjs/core";
@@ -28,7 +29,7 @@ export async function previousTier(request: ChatRequest): Promise<Tier | undefin
 
 export async function remember(request: ChatRequest, tier: Tier): Promise<void> {
   const key = tierKey(request);
-  if (key) await store.set(key, tier, { ttl: 24 * 60 * 60 });
+  if (key) await store.set(key, tier, { ttl: 24 * 60 * 60 * 1000 });
 }
 ```
 

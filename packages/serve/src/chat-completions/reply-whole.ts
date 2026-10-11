@@ -8,25 +8,33 @@ import { usageField } from './usage.ts';
 // Sound arrives in fragments of one object: its data and its transcript
 // grow, and what names it is said once.
 function heard(whole: Dict, fragment: Dict): Dict {
-  const merged = { ...whole };
-  for (const [key, value] of Object.entries(fragment)) {
-    const held = merged[key];
-    merged[key] =
-      typeof held === 'string' &&
-      typeof value === 'string' &&
-      (key === 'data' || key === 'transcript')
-        ? held + value
-        : value;
-  }
-  return merged;
+  // Made from entries, a key named as the prototype is a key like any other.
+  return Object.fromEntries([
+    ...Object.entries(whole),
+    ...Object.entries(fragment).map(([key, value]): [string, Json] => {
+      const held =
+        key === 'data' || key === 'transcript' ? whole[key] : undefined;
+      return [
+        key,
+        typeof held === 'string' && typeof value === 'string'
+          ? held + value
+          : value,
+      ];
+    }),
+  ]);
 }
 
 export function collected(
   events: readonly (Chunk | Progress)[],
   finish: Finish,
-  given: { id: string; model: string; muted: boolean },
+  given: {
+    id: string;
+    model: string;
+    muted: boolean;
+    custom?: ReadonlySet<string>;
+  },
 ): Json {
-  const piece = pieces(given.muted);
+  const piece = pieces(given.muted, given.custom);
   const said = { reasoning: '', content: '', refusal: '' };
   const tokens: { content: Json[]; refusal: Json[] } = {
     content: [],

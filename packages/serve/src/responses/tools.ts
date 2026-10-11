@@ -9,6 +9,7 @@ import {
   list,
   text,
 } from '../wire/json.ts';
+import { parameterless } from '../wire/openai-tools.ts';
 import { invalid } from '../wire/refusals.ts';
 import { carried, family, marked, own } from './family.ts';
 import { field, without } from './fields.ts';
@@ -41,7 +42,7 @@ export function toolOf(raw: Json, at: string): Tool {
       type: 'function',
       name,
       ...described,
-      input: dict(parameters),
+      input: isDict(parameters) ? parameters : parameterless(),
       // Left out, the API picks strictness by the schema; saying either
       // for the caller could have a schema it accepts turned down.
       ...(typeof strict === 'boolean' ? { strict } : {}),
@@ -91,14 +92,6 @@ export function choiceOf(raw: Json): ToolChoice {
     }
   }
   return { provider: { [family]: raw } };
-}
-
-export function customNames(tools: Tools | undefined): Set<string> {
-  const names = new Set<string>();
-  for (const tool of tools ?? []) {
-    if (tool.type === 'custom') names.add(tool.name);
-  }
-  return names;
 }
 
 export function toolBody(left: Leaving, tool: Tools[number]): Dict {

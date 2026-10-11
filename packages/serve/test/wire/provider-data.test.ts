@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
+import { dict, parsed } from '../../src/wire/json.ts';
 import { providerData } from '../../src/wire/provider-data.ts';
 
 const { hinted, own, marked, noted } = providerData(
@@ -220,4 +221,14 @@ test('a wire with no provider key holds nothing to that check', () => {
     hints: {},
     leftOut: [],
   });
+});
+
+test('a field named as the prototype is written as a field, and nothing is read through it', () => {
+  const { provider } = marked(
+    dict(parsed('{"__proto__":{"logprobs":true},"top_logprobs":0}')),
+  );
+  const { 'openai.chat': fields } = provider ?? {};
+
+  expect(Object.keys(fields ?? {})).toEqual(['__proto__', 'top_logprobs']);
+  expect(Object.getPrototypeOf(fields)).toBe(Object.prototype);
 });

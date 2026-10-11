@@ -32,7 +32,7 @@ declare function tierOf(
 declare function remember(
   request: ChatRequest,
   tier: 'quick' | 'standard' | 'deep',
-  settings: { rememberedSeconds: number },
+  settings: { remembered: number },
 ): Promise<void>;
 declare function sizeOf(
   request: ChatRequest,
@@ -46,10 +46,10 @@ const tuning = motty({ name: 'settings' }).derive(() => ({
     tiers: {
       quickQuestionChars: 400,
       deepProbability: 0.35,
-      rememberedSeconds: 86_400,
+      remembered: 86_400_000,
     },
     structured: { smallProbability: 0.7 },
-    deep: { firstChunkMs: 20_000 },
+    deep: { firstChunk: 20_000 },
   },
 }));
 
@@ -101,8 +101,8 @@ const deep = motty({ name: 'deep' })
     prompt.options = { ...prompt.options, reasoning: { effort: 'high' } };
   })
   .handle(({ prompt, settings }) => {
-    const firstChunkMs: number = settings.deep.firstChunkMs;
-    return complete({ ...prompt, options: { maxTokens: firstChunkMs } });
+    const firstChunk: number = settings.deep.firstChunk;
+    return complete({ ...prompt, options: { maxTokens: firstChunk } });
   });
 
 const tiers = motty({ name: 'tiers' })
@@ -428,9 +428,9 @@ test('a handler sees the values derived before its table', () => {
     .derive(() => ({ tenant: 'acme' }))
     .route(() => 'only', {
       only: ({ prompt, settings, tenant }) => {
-        const firstChunkMs: number = settings.deep.firstChunkMs;
+        const firstChunk: number = settings.deep.firstChunk;
         const named: string = tenant;
-        note(`${firstChunkMs} ${named}`);
+        note(`${firstChunk} ${named}`);
         return complete(prompt);
       },
       // @ts-expect-error
@@ -517,8 +517,8 @@ test('a nested motty reads a value of its parent only through the part that deri
   const shared = motty({ name: 'deep' })
     .use(tuning)
     .handle(({ prompt, settings }) => {
-      const firstChunkMs: number = settings.deep.firstChunkMs;
-      note(`${firstChunkMs}`);
+      const firstChunk: number = settings.deep.firstChunk;
+      note(`${firstChunk}`);
       return complete(prompt);
     });
   const alone = motty({ name: 'alone' })

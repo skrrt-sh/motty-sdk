@@ -281,21 +281,26 @@ async function drive(
   let ended: Ended;
   let given: Routed | undefined;
   try {
-    admitted();
-    const routed = await lived(
-      lifecycle,
-      { request, prompt: sent(request), signal, calls, path: [] },
-      finished,
-      trace,
-    );
-    ended = await out.answered(routed.answer);
-    given = routed;
+    try {
+      admitted();
+      const routed = await lived(
+        lifecycle,
+        { request, prompt: sent(request), signal, calls, path: [] },
+        finished,
+        trace,
+      );
+      ended = await out.answered(routed.answer);
+      given = routed;
+    } catch (thrown) {
+      ended = await out.failed(thrown);
+    }
+    answered(trace, ended, given?.path, given?.early);
+    await afterwards(finished, ended.outcome, state, trace);
+    recorded(trace, calls);
   } catch (thrown) {
-    ended = await out.failed(thrown);
+    // Nothing known throws this far; what does must still end the stream.
+    await out.failed(thrown);
   }
-  answered(trace, ended, given?.path, given?.early);
-  await afterwards(finished, ended.outcome, state, trace);
-  recorded(trace, calls);
 }
 
 export function contractOf(motty: AnyMotty): Contract {

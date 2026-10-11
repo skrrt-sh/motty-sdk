@@ -46,6 +46,23 @@ test('with no key it fails when made, unless the address is its own', () => {
   expect(() => typesafe({ address: 'http://localhost:8000/v1' })).not.toThrow();
 });
 
+test('with no key it fails in words that name it by the prefix the host gave it', () => {
+  expect(() => typesafe({ key: undefined, prefix: 'jev' })).toThrow(
+    'The jev adapter was given no key',
+  );
+});
+
+test.each(['', 'laya/v1', '/'])(
+  'the prefix %p fails when the adapter is made',
+  (prefix) => {
+    expect(() =>
+      typesafe({ address: 'http://localhost:8000/v1', prefix }),
+    ).toThrow(
+      /^An adapter was given a prefix that is no name: it takes one or more characters and no \/$/,
+    );
+  },
+);
+
 test('a decision of all three kinds goes out and its answer comes back as it is', async () => {
   const input = {
     state: 'Help! My payouts have been failing for 3 days.',
@@ -217,7 +234,7 @@ test.each([
       code === 'upstream_refused'
         ? "The upstream refused the host's credentials or account"
         : 'The upstream said why',
-    retryAfterMs: 2000,
+    retryAfter: 2000,
     provider: { typesafe: { status } },
     upstream: true,
     cause: '{"detail":"The upstream said why"}',
@@ -875,7 +892,7 @@ test('a wait the upstream gives in milliseconds is read before the one in second
     AbortSignal.timeout(5000),
   ).catch((raised: unknown) => raised);
 
-  expect(toFacts(thrown)).toMatchObject({ retryAfterMs: 250 });
+  expect(toFacts(thrown)).toMatchObject({ retryAfter: 250 });
 });
 
 test('an address that ends in a slash asks the same path', async () => {
@@ -912,7 +929,7 @@ test('past its time limit a call fails as timed out, and the upstream sees it', 
   // A limit that fires before the request reaches the server leaves it no
   // abort to see, so this one is long enough for a machine under load.
   const { decisions } = adapted([
-    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeoutMs: 500 }),
+    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeout: 500 }),
   ]);
 
   const thrown = await decisions(
@@ -924,6 +941,42 @@ test('past its time limit a call fails as timed out, and the upstream sees it', 
   expect(thrown).toBeInstanceOf(TimedOut);
   expect(toFacts(thrown)).toMatchObject({ status: 504, retryable: true });
   expect((await left.promise).type).toBe('abort');
+});
+
+test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+  'a time limit of %p fails when the adapter is made, in words that name the adapter and the option',
+  (timeout) => {
+    expect(() => typesafe({ key: 'ts-host', timeout })).toThrow(
+      /^The typesafe adapter's timeout must be a finite number of zero or more$/,
+    );
+    expect(() =>
+      typesafe({
+        address: 'http://localhost:8000/v1',
+        prefix: 'laya',
+        timeout,
+      }),
+    ).toThrow(
+      /^The laya adapter's timeout must be a finite number of zero or more$/,
+    );
+  },
+);
+
+test('a time limit of zero is a time, and a call under it times out', async () => {
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: () => new Promise<Response>(() => {}),
+  });
+  const { decisions } = adapted([
+    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeout: 0 }),
+  ]);
+
+  const thrown = await decisions(
+    'typesafe/jev-latest',
+    { state: 'hi', questions: {} },
+    new AbortController().signal,
+  ).catch((raised: unknown) => raised);
+
+  expect(thrown).toBeInstanceOf(TimedOut);
 });
 
 test('a stop ends a call the upstream never answers, and the upstream sees it', async () => {

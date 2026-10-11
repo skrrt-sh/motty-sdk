@@ -308,7 +308,10 @@ test('the overrides are typed by the settings the motty declares, for a serve fi
   const untyped: HostOptions = { settings: { anything: { goes: true } } };
 
   serve(tuned, () => ({ settings: { routing: { tier: 'deep' } } }));
-  serve(tuned, ({ PORT }) => ({ ...typed, limits: { calls: Number(PORT) } }));
+  serve(tuned, ({ PORT }) => ({
+    ...typed,
+    limits: { calls: Number(PORT ?? 8) },
+  }));
   mount(tuned, () => ({ settings: {} }));
   mount(tuned, () => untyped);
   mount(tuned, () => ({
@@ -552,20 +555,13 @@ test('the limit on after-response work is passed to the bundle', async () => {
   });
 });
 
-test('a limit that is no whole number fails the request like any other, with a report', async () => {
-  const reported = Promise.withResolvers<Report>();
-  const served = serve(
-    motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
-    () => ({ limits: { calls: 1.5 }, report: reported.resolve }),
-  );
-
-  const reply = await served.fetch(ask());
-
-  expect(reply.status).toBe(500);
-  expect(await reported.promise).toMatchObject({
-    outcome: 'failed',
-    error: { message: 'limits.calls must be a whole number of zero or more' },
-  });
+test('a limit that is no whole number fails when the host is made, before any request', () => {
+  expect(() =>
+    serve(
+      motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
+      () => ({ limits: { calls: 1.5 } }),
+    ),
+  ).toThrow('limits.calls must be a whole number of zero or more');
 });
 
 test("the report is the record with the request's id and the overrides in effect", async () => {
@@ -591,13 +587,11 @@ test("the report is the record with the request's id and the overrides in effect
     calls: [
       {
         model: 'openai/gpt',
-        latencyMs: expect.any(Number),
-        firstEventMs: expect.any(Number),
+        time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       },
     ],
     usage: {},
-    answerMs: expect.any(Number),
-    totalMs: expect.any(Number),
+    time: { answer: expect.any(Number), total: expect.any(Number) },
     afterResponse: { failed: [], skipped: [], unreached: [] },
   });
   expect(await first.json()).toMatchObject({

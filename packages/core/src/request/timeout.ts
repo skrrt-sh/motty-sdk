@@ -1,4 +1,4 @@
-import type { EventStream } from '../contract.ts';
+import { bound, type EventStream } from '../contract.ts';
 import { stopReason, TimedOut, toFacts } from '../data/errors.ts';
 import { isTerminal, type StreamEvent } from '../data/event.ts';
 import { callable, callOf, type Model, type Read, stopEvent } from './model.ts';
@@ -27,10 +27,6 @@ type Watch =
 
 const late = Symbol('late');
 
-function invalid(amount?: number): boolean {
-  return amount !== undefined && !(Number.isFinite(amount) && amount >= 0);
-}
-
 async function firstOrLate(
   opening: Promise<Upstream>,
   left: Promise<typeof gone>,
@@ -50,7 +46,7 @@ function stallWatched(
   upstream: Upstream,
   leave: Leave,
   signal: AbortSignal,
-  stallMs?: number,
+  stall?: number,
 ): EventStream {
   let watch: Watch = { at: 'streaming' };
 
@@ -96,7 +92,7 @@ function stallWatched(
     giveUp({
       type: 'error',
       error: toFacts(
-        new TimedOut(`The stream stalled: no event in ${stallMs} ms`),
+        new TimedOut(`The stream stalled: no event in ${stall} ms`),
       ),
     });
   }
@@ -140,7 +136,7 @@ function stallWatched(
       case 'streaming': {
         const read = Promise.withResolvers<Read>();
         // Timed from the pull, so a slow reader never counts as a stall.
-        watch = { at: 'reading', read, timer: clock(stalled, stallMs) };
+        watch = { at: 'reading', read, timer: clock(stalled, stall) };
         pull();
         return read.promise;
       }
@@ -167,28 +163,28 @@ function stallWatched(
   });
 }
 
+// Both limits are in milliseconds. A bare number is the first chunk's.
 export function timeout(
   model: Model,
-  limit: number | { firstMs?: number; stallMs?: number },
+  limit: number | { first?: number; stall?: number },
 ): Model {
   const call = callOf(model);
-  const limits = typeof limit === 'number' ? { firstMs: limit } : limit;
+  const limits = typeof limit === 'number' ? { first: limit } : limit;
   if (
     typeof limits !== 'object' ||
     limits === null ||
-    Object.getPrototypeOf(limits) !== Object.prototype ||
-    invalid(limits.firstMs) ||
-    invalid(limits.stallMs)
+    Object.getPrototypeOf(limits) !== Object.prototype
   ) {
     throw new Error('timeout() needs limits of zero or more milliseconds');
   }
-  const { firstMs, stallMs } = limits;
-  if (firstMs === undefined && stallMs === undefined) return model;
+  const first = bound('first', limits.first);
+  const stall = bound('stall', limits.stall);
+  if (first === undefined && stall === undefined) return model;
   return callable(async (prompt, signal) => {
     if (signal.aborted) throw stopReason(signal.reason);
     const leave = leaving(signal);
     const run = begin(call, prompt, signal, ownSignal(signal));
-    const opened = await firstOrLate(run.pending, leave.gone, firstMs).catch(
+    const opened = await firstOrLate(run.pending, leave.gone, first).catch(
       (failure: unknown) => {
         leave.forget();
         throw signal.aborted ? stopReason(signal.reason, failure) : failure;
@@ -198,10 +194,10 @@ export function timeout(
       throw stopReason(signal.reason, abandonKeepingFailure(run, undefined));
     }
     if (opened !== late) {
-      return stallWatched(run, opened, leave, signal, stallMs);
+      return stallWatched(run, opened, leave, signal, stall);
     }
     leave.forget();
     abandon(run);
-    throw new TimedOut(`No first chunk pulled within ${firstMs} ms`);
+    throw new TimedOut(`No first chunk pulled within ${first} ms`);
   });
 }

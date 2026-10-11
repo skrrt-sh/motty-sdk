@@ -1,6 +1,7 @@
 import type {
   Chunk,
   FinishReason,
+  Json,
   StreamEvent,
   Usage,
 } from '@mottyjs/core/host';
@@ -216,9 +217,12 @@ function ended(block: number, seen: Seen, item: Dict): Chunk[] {
     case 'message':
       if (seen.said) return [];
       return list(field(item, 'content')).flatMap((part): Chunk[] => {
-        const { type, text: said, refusal } = dict(part);
+        const { type, text: said, refusal, annotations } = dict(part);
         if (type === 'output_text' && typeof said === 'string') {
-          return [spoken(block, seen, 'text', said)];
+          return [
+            spoken(block, seen, 'text', said),
+            ...list(annotations).map((annotation) => cited(block, annotation)),
+          ];
         }
         return type === 'refusal' && typeof refusal === 'string'
           ? [spoken(block, seen, 'refusal', refusal)]
@@ -231,6 +235,19 @@ function ended(block: number, seen: Seen, item: Dict): Chunk[] {
         ? [{ type: 'provider', block, provider: { [family]: item } }]
         : [];
   }
+}
+
+function cited(block: number, raw: Json | undefined): Chunk {
+  const annotation = dict(raw);
+  const { url, title, filename } = annotation;
+  const named = text(title) ?? text(filename);
+  return {
+    type: 'citation',
+    ...(typeof url === 'string' ? { url } : {}),
+    ...(named === undefined ? {} : { title: named }),
+    block,
+    provider: { [family]: annotation },
+  };
 }
 
 // The first text of a message says which phase of the answer it belongs to.
@@ -283,20 +300,8 @@ function read(event: Dict, items: Map<number, Seen>): Chunk[] {
     case 'response.function_call_arguments.delta':
     case 'response.custom_tool_call_input.delta':
       return [fragment(block, seen, {}, delta)];
-    case 'response.output_text.annotation.added': {
-      const annotation = dict(field(event, 'annotation'));
-      const { url, title, filename } = annotation;
-      const named = text(title) ?? text(filename);
-      return [
-        {
-          type: 'citation',
-          ...(typeof url === 'string' ? { url } : {}),
-          ...(named === undefined ? {} : { title: named }),
-          block,
-          provider: { [family]: annotation },
-        },
-      ];
-    }
+    case 'response.output_text.annotation.added':
+      return [cited(block, field(event, 'annotation'))];
     default:
       return [];
   }

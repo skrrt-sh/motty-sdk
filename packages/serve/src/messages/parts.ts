@@ -1,7 +1,7 @@
 import type { Cache, Content, Json, Media, Part } from '@mottyjs/core/host';
+import { cacheOf } from '../wire/cache-control.ts';
 import { type Dict, isDict } from '../wire/json.ts';
 import { invalid } from '../wire/refusals.ts';
-import { cacheOf } from './cache.ts';
 import { family, marked } from './family.ts';
 
 type Marker = { cache?: Cache };
@@ -31,8 +31,9 @@ function writtenOf(source: Json | undefined): Media | undefined {
   return { data: btoa(bytes), mediaType };
 }
 
-function citationOf(raw: Json): Part {
-  if (!isDict(raw)) invalid('A citation must be an object');
+// Whole or streamed, a citation is read one way: a search result has a
+// title of its own, and a quote from a document its document's.
+export function cited(raw: Dict): Extract<Part, { type: 'citation' }> {
   const { cited_text: text, document_title: document, title, url } = raw;
   const named = typeof title === 'string' ? title : document;
   return {
@@ -42,6 +43,11 @@ function citationOf(raw: Json): Part {
     ...(typeof text === 'string' ? { text } : {}),
     provider: { [family]: raw },
   };
+}
+
+function citationOf(raw: Json): Part {
+  if (!isDict(raw)) invalid('A citation must be an object');
+  return cited(raw);
 }
 
 function callOf(fields: Dict, cache: Marker, hosted: boolean): Part {

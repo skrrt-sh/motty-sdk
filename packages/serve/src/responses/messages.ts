@@ -46,7 +46,8 @@ function callOf(item: Dict, at: string): Part {
   }
   const given = text(source) ?? '';
   const value = parsed(given);
-  return value === undefined
+  // A bare string is a custom tool's input, never a function's arguments.
+  return value === undefined || typeof value === 'string'
     ? { type: 'tool_call', id, name, raw: given, ...more }
     : { type: 'tool_call', id, name, input: value, ...more };
 }
@@ -128,7 +129,7 @@ export function messagesOf(input: Json | undefined): Message[] {
         const role = roleOf(field(item, 'role'), at);
         if (role === 'assistant') {
           turn = joined(messages, turn, role);
-          turn.parts.push(...spoken(item, at));
+          for (const part of spoken(item, at)) turn.parts.push(part);
           break;
         }
         const { content } = item;

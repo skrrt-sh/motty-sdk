@@ -10,8 +10,8 @@ export const tuning = settings({
     rounds: z.number().int().min(1).max(2).default(2),
   }),
   timeouts: z.object({
-    firstMs: milliseconds.default(20_000),
-    stallMs: milliseconds.default(15_000),
+    first: milliseconds.default(20_000),
+    stall: milliseconds.default(15_000),
   }),
   spend: z.object({
     requestUsd: dollars.default(0.05),

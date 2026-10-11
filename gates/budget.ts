@@ -2,7 +2,7 @@ import type { Measured } from './measure.ts';
 
 type Counts = Record<string, number>;
 
-export type Baseline = {
+type Baseline = {
   [Gate in keyof Omit<Measured, 'reproducibility' | 'timePerCall'>]: Counts;
 };
 

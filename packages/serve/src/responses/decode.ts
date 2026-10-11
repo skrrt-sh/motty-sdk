@@ -1,5 +1,6 @@
 import type { Json, JsonOutput, Message, Options } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
+import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import {
   type Dict,
@@ -8,6 +9,8 @@ import {
   isDict,
   text,
 } from '../wire/json.ts';
+import { numberOf } from '../wire/number.ts';
+import { customNames } from '../wire/openai-tools.ts';
 import { meant } from '../wire/provider-data.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { family, marked, noted } from './family.ts';
@@ -15,17 +18,11 @@ import { field, without } from './fields.ts';
 import { formless } from './formless.ts';
 import { messagesOf } from './messages.ts';
 import { collected, streamed } from './response.ts';
-import { choiceOf, customNames, toolOf } from './tools.ts';
+import { choiceOf, toolOf } from './tools.ts';
 
 function given(body: Dict, key: string): Json | undefined {
   const { [key]: value } = body;
   return value === null ? undefined : value;
-}
-
-function numeric(body: Dict, key: string): number | undefined {
-  const value = given(body, key);
-  if (value === undefined || typeof value === 'number') return value;
-  invalid(`${key} must be a number`);
 }
 
 // Each needs state the server would hold between requests, and none is held.
@@ -55,19 +52,8 @@ function refused(body: Dict): void {
 }
 
 function effortOf(effort: Json | undefined) {
-  switch (effort) {
-    case undefined:
-    case 'none':
-    case 'minimal':
-    case 'low':
-    case 'medium':
-    case 'high':
-    case 'xhigh':
-    case 'max':
-      return effort;
-    default:
-      invalid('reasoning.effort is not a known effort');
-  }
+  if (effort === undefined || isEffort(effort)) return effort;
+  invalid('reasoning.effort is not a known effort');
 }
 
 function outputOf(format: Json | undefined): JsonOutput | undefined {
@@ -88,6 +74,8 @@ function outputOf(format: Json | undefined): JsonOutput | undefined {
 
 function optionsOf(body: Dict): Options {
   const { tool_choice: choice, parallel_tool_calls: parallel } = body;
+  const { max_output_tokens, temperature: heat, top_p } = body;
+  const { presence_penalty, frequency_penalty } = body;
   const { effort, summary, generate_summary, ...thinking } = dict(
     given(body, 'reasoning'),
   );
@@ -107,12 +95,12 @@ function optionsOf(body: Dict): Options {
         : {}),
     };
   }
-  const maxTokens = numeric(body, 'max_output_tokens');
-  const temperature = numeric(body, 'temperature');
-  const topP = numeric(body, 'top_p');
+  const maxTokens = numberOf(max_output_tokens, 'max_output_tokens');
+  const temperature = numberOf(heat, 'temperature');
+  const topP = numberOf(top_p, 'top_p');
   const user = text(given(body, 'user'));
-  const presencePenalty = numeric(body, 'presence_penalty');
-  const frequencyPenalty = numeric(body, 'frequency_penalty');
+  const presencePenalty = numberOf(presence_penalty, 'presence_penalty');
+  const frequencyPenalty = numberOf(frequency_penalty, 'frequency_penalty');
   if (presencePenalty !== undefined) options.presencePenalty = presencePenalty;
   if (frequencyPenalty !== undefined) {
     options.frequencyPenalty = frequencyPenalty;

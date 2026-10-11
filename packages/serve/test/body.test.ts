@@ -217,17 +217,24 @@ test('a body of exactly the limit is taken, and with no limit stated 32 MB is th
 });
 
 test.each([
-  [{ limits: { body: Number.NaN } }, {}, 'limits.body'],
-  [{ limits: { body: -1 } }, {}, 'limits.body'],
-  [{ limits: { body: Number.POSITIVE_INFINITY } }, {}, 'limits.body'],
-  [{}, { receive: Number.NaN }, 'receive'],
-  [{}, { receive: -1 }, 'receive'],
-  [{}, { receive: Number.POSITIVE_INFINITY }, 'receive'],
+  [{ limits: { body: Number.NaN } }, {}, 'limits.body', 'whole'],
+  [{ limits: { body: 0.5 } }, {}, 'limits.body', 'whole'],
+  [{ limits: { calls: 1.5 } }, {}, 'limits.calls', 'whole'],
+  [{ limits: { duration: -1 } }, {}, 'limits.duration', 'finite'],
+  [{}, { receive: Number.NaN }, 'receive', 'finite'],
+  [{}, { receive: -1 }, 'receive', 'finite'],
+  [{}, { receive: Number.POSITIVE_INFINITY }, 'receive', 'finite'],
+  [{}, { keepAlive: Number.NaN }, 'keepAlive', 'finite'],
+  [{}, { keepAlive: -1 }, 'keepAlive', 'finite'],
+  [{}, { keepAlive: Number.POSITIVE_INFINITY }, 'keepAlive', 'finite'],
+  [{}, { drain: Number.NaN }, 'drain', 'finite'],
+  [{}, { drain: -1 }, 'drain', 'finite'],
+  [{}, { drain: Number.POSITIVE_INFINITY }, 'drain', 'finite'],
 ])(
-  'a body limit or a time to receive that is no finite number of zero or more fails when the host is made, named: %o %o',
-  (options, edge, name) => {
+  'a limit or a time of the edge that is no number of zero or more fails when the host is made, named: %o %o',
+  (options, edge, name, kind) => {
     expect(() => mount(coder, () => options, edge)).toThrow(
-      `${name} must be a finite number of zero or more`,
+      `${name} must be a ${kind} number of zero or more`,
     );
   },
 );

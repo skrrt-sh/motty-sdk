@@ -262,7 +262,7 @@ test('the error event carries retry facts as plain data', () => {
       code: 'overloaded',
       status: 529,
       message: 'Try again',
-      retryAfterMs: 1500,
+      retryAfter: 1500,
       retryable: true,
       provider: { anthropic: { type: 'overloaded_error' } },
     },

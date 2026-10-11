@@ -951,3 +951,23 @@ test.each([
     `The Responses API cannot carry ${a(part.type)} part the model wrote`,
   );
 });
+
+test('a million calls in one message are each an item, not a stack too deep', () => {
+  const { input } = inputOf(
+    leaving('responses'),
+    [
+      {
+        role: 'assistant',
+        parts: Array.from({ length: 1_000_000 }, () => ({
+          type: 'tool_call' as const,
+          id: 'call_1',
+          name: 'now',
+          input: {},
+        })),
+      },
+    ],
+    new Set(),
+  );
+
+  expect(input).toHaveLength(1_000_000);
+});

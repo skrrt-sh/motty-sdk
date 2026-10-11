@@ -213,3 +213,11 @@ export type ChatRequest = Closed<{
   options: Options;
   output?: JsonOutput;
 }> & { readonly headers: Headers };
+
+// A function holds keys as an object does: some validator libraries make
+// their schemas callable.
+export function keyed(value: unknown): value is object {
+  return (
+    (typeof value === 'object' && value !== null) || typeof value === 'function'
+  );
+}

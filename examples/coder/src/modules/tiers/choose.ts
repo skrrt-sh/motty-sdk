@@ -30,10 +30,10 @@ export async function tierOf(
 export async function remember(
   request: ChatRequest,
   tier: Tier,
-  { rememberedSeconds }: TierSettings,
+  { remembered }: TierSettings,
 ): Promise<void> {
   const key = tierKey(request);
-  if (key) await store.set(key, tier, { ttl: rememberedSeconds });
+  if (key) await store.set(key, tier, { ttl: remembered });
 }
 
 function tierKey(request: ChatRequest): string | undefined {

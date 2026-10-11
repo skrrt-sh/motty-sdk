@@ -1,11 +1,12 @@
 import type { ErrorFacts } from './data/errors.ts';
 import type { Finish, StreamEvent, Usage } from './data/event.ts';
-import type {
-  ChatRequest,
-  Json,
-  JsonOutput,
-  Prompt,
-  ReadonlyJson,
+import {
+  type ChatRequest,
+  type Json,
+  type JsonOutput,
+  keyed,
+  type Prompt,
+  type ReadonlyJson,
 } from './data/message.ts';
 
 // From the global registry, so a bundle's SDK copy and the host's agree on it.
@@ -39,6 +40,7 @@ export type DecisionCall = (
   signal: AbortSignal,
 ) => Promise<Json>;
 
+// A time to live is a whole number of milliseconds.
 export type Storage = {
   get: (key: string) => Promise<Json | undefined>;
   set: (
@@ -57,7 +59,21 @@ export type Storage = {
 
 export type Caller = { id: string };
 
+// The time after the response is in milliseconds.
 export type Limits = { calls?: number; afterResponse?: number };
+
+// A bound that is no number would refuse nothing, with no word of it.
+export function bound(
+  name: string,
+  given: number | undefined,
+  kind: 'finite' | 'whole' = 'finite',
+): number | undefined {
+  const counts = kind === 'whole' ? Number.isInteger : Number.isFinite;
+  if (given !== undefined && !(counts(given) && given >= 0)) {
+    throw new Error(`${name} must be a ${kind} number of zero or more`);
+  }
+  return given;
+}
 
 export type Host = {
   models: ModelCall;
@@ -72,6 +88,7 @@ export type Host = {
 };
 
 // A caller who left gets no terminal event, so why the request ended is here.
+// Every time in it is in milliseconds.
 export type RequestRecord = {
   outcome: 'completed' | 'aborted' | 'failed';
   error?: ErrorFacts;
@@ -80,16 +97,14 @@ export type RequestRecord = {
   part?: string;
   calls: (Usage & {
     model: string;
-    latencyMs: number;
-    firstEventMs?: number;
+    time: { total: number; firstEvent?: number };
     code?: ErrorFacts['code'];
     // What the failure said, so one a fallback recovered from is still told.
     message?: string;
     warnings?: NonNullable<Finish['warnings']>;
   })[];
   usage: Usage;
-  answerMs: number;
-  totalMs: number;
+  time: { answer: number; total: number };
   afterResponse: {
     failed: { part: string; error: ErrorFacts }[];
     // The hooks the time limit left no time for.
@@ -114,9 +129,5 @@ export type Contract = {
 export type Marked = { readonly [mark]: Contract };
 
 export function isMarked(value: unknown): value is Marked {
-  return (
-    ((typeof value === 'object' && value !== null) ||
-      typeof value === 'function') &&
-    mark in value
-  );
+  return keyed(value) && mark in value;
 }

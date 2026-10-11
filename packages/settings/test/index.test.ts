@@ -164,7 +164,7 @@ test('an override for a group the motty does not define is not a setting and is 
         read.push(Object.keys(settings));
         return answer('Hi');
       }),
-    { settings: { deep: { firstChunkMs: 1 }, toString: {} } },
+    { settings: { deep: { firstChunk: 1 }, toString: {} } },
   );
 
   expect(record.outcome).toBe('completed');
@@ -417,4 +417,161 @@ test('the entry exports exactly the held types', async () => {
   expect(
     [...text.matchAll(/export type (\w+)/g)].map(([, name]) => name),
   ).toEqual(['Settings']);
+});
+
+test('a write to a default throws in the motty that makes it, and the next request reads the defaults', async () => {
+  const read: unknown[] = [];
+  const served = motty({ name: 'coder' })
+    .use(
+      settings({
+        tiers: z.object({
+          threshold: z.number().default(0.5),
+          names: z.array(z.string()).default(['a']),
+        }),
+      }),
+    )
+    .handle(({ request, settings }) => {
+      if (request.id === 'req_write') {
+        Object.assign(settings.tiers.names, { 1: 'evil' });
+        Object.assign(settings.tiers, { threshold: 99 });
+      }
+      read.push(structuredClone(settings));
+      return answer('Hi');
+    });
+  const record = Promise.withResolvers<RequestRecord>();
+
+  await Array.fromAsync(
+    served[mark].run(
+      { ...ask(), id: 'req_write' },
+      {
+        models: unserved,
+        signal: new AbortController().signal,
+        record: record.resolve,
+      },
+    ),
+  );
+  await ran(served);
+
+  expect((await record.promise).outcome).toBe('failed');
+  expect(read).toEqual([{ tiers: { threshold: 0.5, names: ['a'] } }]);
+});
+
+test('with overrides, a write to any group or to the settings themselves throws, and the next request reads what the host set', async () => {
+  const read: unknown[] = [];
+  const written: string[] = [];
+  const served = motty({ name: 'coder' })
+    .use(
+      settings({
+        tiers: z.object({ names: z.array(z.string()).default(['a']) }),
+        limits: z.object({ turns: z.array(z.number()).default([8]) }),
+        raw: {
+          '~standard': {
+            version: 1,
+            vendor: 'test',
+            validate: (value: unknown) => ({ value }),
+          },
+        },
+      }),
+    )
+    .handle(({ request, settings }) => {
+      if (request.id === 'req_write') {
+        for (const [name, write] of [
+          ['a default', () => Object.assign(settings.tiers.names, { 1: 'x' })],
+          ['an override', () => Object.assign(settings.limits.turns, [99])],
+          [
+            'what the host passed',
+            () =>
+              typeof settings.raw === 'object' &&
+              settings.raw !== null &&
+              Object.assign(settings.raw, { x: 1 }),
+          ],
+          ['the settings', () => Object.assign(settings, { tiers: {} })],
+        ] as const) {
+          try {
+            write();
+            written.push(name);
+          } catch {}
+        }
+      }
+      read.push(structuredClone(settings));
+      return answer('Hi');
+    });
+  const overrides = { limits: { turns: [3] }, raw: { deep: { list: [1] } } };
+
+  await Array.fromAsync(
+    served[mark].run(
+      { ...ask(), id: 'req_write' },
+      {
+        models: unserved,
+        signal: new AbortController().signal,
+        settings: overrides,
+      },
+    ),
+  );
+  await ran(served, { settings: overrides });
+
+  expect(written).toEqual([]);
+  expect(read[1]).toEqual({
+    tiers: { names: ['a'] },
+    limits: { turns: [3] },
+    raw: { deep: { list: [1] } },
+  });
+});
+
+test('a group named as the prototype is a group like any other, and the settings inherit nothing', async () => {
+  const read: unknown[] = [];
+  const served = motty({ name: 'coder' })
+    .use(
+      settings({
+        ['__proto__']: z.object({ threshold: z.number().default(0.5) }),
+        tiers: z.object({ deep: z.number().default(0.35) }),
+      }),
+    )
+    .handle(({ settings }) => {
+      read.push([
+        Object.keys(settings).sort(),
+        Object.getOwnPropertyDescriptor(settings, '__proto__')?.value,
+        'threshold' in settings,
+        'toString' in settings,
+      ]);
+      return answer('Hi');
+    });
+
+  const plain = await ran(served);
+  const overridden = await ran(served, {
+    settings: JSON.parse('{"__proto__":{"threshold":0.9}}'),
+  });
+
+  expect([plain.record.outcome, overridden.record.outcome]).toEqual([
+    'completed',
+    'completed',
+  ]);
+  expect(read).toEqual([
+    [['__proto__', 'tiers'], { threshold: 0.5 }, false, false],
+    [['__proto__', 'tiers'], { threshold: 0.9 }, false, false],
+  ]);
+});
+
+test('a group whose validation gives a thenable that is no Promise fails the motty at load like any asynchronous one', () => {
+  const later = Promise.resolve({ value: { deepProbability: 0.35 } });
+
+  expect(() =>
+    settings({
+      tiers: {
+        '~standard': {
+          version: 1,
+          vendor: 'test',
+          validate: () => ({
+            // biome-ignore lint/suspicious/noThenProperty: a thenable that is no Promise is the case
+            then: later.then.bind(later),
+            catch: later.catch.bind(later),
+            finally: later.finally.bind(later),
+            [Symbol.toStringTag]: 'Thenable',
+          }),
+        },
+      },
+    }),
+  ).toThrow(
+    'The settings group "tiers" validates asynchronously, so it cannot be checked at load',
+  );
 });

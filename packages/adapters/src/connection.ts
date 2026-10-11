@@ -21,6 +21,18 @@ export function addressed(prefix: string, address: string): string {
   return address;
 }
 
+// A model is named as the prefix, a slash and the provider's own name. An
+// empty prefix would serve names that start with the slash, and one that
+// holds a slash would leave where the provider's name starts unsaid.
+export function prefixed(prefix: string): string {
+  if (prefix === '' || prefix.includes('/')) {
+    throw new Error(
+      'An adapter was given a prefix that is no name: it takes one or more characters and no /',
+    );
+  }
+  return prefix;
+}
+
 // A fetch that threw says only that it threw: whether the request was
 // stopped is read from the signal, which is the same on every runtime.
 // What it threw may quote the request, so the secrets are cut from it.

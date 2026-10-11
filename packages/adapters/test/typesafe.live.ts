@@ -19,14 +19,14 @@ const { TYPESAFE_KEY: key = '', LAYA_ADDRESS: address = '' } = Bun.env;
 
 // A new connection, or a checkpoint Laya loads on its first call, takes
 // longer than the adapter's own limit allows a decision.
-const timeoutMs = 30_000;
+const timeout = 30_000;
 
 function jev(held = key) {
-  return typesafe({ key: held, timeoutMs });
+  return typesafe({ key: held, timeout });
 }
 
 function laya(body: { [control: string]: number } = {}) {
-  return typesafe({ address, prefix: 'laya', timeoutMs, body });
+  return typesafe({ address, prefix: 'laya', timeout, body });
 }
 
 function decided(name: string, state: string) {
@@ -119,7 +119,7 @@ describe.each([
             },
           },
         },
-        AbortSignal.timeout(timeoutMs),
+        AbortSignal.timeout(timeout),
       );
 
       await expect(asked).rejects.toBeInstanceOf(UnknownModel);
@@ -136,7 +136,7 @@ describe.each([
     'an address with no decisions at it rejects as an upstream failure nothing retries, and as no unknown model',
     async () => {
       const thrown = await adapted([
-        typesafe({ key, address: wrong, prefix, timeoutMs }),
+        typesafe({ key, address: wrong, prefix, timeout }),
       ])
         .decisions(
           `${prefix}/english`,
@@ -149,7 +149,7 @@ describe.each([
               },
             },
           },
-          AbortSignal.timeout(timeoutMs),
+          AbortSignal.timeout(timeout),
         )
         .catch((raised: unknown) => raised);
 
@@ -182,7 +182,7 @@ describe.skipIf(key === '')('against Jev', () => {
         state: 'We were billed twice for March.',
         questions: { refund: { type: 'noul' } },
       },
-      AbortSignal.timeout(timeoutMs),
+      AbortSignal.timeout(timeout),
     );
 
     await expect(asked).rejects.toBeInstanceOf(InvalidRequest);
@@ -208,7 +208,7 @@ describe.skipIf(address === '')('against Laya', () => {
     );
     const { text } = await sorted(
       'laya/jev-latest',
-      typesafe({ address, prefix: 'laya', timeoutMs, routes: true }),
+      typesafe({ address, prefix: 'laya', timeout, routes: true }),
     );
 
     expect(refused).toBeInstanceOf(UnknownModel);

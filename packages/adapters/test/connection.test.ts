@@ -5,6 +5,7 @@ import {
   credentials,
   endpoint,
   moved,
+  prefixed,
   told,
 } from '../src/connection.ts';
 
@@ -292,6 +293,19 @@ test('an address with no credentials is the address as it was written', () => {
   expect(addressed('acme', 'http://localhost:8000/v1/')).toBe(
     'http://localhost:8000/v1/',
   );
+});
+
+test.each(['', 'acme/eu', '/'])(
+  'the prefix %p, which would serve names no caller writes, fails',
+  (prefix) => {
+    expect(() => prefixed(prefix)).toThrow(
+      /^An adapter was given a prefix that is no name: it takes one or more characters and no \/$/,
+    );
+  },
+);
+
+test('a prefix that is a name is the prefix as it was written', () => {
+  expect(prefixed('acme-eu.2')).toBe('acme-eu.2');
 });
 
 test.each([301, 302, 303, 307, 308])(

@@ -147,7 +147,7 @@ type PathsOf<Table> = {
 }[keyof Table];
 
 // With no parent named its context is never, so any recover fits.
-export type Caught<Inner, Name extends string, Outer = never> = {
+type Caught<Inner, Name extends string, Outer = never> = {
   readonly entry: Inner;
   readonly recover: (
     thrown: unknown,

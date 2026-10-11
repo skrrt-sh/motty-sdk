@@ -89,13 +89,15 @@ function resultsOf({ role, content, ...fields }: Dict): Json[] | undefined {
 // turn, where the two OpenAI APIs send a message or an item for each.
 function gathered(turns: readonly Dict[]): Dict[] {
   const sent: Dict[] = [];
+  // The results of the turn sent last, added to in place: read again and
+  // copied for every turn, a long run cost the square of its length.
+  let open: Json[] | undefined;
   for (const turn of turns) {
-    const last = sent.at(-1);
-    const held = last === undefined ? undefined : resultsOf(last);
     const more = resultsOf(turn);
-    if (last === undefined || held === undefined || more === undefined) {
+    if (open === undefined || more === undefined) {
       sent.push(turn);
-    } else sent.splice(-1, 1, { ...last, content: [...held, ...more] });
+      open = more;
+    } else for (const result of more) open.push(result);
   }
   return sent;
 }

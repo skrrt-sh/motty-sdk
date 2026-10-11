@@ -6,6 +6,7 @@ import {
   reasonOf,
   stopOf,
 } from '../../src/messages/finish.ts';
+import { dict, parsed } from '../../src/wire/json.ts';
 
 test('every stop reason has a finish reason, and comes back as itself', () => {
   for (const [stop, reason] of [
@@ -119,4 +120,14 @@ test('the tokens spent thinking are the reasoning count, both ways', () => {
     output_tokens: 503,
     output_tokens_details: { thinking_tokens: 480 },
   });
+});
+
+test('a count named as the prototype is a field, and no count is read through it', () => {
+  const counts = merged(
+    { input_tokens: 25 },
+    dict(parsed('{"__proto__":{"output_tokens":999}}')),
+  );
+
+  expect(Object.keys(counts)).toEqual(['input_tokens', '__proto__']);
+  expect(countsOf(counts)).toEqual({ input: 25 });
 });

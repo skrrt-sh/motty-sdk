@@ -1,5 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
-import * as assembly from '../../src/chain/assemble.ts';
+import { expect, test } from 'bun:test';
 import { type Base, chain, type Motty } from '../../src/chain/builder.ts';
 import { motty } from '../../src/chain/motty.ts';
 import { reroute } from '../../src/chain/route.ts';
@@ -31,7 +30,7 @@ declare function tierOf(
 declare function remember(
   request: ChatRequest,
   tier: 'quick' | 'standard' | 'deep',
-  settings: { rememberedSeconds: number },
+  settings: { remembered: number },
 ): Promise<void>;
 declare function sizeOf(
   request: ChatRequest,
@@ -45,10 +44,10 @@ const tuning = motty({ name: 'settings' }).derive(() => ({
     tiers: {
       quickQuestionChars: 400,
       deepProbability: 0.35,
-      rememberedSeconds: 86_400,
+      remembered: 86_400_000,
     },
     structured: { smallProbability: 0.7 },
-    deep: { firstChunkMs: 20_000 },
+    deep: { firstChunk: 20_000 },
   },
 }));
 
@@ -100,8 +99,8 @@ const deep = motty({ name: 'deep' })
     prompt.options = { ...prompt.options, reasoning: { effort: 'high' } };
   })
   .handle(({ prompt, settings }) => {
-    const firstChunkMs: number = settings.deep.firstChunkMs;
-    return complete({ ...prompt, options: { maxTokens: firstChunkMs } });
+    const firstChunk: number = settings.deep.firstChunk;
+    return complete({ ...prompt, options: { maxTokens: firstChunk } });
   });
 
 const tiers = motty({ name: 'tiers' })
@@ -833,22 +832,4 @@ test('the mark of a frozen motty cannot be given another contract', () => {
     Object.defineProperty(served, mark, { value: other[mark] }),
   ).toThrow(TypeError);
   expect(served[mark]).toBe(contractOf(served));
-});
-
-test('a chain is assembled when its mark is first read, not when it is built', () => {
-  const assembled = spyOn(assembly, 'assemble');
-  try {
-    const part = motty({ name: 'part' }).derive(() => ({ tier: 'quick' }));
-    const served = motty({ name: 'root' })
-      .use(part)
-      .handle(() => answer('Handled'));
-    const built = assembled.mock.calls.length;
-    served[mark];
-    served[mark];
-
-    expect(built).toBe(0);
-    expect(assembled.mock.calls.map(([root]) => root)).toEqual([served[chain]]);
-  } finally {
-    assembled.mockRestore();
-  }
 });

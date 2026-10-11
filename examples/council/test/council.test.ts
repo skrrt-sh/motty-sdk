@@ -314,7 +314,7 @@ describe("time limits", () => {
     const { answer: opinions, calls } = await run(
       panel.handle(({ opinions }) => answer(opinions.join(" | "))),
       { text: "What is the capital of Australia?" },
-      { models: [models], settings: { timeouts: { firstMs: 20 } } },
+      { models: [models], settings: { timeouts: { first: 20 } } },
     );
 
     expect(await opinions.text()).toBe("From OpenAI | From OpenAI | From OpenRouter");
@@ -339,7 +339,7 @@ describe("time limits", () => {
     const { answer: opinions } = await run(
       panel.handle(({ opinions }) => answer(opinions.join(" | "))),
       { text: "What is the capital of Australia?" },
-      { models: [models], settings: { timeouts: { stallMs: 20 } } },
+      { models: [models], settings: { timeouts: { stall: 20 } } },
     );
 
     expect(await opinions.text()).toBe("Canberra | Canberra, I think");

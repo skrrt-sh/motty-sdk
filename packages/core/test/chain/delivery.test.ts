@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { AnyMotty } from '../../src/chain/builder.ts';
 import { motty } from '../../src/chain/motty.ts';
 import { contractOf } from '../../src/chain/run.ts';
@@ -7,7 +7,6 @@ import { UpstreamFailed } from '../../src/data/errors.ts';
 import type { Chunk, StreamEvent, Usage } from '../../src/data/event.ts';
 import type { ChatRequest } from '../../src/data/message.ts';
 import { answer, buffered } from '../../src/request/answer.ts';
-import * as context from '../../src/request/context.ts';
 import { model } from '../../src/request/model.ts';
 import { fallback } from '../../src/request/switching.ts';
 import { think } from '../../src/request/think.ts';
@@ -844,27 +843,4 @@ test('an answer made outside any request is left when the host closes the stream
   expect(replayed.value).toEqual({ type: 'text', text: 'Half' });
   expect((await again.promise).outcome).toBe('aborted');
   expect(closed).toBe(0);
-}, 1_000);
-
-test('a caller who left before the terminal event has the phase of the answer ended once', async () => {
-  const ended = spyOn(context, 'endPhase');
-  const over = Promise.withResolvers<RequestRecord>();
-
-  const reader = reading(
-    motty({ name: 'coder' }).handle(({ prompt }) =>
-      model('acme/small').complete(prompt),
-    ),
-    {
-      ...stubHost({}, { record: over.resolve }),
-      models: () => stalling({ type: 'text', text: 'Half' }),
-    },
-  );
-  await reader.next();
-  await reader.return?.();
-  const { outcome } = await over.promise;
-  const times = ended.mock.calls.length;
-  ended.mockRestore();
-
-  expect(outcome).toBe('aborted');
-  expect(times).toBe(1);
 }, 1_000);

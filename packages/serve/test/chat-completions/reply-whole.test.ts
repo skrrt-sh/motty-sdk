@@ -392,3 +392,30 @@ test('pictures a model made are collected in the field a stream sends them in', 
     ],
   });
 });
+
+test('a field of sound named as the prototype is a field like any other', () => {
+  const reply = collected(
+    [
+      {
+        type: 'provider',
+        provider: {
+          'openai.chat': {
+            audio: JSON.parse(
+              '{"id":"audio_1","__proto__":{"x":1},"data":"Uk"}',
+            ),
+          },
+        },
+      },
+      {
+        type: 'provider',
+        provider: { 'openai.chat': { audio: { data: 'lG' } } },
+      },
+    ],
+    { type: 'finish', reason: 'stop' },
+    { id: 'req_1', model: 'coder', muted: false },
+  );
+
+  expect(JSON.stringify(reply)).toContain(
+    '"audio":{"id":"audio_1","__proto__":{"x":1},"data":"UklG"}',
+  );
+});

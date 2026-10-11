@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
+import type { Message } from '@mottyjs/core/host';
 import { chatCompletions } from '../../src/chat-completions/index.ts';
+import { decode } from '../../src/messages/decode.ts';
 import { encode } from '../../src/messages/encode.ts';
 
 test('a prompt is sent as a streamed request with the version header', () => {
@@ -546,6 +548,90 @@ test('a turn of results is gathered with its own marker and failure flag, and on
     ],
   });
 });
+
+function results(count: number): readonly Message[] {
+  const { request } = chatCompletions.decode(
+    {
+      model: 'coder',
+      messages: [
+        { role: 'user', content: 'Check every host.' },
+        ...Array.from({ length: count }, (_, at) => ({
+          role: 'tool',
+          tool_call_id: `call_${at}`,
+          content: 'up',
+        })),
+      ],
+    },
+    new Headers(),
+  );
+  return request.messages;
+}
+
+function citations(count: number): readonly Message[] {
+  const { request } = decode(
+    {
+      model: 'coder',
+      max_tokens: 1024,
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: 'It grew.',
+              citations: Array.from({ length: count }, (_, at) => ({
+                type: 'char_location',
+                cited_text: 'grew',
+                document_index: 0,
+                start_char_index: at,
+                end_char_index: at + 4,
+              })),
+            },
+          ],
+        },
+      ],
+    },
+    new Headers(),
+  );
+  return request.messages;
+}
+
+test('results gathered and citations put back are written as they always were', () => {
+  expect(
+    JSON.stringify(encode('claude-haiku-5-5', { messages: results(3) }).body),
+  ).toBe(
+    '{"max_tokens":64000,"model":"claude-haiku-5-5","messages":[{"role":"user","content":"Check every host."},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_0","content":"up"},{"type":"tool_result","tool_use_id":"call_1","content":"up"},{"type":"tool_result","tool_use_id":"call_2","content":"up"}]}],"stream":true}',
+  );
+  expect(
+    JSON.stringify(encode('claude-haiku-5-5', { messages: citations(3) }).body),
+  ).toBe(
+    '{"max_tokens":64000,"model":"claude-haiku-5-5","messages":[{"role":"assistant","content":[{"type":"text","text":"It grew.","citations":[{"type":"char_location","cited_text":"grew","document_index":0,"start_char_index":0,"end_char_index":4},{"type":"char_location","cited_text":"grew","document_index":0,"start_char_index":1,"end_char_index":5},{"type":"char_location","cited_text":"grew","document_index":0,"start_char_index":2,"end_char_index":6}]}]}],"stream":true}',
+  );
+});
+
+// The least of five rounds is read, so a busy machine does not fail it.
+function quickest(messages: readonly Message[]): number {
+  let least = Number.POSITIVE_INFINITY;
+  for (let round = 0; round < 5; round++) {
+    const start = performance.now();
+    encode('claude-haiku-5-5', { messages });
+    least = Math.min(least, performance.now() - start);
+  }
+  return least;
+}
+
+// Four times the input takes four times as long when the work grows with
+// it, and sixteen when it grows with its square.
+test.each([
+  ['results of tools, a turn each', results],
+  ['citations of one text', citations],
+])(
+  '%s are encoded in time that grows with their number, not its square',
+  (_, made) => {
+    expect(quickest(made(40_000)) / quickest(made(10_000))).toBeLessThan(8);
+  },
+  60_000,
+);
 
 test.each([
   [

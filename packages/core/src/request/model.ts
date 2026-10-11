@@ -15,7 +15,13 @@ import {
   type Usage,
 } from '../data/event.ts';
 import type { JsonOutput, OutputSchema, Prompt } from '../data/message.ts';
-import { type Answer, buffered, calledBy, type Parsed } from './answer.ts';
+import {
+  type Answer,
+  buffered,
+  calledBy,
+  endedEarly,
+  type Parsed,
+} from './answer.ts';
 import { current, mayGoUnawaited, openCall } from './context.ts';
 import { wired } from './output-schema.ts';
 import { close, onAbort, reader, reasonOf } from './wait.ts';
@@ -113,7 +119,7 @@ function thrownBy(thrown: unknown, name: string): Terminal {
 }
 
 function entering(result: IteratorResult<unknown>): StreamEvent | string {
-  if (result?.done) return 'The stream ended without a finish or an error';
+  if (result?.done) return endedEarly;
   return (
     eventOf(result?.value) ?? 'The host sent something that is not an event'
   );

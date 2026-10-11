@@ -394,7 +394,7 @@ test('an upstream`s failure is answered to the caller in the API`s error body', 
 
   expect(facts).toMatchObject({
     code: 'quota_exceeded',
-    retryAfterMs: 20_000,
+    retryAfter: 20_000,
     provider: { 'openai.chat': { status: 429, code: 'insufficient_quota' } },
   });
   expect(chatCompletions.error(facts)).toEqual({

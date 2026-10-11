@@ -4,6 +4,7 @@ import { z } from "zod";
 const probability = z.number().min(0).max(1);
 const positiveInteger = z.number().int().min(1);
 
+// Every time is in milliseconds
 export const tuning = settings({
   triage: z.object({
     abuseProbability: probability.default(0.85),
@@ -14,11 +15,11 @@ export const tuning = settings({
     frontline: z.enum(["nano", "haiku"]).default("nano"),
     senior: z.enum(["sonnet", "oss"]).default("sonnet"),
     reader: z.enum(["gemini", "haiku"]).default("gemini"),
-    firstChunkMs: positiveInteger.default(15_000),
-    silentMs: positiveInteger.default(30_000),
+    firstChunk: positiveInteger.default(15_000),
+    silent: positiveInteger.default(30_000),
   }),
   conversation: z.object({
-    rememberedSeconds: positiveInteger.default(3 * 24 * 60 * 60),
+    remembered: positiveInteger.default(3 * 24 * 60 * 60 * 1000),
     keptMessages: positiveInteger.default(8),
   }),
 });

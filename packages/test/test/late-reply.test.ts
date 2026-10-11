@@ -81,9 +81,9 @@ test('a reply that comes within the time limit is the answer', async () => {
   expect(await reply.text()).toBe('slow reply');
 });
 
-test('chunks whose first comes after firstMs end as TimedOut', async () => {
+test('chunks whose first comes after the first limit end as TimedOut', async () => {
   const waiting = motty({ name: 'waiting' }).handle(({ prompt }) =>
-    timeout(small, { firstMs: 10, stallMs: 500 }).complete(prompt),
+    timeout(small, { first: 10, stall: 500 }).complete(prompt),
   );
 
   const asked = run(
@@ -109,7 +109,7 @@ test('chunks whose first comes after firstMs end as TimedOut', async () => {
 test('a stream that stalls between chunks ends with the error in the stream', async () => {
   const seen: string[] = [];
   const streaming = motty({ name: 'streaming' }).handle(({ prompt }) =>
-    timeout(small, { firstMs: 500, stallMs: 10 }).complete(prompt),
+    timeout(small, { first: 500, stall: 10 }).complete(prompt),
   );
 
   const asked = run(
@@ -135,9 +135,9 @@ test('a stream that stalls between chunks ends with the error in the stream', as
   expect(seen).toEqual(['the first chunk was read']);
 });
 
-test('chunks that each come within stallMs are the whole answer', async () => {
+test('chunks that each come within the stall limit are the whole answer', async () => {
   const streaming = motty({ name: 'streaming' }).handle(({ prompt }) =>
-    timeout(small, { firstMs: 500, stallMs: 500 }).complete(prompt),
+    timeout(small, { first: 500, stall: 500 }).complete(prompt),
   );
 
   const { answer: reply } = await run(

@@ -253,10 +253,16 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   cannot serve fails that call with `UnknownModel`, and `fallback` moves on. No check at start.
 - **Combinators return models, so they nest:** `fallback(...models)`, `race(...models)`, which
   cancels the losers, `retry(model, times)`, `timeout(model, ms)`.
-- **`retry` repeats only retryable failures,** honours retry-after, and counts retries, not tries.
+- **`retry` repeats only retryable failures,** honours a retry-after of thirty seconds or less,
+  and counts retries, not tries.
   With no retry-after it waits half a second, doubling each time, up to thirty seconds. Rejected:
   retrying at once, a hot loop against an upstream that is already overloaded. `Aborted` and
   `LimitReached` are never repeated, whatever an upstream says.
+- **A retry-after longer than those thirty seconds is not waited for:** the call ends at once
+  with that failure, so a `fallback` can move on. Cause: an upstream that answered 429 with a
+  retry-after of a day held the request, and a streaming caller with it, for as long as the
+  host set no duration limit, which is optional. Rejected: waiting the thirty seconds and
+  calling again, which calls an upstream that said not to.
 - **When every model failed, `fallback` throws the last failure,** and `race` throws the failure of
   the model listed first.
 - **Once the request is stopped, a combinator throws the stop's error.** When that is the SDK's
@@ -265,7 +271,7 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **A time limit belongs to a model call; how long a request may take is the host's.** `timeout`
   fails a call whose first chunk is late, with `TimedOut`. Without it, `fallback` waits forever on
   an upstream that hangs. A decision call past its adapter's limit throws `TimedOut` too.
-- **`timeout(model, { firstMs, stallMs })` also ends a stream that goes silent between chunks,** as
+- **`timeout(model, { first, stall })` also ends a stream that goes silent between chunks,** as
   an error in the stream. A `timeout` limits whatever it wraps, a `fallback` or a `retry` as a
   whole.
 - **`fallback` and `race` stop switching models at the answer's first chunk,** not at progress. An
@@ -291,7 +297,7 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   Rejected: a rewrite that always ends in `stop`, which turned a tool call into a plain reply.
 - **Two views of usage.** `answer.usage()` is the call that answered. `calls` is on the context from
   the start and grows with every model call, cancelled and failed too: model, the token counts the
-  upstream reported, cache writes included, latency and time to the first event per call, what the
+  upstream reported, cache writes included, each call's `time` in total and to its first event, what the
   call left out as `warnings`, with the token totals summed as it goes. A count an upstream did not report is absent, never a zero. So any
   hook reads usage so far and `afterResponse` the final figure. This serves a self-host and the
   motty's own logic; the Hub counts for itself, because it provides the inference.
@@ -384,7 +390,7 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **A provider's table belongs to its adapter and a family's to its codec.** A provider that
   speaks a shared wire format names its own codes in its dialect, read before the family's, for
   a failed response and for a failure told inside a stream alike. A failure a provider tells
-  with no error object is stated by its dialect, which says what error such a body or chunk
+  with no `error` field is stated by its dialect, which says what error such a body or chunk
   holds; the family's reader looks for none, and the family's table holds the family's own
   codes.
 - **By status alone:** 401 and 403 are `UpstreamRefused`; 402 is `QuotaExceeded`; 404 with an
@@ -416,7 +422,8 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **Whether a failure may be retried is the upstream's to say, and the caller is told.** A retry
   flag and a retry-after an upstream sends replace the kind's defaults: a spent quota and a rate
   limit no wait can meet are not retried. The reply carries the flag in the header the official
-  client libraries read before they look at a status.
+  client libraries read before they look at a status, and a `retry-after` only for a wait that
+  is a finite number of zero or more, in whole seconds rounded up.
 - **A spent balance or limit is `QuotaExceeded`, in the upstream's words.** It is the host's
   account, yet the caller may be the one who can act: a request that asks for less output may
   fit what is left. A sentence that holds a link is left out, since the link goes to the host's
@@ -488,7 +495,10 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **A secret an upstream echoes as a field's name is cut as a value is, at every depth.** Two
   names the cut makes equal are both kept, the later numbered. Cause: a key echoed as a field
   name reached the motty in the error's provider facts.
-- **A field named as the prototype is a field like any other,** in a record and in parsed JSON.
+- **A field named `__proto__` is a field like any other,** in a caller's body, an upstream's
+  stream, a record and the settings: it is kept as a field and nothing is inherited from it.
+  Cause: such a field was dropped from what was passed on and inherited by what read it, so an
+  upstream's stream could forge its own finish reason and usage.
 - **A key of twenty characters or more is cut whole, by four characters of either end and by
   eight of its middle.** An end is cut only at that edge of a name: a beginning not preceded,
   an end not followed, by a letter, a digit, `_` or `-`. A mask leaves a key's ends there, and
@@ -540,6 +550,9 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   and "Internal error". It was not written for a caller and can hold anything: a query, a key, a
   path. That holds for whatever threw it, the motty, a plugin or an adapter, and after it has
   crossed the host contract as facts.
+- **A thrown value that throws again while it is read is told and recorded as that same plain
+  failure, quoting nothing:** a `message` that throws when read, a proxy. Cause: it left the
+  request with no last event and no record, against the rule that running never throws.
 - **What a service of the host throws that is no SDK error reaches the motty as an SDK error
   that names the service, with nothing of the thrown value:** storage, decisions, the function
   that supplies the models, a model adapter. Of a model call it says that the call to that
@@ -585,11 +598,11 @@ How whatever runs a motty, `serve` or the Hub, calls it. Both sides are written 
   after the after-response work has finished. The record holds: the outcome; the error, when the
   request failed or was stopped; `path`; every entry that ran, reroutes included; the part that
   answered early or threw; every model call, with the code of its failure and what it said when
-  it failed or was cancelled; the usage totals; how long the answer took and how long the whole
-  request took; and the after-response hooks that failed, and apart from each other those the
-  time limit left no time for, as `skipped`, and those not run because a value they are typed
-  to read was never made, as `unreached`. Cause: with one list for both, a host could not
-  alert on the first, since every early answer listed a skip.
+  it failed or was cancelled; the usage totals; under `time`, how long the answer took and how
+  long the whole request took; and the after-response hooks that failed, and apart from each
+  other those the time limit left no time for, as `skipped`, and those not run because a value
+  they are typed to read was never made, as `unreached`. Cause: with one list for both, a host
+  could not alert on the first, since every early answer listed a skip.
 - **The error is in the record because the stream may not deliver it.** A caller who left gets no
   terminal event, so the record is the only place the host can read why the request ended.
 - **Rejected ways to deliver those facts.** On the terminal event: a caller who left never gets
@@ -599,8 +612,8 @@ How whatever runs a motty, `serve` or the Hub, calls it. Both sides are written 
   make the two disagree.
 - **The record also tells the host that the request is over.** A serverless host is stopped by its
   platform soon after the response ends, so it must ask the platform to wait until the record
-  arrives. Platforms limit that wait, so the host sets `limits.afterResponse` below the platform's
-  limit.
+  arrives. Platforms limit that wait, so the host sets `limits.afterResponse` below the
+  platform's limit.
 - **Running never throws.** A mistake in what the host supplied, such as a limit that is not a
   whole number, comes back as a stream with one error and a record, like any failed request. So a
   host handles failure in one place.
@@ -637,6 +650,10 @@ core stays what every motty uses, and a plugin is proven possible by being writt
 - **The host supplies overrides; the motty never fetches them** nor reads the environment. They are
   checked when the host supplies them, which may be per request. Rejected: values compiled into the
   bundle, a version per retuning, and overrides in `store`, which only a request can write.
+- **Settings are frozen at every depth of plain data,** the defaults once when loaded and an
+  override when merged, so a write throws in the motty that makes it. Cause: the defaults were
+  one object handed to every request, and a hook that wrote to it changed what every later
+  caller read: measured, a threshold of 0.5 read 99 on the next request.
 - **Only bounded values are settings:** a model name if its schema lists the names, never a prompt.
 - **One settings part per served motty;** a plugin takes arguments. A caller cannot set them.
 - **A second settings definition anywhere in a served motty fails at load,** whether its groups
@@ -652,7 +669,7 @@ core stays what every motty uses, and a plugin is proven possible by being writt
   no check: it throws `Unauthenticated`, 401, when the host knows no caller, else adds `caller`.
 - **`caller.id` is extracted and validated, never read raw.** The motty never sees the key or token.
 - **Without `auth()` a motty is open** to whoever reaches its host.
-- **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttl }` in seconds,
+- **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttl }`,
   `delete`, and `increment`. It adds a key prefix only: one call is one command, no cache, no
   batching.
 - **`increment(key, by, { ttl })` adds to a number in one step of the database and returns the
@@ -696,6 +713,9 @@ core stays what every motty uses, and a plugin is proven possible by being writt
   `probabilities` per option and `confidence`; a score has `score`, `probabilities` per level and
   `confidence`; a noul has `noul`, the probability of yes. Thresholds go on probabilities: Jev
   and Laya differ on confidence, which on Laya is another measure, normalised entropy.
+- **A score's answer is held to its question:** a probability for each level, and a finite score
+  within the levels. Confidence is only required to be finite, the two servers measuring it
+  differently.
 - **What Laya adds to an answer is typed as optional, under Laya's names:** on every answer its
   confidence in the answer and the probability it would act; on a noul its own confidence; on a
   choice and a score Jev's confidence formula computed from the same probabilities, the one
@@ -756,9 +776,10 @@ test("an off-topic opening gets a canned reply and no route", async () => {
 - **Host options are optional, each with a test default:** no models, everyone admitted as
   `tester` unless an `auth` adapter is passed, no limits, in-memory storage per run unless a
   `memory()` is passed. With an `auth` adapter the credential is read from `authorization`.
-- **`memory()` refuses what `redis` refuses.** A time to live that is not a positive, finite
-  number of seconds is rejected by both with the same message. Cause: the test store read zero as
-  already gone and infinity as forever, so a motty passed its tests and failed on a real store.
+- **`memory()` refuses what `redis` refuses.** A time to live that is not a positive, whole
+  number of milliseconds is rejected by both with the same message. Cause: the test store read
+  zero as already gone and infinity as forever, so a motty passed its tests and failed on a real
+  store.
 - **`memory()` holds what JSON text reads back as:** negative zero is zero, and a number that is
   not finite is null. `increment` adds only to a JSON number, in both stores.
 - **A test declares no types of its own;** SDK types may be imported. A scripted reply is typed by
@@ -902,6 +923,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   needs are set after it, by name in any letter case. `anthropic-version` is one of them: the
   codec speaks that version, and another version is another wire. A key or a header no request
   can carry fails when the adapter is made, in the adapter's words and without the value.
+- **A prefix, an `api` and a bearer's caller id are checked when the adapter is made too.**
+  Cause: an empty prefix served names that began with a slash.
 - **A connection's body field is a default, and the request's own field replaces it whole.** What
   a caller sent in the upstream's format, what the author set on the call and what a neutral
   option translates to are all the request's. Top-level only: a request's `thinking` replaces the
@@ -964,8 +987,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   Measured from a client that opens a new connection each time, Jev answers in 270 to 450 ms
   and a warm, local Laya in 10 to 250. A Laya checkpoint that is not preloaded took 14.6 s on
   its first call, which the limit ends as a timeout: the host preloads its checkpoints or
-  raises `timeoutMs`. Rejected: a longer default for a local server, which would hide a server
-  that is not ready behind a wait no route can afford.
+  raises `timeout`. Rejected: a longer default for a local server, which would hide a server
+  that is not ready behind a wait no route can afford. A `timeout` that is no finite number
+  of zero or more fails when the adapter is made.
 - **What a router's provider said is told after the router's own message.** A router may say only
   that its provider refused and put the provider's words beside that; the most specific message
   there is, is the one a caller can act on.
@@ -1058,6 +1082,13 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **`limits` caps a request's duration, its model calls, its after-response work and its body.**
   The host enforces the duration by firing the stop signal; the bundle enforces the calls and
   the after-response work; the edge enforces the body, which no other host has.
+- **Every time is milliseconds and every size is bytes, so no name carries a unit.** The limits
+  are `duration`, `afterResponse`, `body` and `calls`, the edge's times `keepAlive`, `drain` and
+  `receive`, a stored value's time to live `ttl`, a decision adapter's `timeout`, the `first`
+  and `stall` of `timeout`, and an error's `retryAfter`. Cause: the names had three conventions
+  at once, bare milliseconds in the limits and the edge, an `Ms` suffix in the adapters, the
+  errors and `timeout`, and seconds in `store`. Rejected: a suffix on every name, which says
+  the same thing in each of them once there is one unit.
 - **`settings` overrides the motty's defaults,** any subset, typed. Rejected: mapping environment
   variables onto settings by name: flat strings onto typed groups, and a second way to set a value.
 - **The overrides are typed by the motty they are given with:** any of the groups its settings
@@ -1078,6 +1109,12 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   handler and stops no listener. `serve` is for a serve file, whose default export Bun starts: it
   also drains on a stop signal, stops the listener and ends the process. Cause: with one function
   for both, a host that mounted two motties lost its own shutdown to ours.
+- **In development a serve file is reloaded by Bun's own `--watch`,** which starts the process
+  again when the motty or a file it imports changes; the SDK adds nothing for it. Rejected:
+  `--hot`, which evaluates the file again in the same process, so the handlers of earlier
+  evaluations pile up and a Ctrl-C no longer drains the requests in flight: after 31 reloads
+  there were 31 SIGINT handlers, and a request in flight was reset on Ctrl-C. Rejected: a
+  watcher of the SDK's own, a copy of what the runtime has.
 - **A server passed to `fetch` means one thing:** this request is taken off its idle timeout,
   once its body has arrived whole. Until then the server's idle timeout stands.
 - **A body has a time to arrive in, the edge's own `receive`, sixty seconds unless the host
@@ -1093,7 +1130,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   does not have; starting the duration limit at arrival, since that limit is optional and is
   the time the motty may run, which a slow upload would then spend. A path that is not chat
   reads no body, so the server's own timeout is all that holds its socket.
-- **A body is at most `limits.body` bytes, 32 MB unless the host says otherwise.** A stated
+- **A body is at most `limits.body`, 32 MB unless the host says otherwise.** A stated
   length over the limit is refused before a byte is read; the bytes are counted as they are
   read as well, so a body with no stated length, or more of it than was stated, ends at the
   limit. The answer is a 413 in the API's own error shape, `request_too_large` on Messages,
@@ -1107,12 +1144,15 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   the smallest limit an upstream served here has: what is over it one of the three refuses
   anyway, and a host that sends more to another raises it. Rejected: a megabyte or a few, the
   proxy's habit, which refuses one photograph; no default, which is the defect.
-- **`limits.body` or `receive` that is no finite number of zero or more fails when the host is
-  made,** in words that name the option. Cause: a body limit that was no number refused
-  nothing, with no word of it, and these two are what an anonymous request is bounded by.
-  Rejected: reading such a value as the default, which hides the host's mistake. The other
-  limits are not checked there: the bundle checks the two it enforces on each request, and
-  the duration and the edge's other two times are not checked at all.
+- **Every limit and every time of the edge is checked once, when the host is made,** in words
+  that name the option: a time is a finite number of zero or more, the body limit and the call
+  limit whole numbers of zero or more. Cause: a body limit that was no number refused nothing,
+  with no word of it; and only the body limit and the time to receive were checked there, the
+  call limit and the after-response time on each request, and the duration and the edge's
+  other two times never, so a mistake in one of those was told to a caller or to nobody.
+  Rejected: reading such a value as the default, which hides the host's mistake. A host that
+  speaks the contract without these steps is still checked by the bundle, on each request, for
+  the two limits the bundle enforces.
 - **What the headers alone settle is settled before the body is read:** that the server is
   shutting down, the content type, and the stated length. Whether a caller is needed is not
   among them. A motty says it needs a caller with a part in its chain, which may stand on one
@@ -1321,6 +1361,18 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   turns that hold only tool results are joined in order, each result with its own fields and
   marker; a turn with fields of its own stays apart. Cause: the two OpenAI APIs send a message or
   an item per result, and Anthropic asks for all results of one assistant turn together.
+- **A tool call an Anthropic upstream ends with no input text is told as `{}` arguments, and
+  empty arguments a caller of an OpenAI API echoes are read as an empty input.** Cause: such a
+  call reached those callers as an empty string, which no client parses and OpenAI itself never
+  sends, and the echoed turn was then refused, so every loop with a tool that takes no
+  arguments ended on its second turn.
+- **A custom tool call is told by the upstream's mark or by the custom tools the caller
+  declared,** so it is written as custom whichever API answered. Cause: one a Responses
+  upstream answered was written to a Chat Completions caller as a function call whose
+  arguments were not JSON.
+- **A function tool with no parameters decodes to an empty object schema, on both OpenAI APIs.**
+- **A citation's title is its own `title` when that is text, otherwise the document's,** whole
+  and streamed alike.
 - **File bytes of a named type that came with no name are given one for an OpenAI API:**
   `file.pdf`, from the type. Cause: both refuse `file_data` with no `filename`, and an Anthropic
   document has no title to give. Bytes of no named type are given none.
@@ -1332,6 +1384,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **A Chat Completions stream that reaches its done mark finished.** With no reason said it
   stopped; one that ends with no mark was cut. Cause: a router's reply of sound alone says no
   reason, so a complete reply ended as a failure worth another, paid, try.
+- **A Chat Completions stream chunk whose `error` is a sentence is a failure with that message,**
+  as a failed response is. Cause: a cut answer was recorded and delivered as complete, and no
+  retry or fallback saw a failure.
 - **A dialect may say that the reason an ending is told apart by is the provider's own.** A stop
   sequence is then kept as the upstream's word for the ending, which an Anthropic Messages caller
   is written back; where a dialect cannot tell it from a stop, nothing changes.

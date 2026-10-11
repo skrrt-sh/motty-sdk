@@ -145,7 +145,7 @@ test('a failed call crosses as facts', async () => {
           code: 'rate_limited',
           status: 429,
           message: 'Slow down',
-          retryAfterMs: 1500,
+          retryAfter: 1500,
         },
       },
     ],
@@ -159,7 +159,7 @@ test('a failed call crosses as facts', async () => {
         code: 'rate_limited',
         status: 429,
         message: 'Slow down',
-        retryAfterMs: 1500,
+        retryAfter: 1500,
       },
     },
   ]);
@@ -208,7 +208,7 @@ test('an error thrown in the motty crosses back as facts', async () => {
       description: { sdk: '0.0.0', name: 'relay', plugins: [] },
       run: async function* () {
         try {
-          throw new RateLimited('Slow down', { retryAfterMs: 1500 });
+          throw new RateLimited('Slow down', { retryAfter: 1500 });
         } catch (thrown) {
           yield { type: 'error', error: toFacts(thrown) };
         }
@@ -225,7 +225,7 @@ test('an error thrown in the motty crosses back as facts', async () => {
         status: 429,
         message: 'Slow down',
         retryable: true,
-        retryAfterMs: 1500,
+        retryAfter: 1500,
       },
     },
   ]);

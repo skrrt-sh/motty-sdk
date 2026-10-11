@@ -131,7 +131,7 @@ export const cuts: readonly Cut[] = [
 
 // The failure is named from what was said as it came: what is cut for the
 // host may break the words it is named by.
-function failed(
+export function failed(
   body: Dict,
   clean?: Clean,
   status?: number,
@@ -183,9 +183,4 @@ export function failure(
   clean?: Clean,
 ): ErrorFacts {
   return failed(dict(parsed(body)), clean, status, headers);
-}
-
-// A failure told inside a stream has no status: only its own name tells it.
-export function streamFailure(event: Dict, clean?: Clean): ErrorFacts {
-  return failed(event, clean);
 }

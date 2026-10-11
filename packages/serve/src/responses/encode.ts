@@ -2,11 +2,12 @@ import type { JsonOutput, Prompt } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given } from '../wire/json.ts';
+import { customNames } from '../wire/openai-tools.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
 import { addressed } from './family.ts';
 import { field, without } from './fields.ts';
 import { inputOf } from './items.ts';
-import { choiceBody, customNames, toolBody } from './tools.ts';
+import { choiceBody, toolBody } from './tools.ts';
 
 type Options = NonNullable<Prompt['options']>;
 
