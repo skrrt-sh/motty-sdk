@@ -7,6 +7,7 @@
   "main": "src/motty.ts",
   "scripts": {
     "build": "bun build src/motty.ts --target=node --outfile=dist/motty.js",
+    "dev": "bun --watch src/serve.ts",
     "test": "bun test ./test",
     "eval": "bun test --timeout 60000 ./evals/attachment.eval.ts ./evals/ticket.eval.ts"
   },
