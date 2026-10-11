@@ -65,7 +65,7 @@
     },
     "packages/adapters": {
       "name": "@mottyjs/adapters",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@mottyjs/core": "workspace:*",
         "@mottyjs/serve": "workspace:*",
@@ -78,25 +78,25 @@
     },
     "packages/auth": {
       "name": "@mottyjs/auth",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@mottyjs/core": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@mottyjs/core",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/decision": {
       "name": "@mottyjs/decision",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@mottyjs/core": "workspace:*",
       },
     },
     "packages/serve": {
       "name": "@mottyjs/serve",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@mottyjs/core": "workspace:*",
       },
@@ -116,7 +116,7 @@
     },
     "packages/settings": {
       "name": "@mottyjs/settings",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@mottyjs/core": "workspace:*",
       },
@@ -126,14 +126,14 @@
     },
     "packages/store": {
       "name": "@mottyjs/store",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@mottyjs/core": "workspace:*",
       },
     },
     "packages/test": {
       "name": "@mottyjs/test",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@mottyjs/core": "workspace:*",
         "@mottyjs/decision": "workspace:*",

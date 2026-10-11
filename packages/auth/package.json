@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/auth",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A motty part that requires a caller its host has identified.",
   "keywords": [
     "motty",

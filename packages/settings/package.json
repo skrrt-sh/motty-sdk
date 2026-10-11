@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/settings",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Typed settings for a motty: defaults defined in code, overrides supplied by the host.",
   "keywords": [
     "motty",
