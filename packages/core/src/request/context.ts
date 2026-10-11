@@ -19,7 +19,7 @@ import { ownSignal, wait } from './wait.ts';
 type Made = RequestRecord['calls'][number];
 
 // What a call says of itself when it ends; the rest of its entry is measured.
-type Reported = Omit<Made, 'model' | 'latency' | 'firstEvent'>;
+type Reported = Omit<Made, 'model' | 'time'>;
 
 export type Calls = {
   readonly made: readonly Readonly<Made>[];
@@ -276,11 +276,13 @@ export function openCall(name: string, under?: AbortSignal): OpenCall {
       firstEvent ??= performance.now() - from;
     },
     close: (reported) => {
-      const latency = performance.now() - from;
-      const call: Made =
-        firstEvent === undefined
-          ? { model: name, latency }
-          : { model: name, latency, firstEvent };
+      const total = performance.now() - from;
+      const call: Made = {
+        model: name,
+        time: Object.freeze(
+          firstEvent === undefined ? { total } : { total, firstEvent },
+        ),
+      };
       entry = call;
       count(live, call, reported);
     },

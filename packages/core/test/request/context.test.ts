@@ -529,10 +529,11 @@ test('a counted call resolves with its result and is recorded with its name, its
       cached: 1,
       cacheWrite: 5,
       reasoning: 0,
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
     },
   ]);
-  expect(calls.made[0]?.latency).toBeGreaterThanOrEqual(4);
+  expect(calls.made[0]?.time.total).toBeGreaterThanOrEqual(4);
+  expect(Object.isFrozen(calls.made[0]?.time)).toBe(true);
   expect(calls.total).toEqual({
     input: 3,
     output: 2,
@@ -562,7 +563,7 @@ test('a counted call with no way to read usage records no count and adds nothing
   });
 
   expect(calls.made).toStrictEqual([
-    { model: 'typesafe/jev', latency: expect.any(Number) },
+    { model: 'typesafe/jev', time: { total: expect.any(Number) } },
   ]);
   expect(calls.total).toStrictEqual({});
 });
@@ -582,7 +583,7 @@ test('a count the call did not report stays absent, and a reported zero is kept'
       model: 'acme/small',
       input: 3,
       reasoning: 0,
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
     },
   ]);
   expect(calls.total).toStrictEqual({ input: 3, reasoning: 0 });
@@ -604,12 +605,12 @@ test('a count a call reports that is not a whole number is dropped, and the tota
   });
 
   expect(calls.made).toStrictEqual([
-    { model: 'typesafe/jev', output: 2, latency: expect.any(Number) },
+    { model: 'typesafe/jev', output: 2, time: { total: expect.any(Number) } },
     {
       model: 'typesafe/jev',
       input: 4,
       output: 1,
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
     },
   ]);
   expect(calls.total).toStrictEqual({ input: 4, output: 3 });
@@ -660,7 +661,7 @@ test('the totals sum the cost each call reported, and hold none when no call rep
     model: 'acme/small',
     input: 3,
     cost: 0.25,
-    latency: expect.any(Number),
+    time: { total: expect.any(Number) },
   });
 });
 
@@ -684,14 +685,13 @@ test('a call that says its first event arrived and how it failed is recorded wit
     {
       model: 'acme/small',
       output: 2,
-      firstEvent: expect.any(Number),
       code: 'overloaded',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
   ]);
-  expect(made[0]?.firstEvent).toBeGreaterThanOrEqual(4);
-  expect(made[0]?.firstEvent).toBeLessThan(9);
-  expect(made[0]?.latency).toBeGreaterThanOrEqual(9);
+  expect(made[0]?.time.firstEvent).toBeGreaterThanOrEqual(4);
+  expect(made[0]?.time.firstEvent).toBeLessThan(9);
+  expect(made[0]?.time.total).toBeGreaterThanOrEqual(9);
 });
 
 test('a call given up at the stop keeps the time to its first event', async () => {
@@ -710,10 +710,9 @@ test('a call given up at the stop keeps the time to its first event', async () =
   expect(made).toStrictEqual([
     {
       model: 'acme/small',
-      firstEvent: expect.any(Number),
       code: 'aborted',
       message: 'The work was stopped',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
   ]);
 });
@@ -738,7 +737,7 @@ test('a counted call that rejects is counted with the code of its failure and re
       model: 'typesafe/jev',
       code: 'upstream_failed',
       message: 'The decision model is down',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
     },
   ]);
 });
@@ -756,7 +755,7 @@ test('a counted call that throws when asked is counted as an internal failure, w
       model: 'typesafe/jev',
       code: 'internal',
       message: 'Internal error',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
     },
   ]);
 });
@@ -816,7 +815,7 @@ test('nothing assigned through a widened view of calls changes the counts', () =
     const total: { input?: number } = calls.total;
 
     expect(() => {
-      view.made = [{ model: 'acme/free', latency: 0 }];
+      view.made = [{ model: 'acme/free', time: { total: 0 } }];
     }).toThrow(TypeError);
     expect(() => {
       view.total = { input: 1_000_000, output: 0 };
@@ -921,7 +920,7 @@ test('a counted call that never settles ends with the stop once the signal fires
       model: 'typesafe/jev',
       code: 'aborted',
       message: 'The work was stopped',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
     },
   ]);
 });
@@ -969,7 +968,7 @@ test('a counted call that follows the signal itself ends the way it says', async
 
   expect(reply).toEqual({ usage: { input: 40 } });
   expect(made).toStrictEqual([
-    { model: 'typesafe/jev', input: 40, latency: expect.any(Number) },
+    { model: 'typesafe/jev', input: 40, time: { total: expect.any(Number) } },
   ]);
 });
 
@@ -1164,12 +1163,12 @@ test('ending a phase cancels the calls still open and goes on only when each has
   expect(rejected[0]).toBeInstanceOf(Aborted);
   expect(rejected[1]).toEqual({ input: 7 });
   expect(calls.made).toEqual([
-    { model: 'acme/small', input: 7, latency: expect.any(Number) },
+    { model: 'acme/small', input: 7, time: { total: expect.any(Number) } },
     {
       model: 'acme/large',
       code: 'aborted',
       message: 'The work was stopped',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
     },
   ]);
   expect(calls.total).toEqual({ input: 7 });
@@ -1304,7 +1303,7 @@ test('usage added to a call that has closed replaces its entry and the total, an
 
   expect(outcome.before.made[1]).toEqual({
     model: 'acme/slow',
-    latency: expect.any(Number),
+    time: { total: expect.any(Number) },
     code: 'aborted',
   });
   expect(outcome.before.total).toEqual({ input: 1, output: 1 });
@@ -1313,7 +1312,7 @@ test('usage added to a call that has closed replaces its entry and the total, an
     model: 'acme/slow',
     input: 40,
     cost: 0.5,
-    latency: expect.any(Number),
+    time: { total: expect.any(Number) },
     code: 'aborted',
   });
   expect(outcome.total).toEqual({ input: 41, output: 1, cost: 0.5 });
@@ -1333,7 +1332,7 @@ test('usage added to a call that has not closed is not counted', () => {
   });
 
   expect(calls.made).toEqual([
-    { model: 'acme/small', latency: expect.any(Number) },
+    { model: 'acme/small', time: { total: expect.any(Number) } },
   ]);
   expect(calls.total).toEqual({});
 });

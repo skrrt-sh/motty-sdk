@@ -587,13 +587,11 @@ test("the report is the record with the request's id and the overrides in effect
     calls: [
       {
         model: 'openai/gpt',
-        latency: expect.any(Number),
-        firstEvent: expect.any(Number),
+        time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       },
     ],
     usage: {},
-    answer: expect.any(Number),
-    total: expect.any(Number),
+    time: { answer: expect.any(Number), total: expect.any(Number) },
     afterResponse: { failed: [], skipped: [], unreached: [] },
   });
   expect(await first.json()).toMatchObject({

@@ -471,7 +471,7 @@ test('a call still open when after-response work is done is cancelled and settle
   expect((await over.promise).calls).toStrictEqual([
     {
       model: 'acme/slow',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       code: 'aborted',
       message: 'The call was given up',
     },

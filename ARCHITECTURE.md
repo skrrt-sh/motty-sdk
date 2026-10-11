@@ -297,7 +297,7 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   Rejected: a rewrite that always ends in `stop`, which turned a tool call into a plain reply.
 - **Two views of usage.** `answer.usage()` is the call that answered. `calls` is on the context from
   the start and grows with every model call, cancelled and failed too: model, the token counts the
-  upstream reported, cache writes included, latency and time to the first event per call, what the
+  upstream reported, cache writes included, each call's `time` in total and to its first event, what the
   call left out as `warnings`, with the token totals summed as it goes. A count an upstream did not report is absent, never a zero. So any
   hook reads usage so far and `afterResponse` the final figure. This serves a self-host and the
   motty's own logic; the Hub counts for itself, because it provides the inference.
@@ -598,11 +598,11 @@ How whatever runs a motty, `serve` or the Hub, calls it. Both sides are written 
   after the after-response work has finished. The record holds: the outcome; the error, when the
   request failed or was stopped; `path`; every entry that ran, reroutes included; the part that
   answered early or threw; every model call, with the code of its failure and what it said when
-  it failed or was cancelled; the usage totals; how long the answer took and how long the whole
-  request took; and the after-response hooks that failed, and apart from each other those the
-  time limit left no time for, as `skipped`, and those not run because a value they are typed
-  to read was never made, as `unreached`. Cause: with one list for both, a host could not
-  alert on the first, since every early answer listed a skip.
+  it failed or was cancelled; the usage totals; under `time`, how long the answer took and how
+  long the whole request took; and the after-response hooks that failed, and apart from each
+  other those the time limit left no time for, as `skipped`, and those not run because a value
+  they are typed to read was never made, as `unreached`. Cause: with one list for both, a host
+  could not alert on the first, since every early answer listed a skip.
 - **The error is in the record because the stream may not deliver it.** A caller who left gets no
   terminal event, so the record is the only place the host can read why the request ended.
 - **Rejected ways to deliver those facts.** On the terminal event: a caller who left never gets

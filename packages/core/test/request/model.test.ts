@@ -152,7 +152,7 @@ test('the host receives the prompt that was sent', async () => {
   ]);
 });
 
-test('usage and latency land in calls and are summed over two calls', async () => {
+test('usage and time land in calls and are summed over two calls', async () => {
   const host = stubHost({
     'acme/small': [
       { type: 'text', text: 'One' },
@@ -187,8 +187,7 @@ test('usage and latency land in calls and are summed over two calls', async () =
       output: 2,
       cached: 1,
       reasoning: 0,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
     {
       model: 'acme/large',
@@ -196,8 +195,7 @@ test('usage and latency land in calls and are summed over two calls', async () =
       output: 20,
       cached: 0,
       reasoning: 5,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
   ]);
   expect(calls.total).toEqual({
@@ -277,8 +275,7 @@ test('a name the host cannot serve throws UnknownModel and is counted with no us
   expect(calls.made).toEqual([
     {
       model: 'acme/missing',
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'unknown_model',
       message: 'No model named acme/missing',
     },
@@ -349,8 +346,7 @@ test('a failure after the first chunk resolves and then fails on read', async ()
   expect(calls.made).toEqual([
     {
       model: 'acme/small',
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'overloaded',
       message: 'Too busy',
     },
@@ -494,7 +490,7 @@ test('a host that throws when asked rejects the call, which is counted', async (
   expect(outcome.calls.made).toEqual([
     {
       model: 'acme/small',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       code: 'internal',
       message: 'The model call to acme/small failed',
     },
@@ -540,8 +536,7 @@ test('a call resolves at its first event with a stream that still includes it', 
       model: 'acme/small',
       input: 3,
       output: 2,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
   ]);
   expect(outcome.calls.total).toEqual({ input: 3, output: 2 });
@@ -606,8 +601,7 @@ test('a failure before the first chunk is counted with the usage it reports', as
       input: 7,
       output: 0,
       cached: 2,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'overloaded',
       message: 'Too busy',
     },
@@ -630,7 +624,7 @@ test('a source that ends before any event rejects the call, which is counted', a
   expect(outcome.calls.made).toEqual([
     {
       model: 'acme/small',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       code: 'internal',
       message: 'The stream ended without a finish or an error',
     },
@@ -717,7 +711,7 @@ test('a signal that fires while waiting rejects with Aborted, counts the call an
   expect(calls.made).toEqual([
     {
       model: 'acme/small',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       code: 'aborted',
       message: 'The work was stopped',
     },
@@ -965,8 +959,7 @@ test('a consumer that returns the stream before reading counts the call and clos
   expect(calls.made).toEqual([
     {
       model: 'acme/small',
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'aborted',
       message: 'The call was given up',
     },
@@ -1101,8 +1094,7 @@ test('a signal that fires while a read waits on a silent host ends that read wit
   expect(outcome.calls.made).toEqual([
     {
       model: 'acme/small',
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'aborted',
       message: 'The work was stopped',
     },
@@ -1322,8 +1314,7 @@ test('a terminal that arrives once the signal has fired ends the call as stopped
       model: 'acme/small',
       input: 3,
       output: 2,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'aborted',
       message: 'The work was stopped',
     },
@@ -1363,7 +1354,7 @@ test('a first event the core has not seen when the signal fires is dropped for t
   expect(calls.made).toEqual([
     {
       model: 'acme/small',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       code: 'aborted',
       message: 'The work was stopped',
     },
@@ -1920,7 +1911,7 @@ test.each([
     expect(outcome.calls.made).toEqual([
       {
         model: 'acme/small',
-        latency: expect.any(Number),
+        time: { total: expect.any(Number) },
         code: 'aborted',
         message: 'The work was stopped',
       },
@@ -2039,8 +2030,7 @@ test('a finish that arrived as the first event wins over a signal that fires a m
       model: 'acme/small',
       input: 4,
       output: 1,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
   ]);
   expect(closed).toBe(1);
@@ -2712,7 +2702,7 @@ test.each([
 
     const slow = {
       model: 'acme/slow',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       ...usage,
     };
     expect(
@@ -2758,8 +2748,7 @@ test('a chunk that arrived before the call was cancelled is its first event, wha
     {
       model: 'acme/slow',
       input: 3,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'aborted',
       message: 'The call was given up',
     },
@@ -2937,12 +2926,11 @@ test('a race loser whose host reports usage after the winner’s first chunk is 
       model: 'acme/fast',
       input: 1,
       output: 1,
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
     {
       model: 'acme/slow',
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       code: 'aborted',
       message: 'The call was given up',
     },
@@ -2952,7 +2940,7 @@ test('a race loser whose host reports usage after the winner’s first chunk is 
     model: 'acme/slow',
     input: 40,
     output: 2,
-    latency: expect.any(Number),
+    time: { total: expect.any(Number) },
     code: 'aborted',
     message: 'The call was given up',
   });
@@ -3008,7 +2996,7 @@ test('a race loser whose host reports usage after the answer has been sent is no
   expect(outcome.closedAtEnd).toBe(1);
   expect(outcome.calls.made[1]).toEqual({
     model: 'acme/slow',
-    latency: expect.any(Number),
+    time: { total: expect.any(Number) },
     code: 'aborted',
     message: 'The call was given up',
   });
@@ -3195,7 +3183,7 @@ test('a race loser in after-response work is counted with what its host reports 
     model: 'acme/slow',
     input: 40,
     output: 2,
-    latency: expect.any(Number),
+    time: { total: expect.any(Number) },
     code: 'aborted',
     message: 'The call was given up',
   });
@@ -3417,7 +3405,7 @@ test('a call cut by a time limit is counted with the usage its host reports afte
       model: 'acme/slow',
       input: 40,
       output: 2,
-      latency: expect.any(Number),
+      time: { total: expect.any(Number) },
       code: 'aborted',
       message: 'The call was given up',
     },

@@ -359,15 +359,13 @@ test('a try that failed before a later one answered stays in the calls with its 
   expect(made).toStrictEqual([
     {
       model: 'acme/limited',
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
       code: 'rate_limited',
       message: 'Slow down',
     },
     {
       model: 'acme/limited',
-      latency: expect.any(Number),
-      firstEvent: expect.any(Number),
+      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
     },
   ]);
 });

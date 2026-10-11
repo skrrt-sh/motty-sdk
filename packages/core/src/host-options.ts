@@ -308,8 +308,7 @@ function refused(error: ErrorFacts): RequestRecord {
     entries: [],
     calls: [],
     usage: {},
-    answer: 0,
-    total: 0,
+    time: { answer: 0, total: 0 },
     afterResponse: { failed: [], skipped: [], unreached: [] },
   };
 }

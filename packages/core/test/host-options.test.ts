@@ -1655,8 +1655,7 @@ test('what the auth adapter throws that is no SDK error is reported as a request
       entries: [],
       calls: [],
       usage: {},
-      answer: 0,
-      total: 0,
+      time: { answer: 0, total: 0 },
       afterResponse: { failed: [], skipped: [], unreached: [] },
       failed: [
         {

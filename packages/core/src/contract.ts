@@ -97,16 +97,14 @@ export type RequestRecord = {
   part?: string;
   calls: (Usage & {
     model: string;
-    latency: number;
-    firstEvent?: number;
+    time: { total: number; firstEvent?: number };
     code?: ErrorFacts['code'];
     // What the failure said, so one a fallback recovered from is still told.
     message?: string;
     warnings?: NonNullable<Finish['warnings']>;
   })[];
   usage: Usage;
-  answer: number;
-  total: number;
+  time: { answer: number; total: number };
   afterResponse: {
     failed: { part: string; error: ErrorFacts }[];
     // The hooks the time limit left no time for.
