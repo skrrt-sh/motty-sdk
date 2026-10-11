@@ -12,14 +12,14 @@ import {
 // key in PEM or a shared secret. Every further check is the host's to name.
 export type JwtOptions = JWTVerifyOptions &
   (
-    | { jwks: string | undefined; key?: never; secret?: never }
-    | { key: string | undefined; jwks?: never; secret?: never }
-    | { secret: string | undefined; jwks?: never; key?: never }
+    | { jwksAddress: string | undefined; publicKey?: never; secret?: never }
+    | { publicKey: string | undefined; jwksAddress?: never; secret?: never }
+    | { secret: string | undefined; jwksAddress?: never; publicKey?: never }
   );
 
-function given(adapter: string, name: string, value: string | undefined) {
+function given(adapter: string, option: string, value: string | undefined) {
   if (value === undefined || value === '') {
-    throw new Error(`The ${adapter} adapter was given no ${name}`);
+    throw new Error(`The ${adapter} adapter was given no ${option}`);
   }
   return value;
 }
@@ -34,11 +34,11 @@ const unread = new WeakSet<Error>();
 function keySet(address: string): JWTVerifyGetKey {
   const url = URL.parse(address);
   if (url === null) {
-    throw new Error('The jwt adapter was given a key set address that is none');
+    throw new Error('The jwt adapter was given a jwksAddress that is none');
   }
   if (url.username !== '' || url.password !== '') {
     throw new Error(
-      'The jwt adapter was given a key set address that holds credentials',
+      'The jwt adapter was given a jwksAddress that holds credentials',
     );
   }
   const read = createRemoteJWKSet(url);
@@ -60,21 +60,36 @@ function keySet(address: string): JWTVerifyGetKey {
     });
 }
 
+// What a runtime says of text it cannot read may quote it, and a host may
+// have set a private key here by mistake, so the refusal is our own words.
+function pem(text: string) {
+  try {
+    return createPublicKey(text);
+  } catch {
+    throw new Error(
+      'The jwt adapter was given a publicKey that is no public key in PEM',
+    );
+  }
+}
+
 // A token that states no expiry is accepted: whether tokens expire is the
 // issuer's to decide, and one that states an expiry is held to it.
 export function jwt(options: JwtOptions): AuthAdapter {
-  const { jwks, key, secret, ...checks } = options;
+  const { jwksAddress, publicKey, secret, ...checks } = options;
   // Past the types, a second way to verify would be ignored without a word.
-  if (['jwks', 'key', 'secret'].filter((way) => way in options).length !== 1) {
+  if (
+    ['jwksAddress', 'publicKey', 'secret'].filter((way) => way in options)
+      .length !== 1
+  ) {
     throw new Error(
-      'The jwt adapter takes exactly one of a key set address, a public key and a secret',
+      'The jwt adapter takes exactly one of jwksAddress, publicKey and secret',
     );
   }
   const verifier =
-    'jwks' in options
-      ? keySet(given('jwt', 'key set address', jwks))
-      : 'key' in options
-        ? createPublicKey(given('jwt', 'public key', key))
+    'jwksAddress' in options
+      ? keySet(given('jwt', 'jwksAddress', jwksAddress))
+      : 'publicKey' in options
+        ? pem(given('jwt', 'publicKey', publicKey))
         : new TextEncoder().encode(given('jwt', 'secret', secret));
   return {
     verify: async (sent) => {

@@ -926,6 +926,33 @@ test('past its time limit a call fails as timed out, and the upstream sees it', 
   expect((await left.promise).type).toBe('abort');
 });
 
+test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
+  'a time limit of %p fails when the adapter is made, in words that name the option',
+  (timeoutMs) => {
+    expect(() => typesafe({ key: 'ts-host', timeoutMs })).toThrow(
+      'The typesafe adapter was given a timeoutMs that is no time',
+    );
+  },
+);
+
+test('a time limit of zero is a time, and a call under it times out', async () => {
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: () => new Promise<Response>(() => {}),
+  });
+  const { decisions } = adapted([
+    typesafe({ key: 'ts-host', address: `${upstream.url}v1`, timeoutMs: 0 }),
+  ]);
+
+  const thrown = await decisions(
+    'typesafe/jev-latest',
+    { state: 'hi', questions: {} },
+    new AbortController().signal,
+  ).catch((raised: unknown) => raised);
+
+  expect(thrown).toBeInstanceOf(TimedOut);
+});
+
 test('a stop ends a call the upstream never answers, and the upstream sees it', async () => {
   const stop = new AbortController();
   const left = Promise.withResolvers<Event>();

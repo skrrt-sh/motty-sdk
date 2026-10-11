@@ -19,6 +19,7 @@ import {
   credentials,
   endpoint,
   moved,
+  timed,
   told,
 } from './connection.ts';
 import { parsed } from './json.ts';
@@ -130,7 +131,7 @@ export function typesafe(options: {
   // A decision is one short answer, and a route waits for it before it does
   // anything else. Jev on a new connection takes about half a second, so
   // this lets a slow one through and is still a wait a route can afford.
-  const { timeoutMs = 2000 } = options;
+  const timeoutMs = timed(name, 'timeoutMs', options.timeoutMs ?? 2000);
   const prefix = `${name}/`;
   // The host's headers add; the content type and the credential stay ours.
   const { headers, clean } = credentials(name, key, undefined, options.headers);

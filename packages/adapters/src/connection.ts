@@ -21,6 +21,17 @@ export function addressed(prefix: string, address: string): string {
   return address;
 }
 
+// A time no timer takes would fail the first call and not the start, so
+// it fails here, where the host that wrote it reads the option's name.
+export function timed(prefix: string, option: string, ms: number): number {
+  if (!Number.isFinite(ms) || ms < 0) {
+    throw new Error(
+      `The ${prefix} adapter was given a ${option} that is no time: it takes milliseconds, a finite number of zero or more`,
+    );
+  }
+  return ms;
+}
+
 // A fetch that threw says only that it threw: whether the request was
 // stopped is read from the signal, which is the same on every runtime.
 // What it threw may quote the request, so the secrets are cut from it.

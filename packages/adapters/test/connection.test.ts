@@ -5,6 +5,7 @@ import {
   credentials,
   endpoint,
   moved,
+  timed,
   told,
 } from '../src/connection.ts';
 
@@ -293,6 +294,22 @@ test('an address with no credentials is the address as it was written', () => {
     'http://localhost:8000/v1/',
   );
 });
+
+test.each([0, 0.5, 2000])(
+  'a time of %p milliseconds is the time as it was given',
+  (ms) => {
+    expect(timed('acme', 'timeoutMs', ms)).toBe(ms);
+  },
+);
+
+test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+  'a time of %p fails in words that name the adapter and the option',
+  (ms) => {
+    expect(() => timed('acme', 'timeoutMs', ms)).toThrow(
+      /^The acme adapter was given a timeoutMs that is no time: it takes milliseconds, a finite number of zero or more$/,
+    );
+  },
+);
 
 test.each([301, 302, 303, 307, 308])(
   'a %i says where to go next, and is told as a redirect that is not followed',

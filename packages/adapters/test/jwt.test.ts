@@ -177,7 +177,7 @@ test('only a token under an algorithm the host lists signs its caller in', async
 test('a token signed with the private key is verified with the public key', async () => {
   const pair = await generateKeyPair('ES256', { extractable: true });
   const stranger = await generateKeyPair('ES256');
-  const adapter = jwt({ key: await exportSPKI(pair.publicKey) });
+  const adapter = jwt({ publicKey: await exportSPKI(pair.publicKey) });
   const mint = (key: CryptoKey) =>
     new SignJWT({})
       .setProtectedHeader({ alg: 'ES256' })
@@ -201,8 +201,8 @@ test('a token of another kind of algorithm than the key means no caller', async 
   // The classic forgery: the public key, which is no secret, used as one.
   const byPublicKey = await signed(pem, { sub: 'user-1' });
 
-  expect(await jwt({ key: pem }).verify(byRsa)).toBeUndefined();
-  expect(await jwt({ key: pem }).verify(byPublicKey)).toBeUndefined();
+  expect(await jwt({ publicKey: pem }).verify(byRsa)).toBeUndefined();
+  expect(await jwt({ publicKey: pem }).verify(byPublicKey)).toBeUndefined();
   expect(await jwt({ secret: 'host-secret' }).verify(byRsa)).toBeUndefined();
 });
 
@@ -210,7 +210,7 @@ test('a public key of each asymmetric kind verifies a token signed by its privat
   const callers = await Promise.all(
     ['RS256', 'PS384', 'ES512', 'EdDSA'].map(async (alg) => {
       const pair = await generateKeyPair(alg, { extractable: true });
-      const adapter = jwt({ key: await exportSPKI(pair.publicKey) });
+      const adapter = jwt({ publicKey: await exportSPKI(pair.publicKey) });
       return adapter.verify(
         await new SignJWT({})
           .setProtectedHeader({ alg })
@@ -236,7 +236,7 @@ test('a token is verified against the key set the host points at', async () => {
     port: 0,
     fetch: () => Response.json({ keys: [published] }),
   });
-  const adapter = jwt({ jwks: `${server.url}jwks.json` });
+  const adapter = jwt({ jwksAddress: `${server.url}jwks.json` });
   const mint = (key: CryptoKey, kid: string) =>
     new SignJWT({})
       .setProtectedHeader({ alg: 'RS256', kid })
@@ -267,9 +267,9 @@ test('a key set that cannot be read throws instead of naming no caller', async (
         ? new Response('down for maintenance', { status: 503 })
         : Response.json({ keys: 'none' }),
   });
-  const refused = jwt({ jwks: 'http://127.0.0.1:1/jwks.json' });
-  const broken = jwt({ jwks: `${server.url}broken` });
-  const malformed = jwt({ jwks: `${server.url}malformed` });
+  const refused = jwt({ jwksAddress: 'http://127.0.0.1:1/jwks.json' });
+  const broken = jwt({ jwksAddress: `${server.url}broken` });
+  const malformed = jwt({ jwksAddress: `${server.url}malformed` });
 
   const failures = await Promise.allSettled([
     refused.verify(token),
@@ -292,10 +292,10 @@ test('a key set that cannot be read is told without its address, and without wha
     fetch: () => new Response('down for maintenance', { status: 503 }),
   });
   const refused = jwt({
-    jwks: 'http://127.0.0.1:1/jwks.json?token=held-in-the-address',
+    jwksAddress: 'http://127.0.0.1:1/jwks.json?token=held-in-the-address',
   });
   const answered = jwt({
-    jwks: `${server.url}jwks.json?token=held-in-the-address`,
+    jwksAddress: `${server.url}jwks.json?token=held-in-the-address`,
   });
 
   const failures = await Promise.allSettled([
@@ -319,23 +319,24 @@ test('a key set that cannot be read is told without its address, and without wha
   );
 });
 
-test('a key set address that holds a name or a password, or is no address, fails when made, in words without it', () => {
+test('a key set address that holds a name or a password, or is no address, fails when made, in words that name the option and not the address', () => {
   expect(() =>
-    jwt({ jwks: 'https://reader:held-in-the-address@id.example/jwks' }),
-  ).toThrow(
-    /^The jwt adapter was given a key set address that holds credentials$/,
-  );
-  expect(() => jwt({ jwks: 'held-in-the-address' })).toThrow(
-    /^The jwt adapter was given a key set address that is none$/,
+    jwt({ jwksAddress: 'https://reader:held-in-the-address@id.example/jwks' }),
+  ).toThrow(/^The jwt adapter was given a jwksAddress that holds credentials$/);
+  expect(() => jwt({ jwksAddress: 'held-in-the-address' })).toThrow(
+    /^The jwt adapter was given a jwksAddress that is none$/,
   );
 });
 
-test('with no key set, key or secret it fails when made', () => {
-  expect(() => jwt({ jwks: undefined })).toThrow(
-    'The jwt adapter was given no key set address',
+test('a source that is missing or blank fails when made, in words that name its option', () => {
+  expect(() => jwt({ jwksAddress: undefined })).toThrow(
+    'The jwt adapter was given no jwksAddress',
   );
-  expect(() => jwt({ key: undefined })).toThrow(
-    'The jwt adapter was given no public key',
+  expect(() => jwt({ publicKey: undefined })).toThrow(
+    'The jwt adapter was given no publicKey',
+  );
+  expect(() => jwt({ publicKey: '' })).toThrow(
+    'The jwt adapter was given no publicKey',
   );
   expect(() => jwt({ secret: undefined })).toThrow(
     'The jwt adapter was given no secret',
@@ -343,21 +344,60 @@ test('with no key set, key or secret it fails when made', () => {
   expect(() => jwt({ secret: '' })).toThrow(
     'The jwt adapter was given no secret',
   );
-  expect(() => jwt({ key: 'not a key' })).toThrow();
 });
 
-test('two ways to verify cannot be given at once, in the types or past them', () => {
-  const both: { secret: string; key: string } = {
+test('a public key that is no PEM fails when made, in words that name the option and hold none of it', () => {
+  expect(() => jwt({ publicKey: 'held-in-the-option' })).toThrow(
+    /^The jwt adapter was given a publicKey that is no public key in PEM$/,
+  );
+});
+
+test('a source read from the environment, which may be missing, is an option, and fails when made if it is', () => {
+  const env: { JWKS_URL?: string; JWT_PUBLIC_KEY?: string } = {};
+
+  expect(() => jwt({ jwksAddress: env.JWKS_URL })).toThrow(
+    'The jwt adapter was given no jwksAddress',
+  );
+  expect(() =>
+    jwt({ publicKey: env.JWT_PUBLIC_KEY, issuer: 'https://id.example' }),
+  ).toThrow('The jwt adapter was given no publicKey');
+});
+
+test('two sources cannot be given at once, nor none, in the types or past them', () => {
+  const both: { secret: string; publicKey: string } = {
     secret: 'host-secret',
-    key: 'not read',
+    publicKey: 'not read',
   };
 
   // @ts-expect-error a secret and a public key together are not an option
   expect(() => jwt(both)).toThrow(
-    'The jwt adapter takes exactly one of a key set address, a public key and a secret',
+    'The jwt adapter takes exactly one of jwksAddress, publicKey and secret',
+  );
+  // @ts-expect-error nor are a key set address and a secret
+  expect(() => jwt({ jwksAddress: 'https://id.example', secret: 'a' })).toThrow(
+    'The jwt adapter takes exactly one of jwksAddress, publicKey and secret',
+  );
+  // @ts-expect-error nor a key set address and a public key
+  expect(() => jwt({ jwksAddress: undefined, publicKey: 'b' })).toThrow(
+    'The jwt adapter takes exactly one of jwksAddress, publicKey and secret',
   );
   // @ts-expect-error nor is none of them
   expect(() => jwt({})).toThrow('The jwt adapter takes exactly one of');
+  // @ts-expect-error nor the checks alone
+  expect(() => jwt({ issuer: 'https://id.example' })).toThrow(
+    'The jwt adapter takes exactly one of',
+  );
+});
+
+test('an option under a name the adapter left is no source', () => {
+  // @ts-expect-error the address of a key set is jwksAddress
+  expect(() => jwt({ jwks: 'https://id.example/jwks' })).toThrow(
+    'The jwt adapter takes exactly one of',
+  );
+  // @ts-expect-error a public key is publicKey
+  expect(() => jwt({ key: 'not read' })).toThrow(
+    'The jwt adapter takes exactly one of',
+  );
 });
 
 test('the plain secret gives the caller the host named', async () => {
