@@ -63,8 +63,11 @@ export type Codec = {
   // The headers a caller of this API sends its key or token in, in lower
   // case. The host reads the credential from them and removes them.
   credentials: readonly string[];
+  // The response header a client of this API reads the request's id from.
+  requestId: string;
   decode: (body: Json, headers: Headers) => Decoded;
-  error: (facts: ErrorFacts) => { status: number; body: Json };
+  // The id is given for a request that has a record.
+  error: (facts: ErrorFacts, id?: string) => { status: number; body: Json };
   // The model name is the provider's own, and the path is relative to the
   // address the adapter was given. The credential is the transport's to add.
   // A hint this API has no field for is left out of the body and named in

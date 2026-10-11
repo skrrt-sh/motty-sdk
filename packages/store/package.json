@@ -2,7 +2,18 @@
   "name": "@mottyjs/store",
   "version": "0.0.0",
   "description": "Key-value storage for a motty, kept in whatever storage its host supplies.",
+  "keywords": [
+    "motty",
+    "llm",
+    "gateway",
+    "key-value",
+    "storage",
+    "bun"
+  ],
   "license": "Apache-2.0",
+  "author": "Skrrt LLC",
+  "homepage": "https://github.com/skrrt-sh/motty-sdk/tree/main/packages/store#readme",
+  "bugs": "https://github.com/skrrt-sh/motty-sdk/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
@@ -10,11 +21,25 @@
   },
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "@mottyjs/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/store/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*"

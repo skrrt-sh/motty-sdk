@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+# Two releases at once could publish half of each.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Tag, Lint, Type Check & Test
+    runs-on: ubuntu-latest
+
+    # The storage adapter is tested against a real server, or not at all.
+    services:
+      valkey:
+        image: valkey/valkey:9-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # The whole history: the tag is looked for on the main branch.
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Check the tag is every package's version
+        run: |
+          for manifest in packages/*/package.json; do
+            version="$(jq -r .version "$manifest")"
+            if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "::error file=$manifest::The version is $version, the tag is $GITHUB_REF_NAME"
+              exit 1
+            fi
+          done
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Biome linter
+        run: bun run lint
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Run tests
+        run: bun test
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run browser tests
+        run: bun run test:browser
+
+  publish:
+    name: Publish to npm
+    needs: check
+    runs-on: ubuntu-latest
+
+    # The registry trusts this workflow by its identity token: no stored token.
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      # Trusted publishing is the npm CLI's, from 11.5.1 on.
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Bun packs, so that workspace and catalog versions are written out. A
+      # package comes after the ones it depends on, and one already on the
+      # registry is skipped, so a release that failed halfway is run again.
+      - name: Pack and publish
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          case "$version" in
+            *-rc.*) tag=next ;;
+            *) tag=latest ;;
+          esac
+          for name in core store decision auth settings test serve adapters; do
+            if npm view "@mottyjs/$name@$version" version 2>/dev/null | grep -q .; then
+              echo "@mottyjs/$name@$version is already published"
+              continue
+            fi
+            (cd "packages/$name" && bun pm pack --destination "$RUNNER_TEMP/tarballs")
+            npm publish "$RUNNER_TEMP/tarballs/mottyjs-$name-$version.tgz" --access public --tag "$tag"
+          done

@@ -2,7 +2,17 @@
   "name": "@mottyjs/settings",
   "version": "0.0.0",
   "description": "Typed settings for a motty: defaults defined in code, overrides supplied by the host.",
+  "keywords": [
+    "motty",
+    "llm",
+    "gateway",
+    "settings",
+    "bun"
+  ],
   "license": "Apache-2.0",
+  "author": "Skrrt LLC",
+  "homepage": "https://github.com/skrrt-sh/motty-sdk/tree/main/packages/settings#readme",
+  "bugs": "https://github.com/skrrt-sh/motty-sdk/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
@@ -10,11 +20,25 @@
   },
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "@mottyjs/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/settings/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*"

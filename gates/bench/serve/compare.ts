@@ -84,7 +84,7 @@ export async function againstBase(commit: string) {
     const [base, tree] = [join(folder, 'base'), join(folder, 'tree')];
     await mkdir(base);
     await mkdir(tree);
-    await baseSources(commit, base, file);
+    await baseSources(commit, base);
     const here = packages.map((name) => `packages/${name}`);
     await $`tar -c --exclude node_modules ${here} ${file} | tar -x -C ${tree}`.quiet();
     return await shares(await loaded(base, file), await loaded(tree, file));

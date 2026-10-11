@@ -664,6 +664,13 @@ core stays what every motty uses, and a plugin is proven possible by being writt
 - **Keys are namespaced per served motty,** by package id or, without a build, the root's `name`.
   The host adds that prefix before it hands the storage over: it knows the package id, and a part
   cannot see the root it is used under.
+- **Two served motties never share a stored key, whatever their names hold.** In the namespace a
+  colon and a percent sign are written percent-encoded, so the first colon of a stored key always
+  ends the namespace. Every other name is stored as written, `acme/coder` too. Cause: a name is
+  any string, and the motty `a` writing `b:x` reached the key `x` of the motty `a:b`. Rejected:
+  refusing a colon in a name at load, which forbids every part a character for the sake of the
+  root's storage and breaks motties that load today. Rejected: the name's length ahead of it, or
+  the whole name encoded, which changes every key already stored and which no person reads.
 - **Anything past key-value is the author's code,** a package the SDK neither wraps nor forbids.
 - **A decision model returns calibrated probabilities, not text,** in under half a second:
   TypeSafe's Jev, the open Laya.
@@ -973,6 +980,13 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   asks the auth adapter who the caller is, makes the stop signal from the caller's own signal and
   the duration limit, and adds the request id and the setting overrides to the report. `serve`
   keeps only the wire, and `run` only its test defaults and its result.
+- **Given a request's headers and no request, the same function says who the caller is and does
+  nothing else.** The credential is read and the auth adapter asked exactly as for a request,
+  and what the adapter throws is reported the same. Cause: the edge learned the caller of a
+  model list by letting in an empty chat request, so a host that gives its models per request
+  was asked for them, and a time limit was started, for a request that calls no model.
+  Rejected: the edge reading the credential itself, a second reading that would drift from the
+  first; a step of its own beside the function, the same.
 - **The wire API says which headers carry the credential; the auth adapter only verifies a
   token.** Each codec lists its credential headers in the order they are tried: `authorization`
   and `api-key`, the header Azure's clients send, for the two OpenAI APIs; `x-api-key` and
@@ -985,13 +999,45 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **A bearer token is read as RFC 6750 says,** the scheme in any case and then exactly one token,
   the way Elysia's bearer plugin reads it. A key header's value is the token as it is. With no
   token there is no caller, and the adapter is not asked.
+- **Auth is the host's own to write: the `auth` option takes any object with a `verify`
+  function,** which is given the token and answers the caller or nothing, at once or later. A
+  lookup in the host's own table of keys is one; `jwt` and `bearer` are two ready-made ones and
+  nothing more. Cause: how a caller is proven differs with every host, and a self-host exists to
+  be fitted to its own. Rejected: a helper that makes an adapter, a name for a plain object.
 - **A signed token is verified by `jwt`,** which is `jose` and supports what `jose` supports: a
   key set, a public key or a shared secret, exactly one of them, returning `sub` as the caller's id
-  with no `store` and no lookup. A plain bearer secret is supported too, and must itself be a token
-  a header can carry. Unlike Elysia's jwt plugin, the key sits with the host, never in the motty.
+  with no `store` and no lookup. Unlike Elysia's jwt plugin, the key sits with the host, never in
+  the motty.
+- **Every check of a signed token beyond its signature is the host's to name.** Beside the way of
+  verifying, `jwt` takes the checks `jose` takes, all of them optional and handed on as given:
+  the issuers, the audiences, the algorithms, a tolerance for clocks, the claims a token must
+  state, its longest age, and what else the library has. A check that is named is held, and one
+  that is not is not made; the times a token itself states are always held. Cause: whose tokens
+  a host takes, for whom and for how long is its own business. Rejected: requiring an issuer, an
+  audience and an expiry of every host, which was tried: it refused hosts whose tokens are their
+  own business and made the ready-made adapter useless to them. Rejected: a list of checks of
+  our own, a copy that falls behind the library's.
 - **A signed token with no expiry is accepted.** Whether tokens expire is the issuer's decision,
-  and a long-lived service token is a real case; one that states an expiry is held to it. Rejected:
+  and a long-lived service token is a real case; one that states an expiry is held to it, and a
+  host that wants one of every token names it among the claims a token must state. Rejected:
   requiring `exp`, which refuses tokens the host's own issuer chose to make.
+- **`jwt` names no algorithms of its own.** Cause: with none named, `jose` takes only a signature
+  of the kind the key is for. A public key verifies no HMAC signature, so the classic forgery, a
+  token signed with the public key as a secret, signs nobody in; a shared secret verifies no
+  asymmetric one; a key set offers no key for an HMAC one; an unsigned token is never taken.
+  Rejected: algorithms fixed by the kind of key, a second guard over one the library holds, and
+  one the host could not change.
+- **A key set that cannot be read is the host's failure and is thrown,** not told as no caller,
+  which would tell a caller with a valid token to sign in again. Its message never holds the
+  address, and what the runtime threw while fetching is not kept with it: an address may carry a
+  token in its query, the thrown message is in the record the host's `report` is handed, and a
+  runtime may write the address into its own failure. What the verifying library says of an
+  answer it could not use is kept as the cause. The address is held to the rule of every
+  adapter's address: one that holds a name or a password, or is no address, fails when the
+  adapter is made, in words without it.
+- **A plain bearer secret is verified by `bearer`,** which gives the caller the id the host
+  named. The secret must itself be a token a header can carry, and it is compared in a time
+  that does not depend on what was sent.
 - **With no `auth` adapter there is nothing to verify against,** so `auth()` rejects the request.
 - **One storage adapter, not a driver collection.** `redis` speaks the Redis protocol, tested on
   Valkey, and is Bun's built-in client. Its server must keep a key's expiry on a plain write:
@@ -1009,8 +1055,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   and a total that is not finite is refused by both stores with the same message. Cause: the
   server adds in a wider float and prints a rounded decimal, so 0.1 + 0.2 read 0.3 on a real
   store and 0.30000000000000004 on the test store.
-- **`limits` caps a request's duration, its model calls and its after-response work.** The host
-  enforces the duration by firing the stop signal; the bundle enforces the other two.
+- **`limits` caps a request's duration, its model calls, its after-response work and its body.**
+  The host enforces the duration by firing the stop signal; the bundle enforces the calls and
+  the after-response work; the edge enforces the body, which no other host has.
 - **`settings` overrides the motty's defaults,** any subset, typed. Rejected: mapping environment
   variables onto settings by name: flat strings onto typed groups, and a second way to set a value.
 - **The overrides are typed by the motty they are given with:** any of the groups its settings
@@ -1031,10 +1078,76 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   handler and stops no listener. `serve` is for a serve file, whose default export Bun starts: it
   also drains on a stop signal, stops the listener and ends the process. Cause: with one function
   for both, a host that mounted two motties lost its own shutdown to ours.
-- **A server passed to `fetch` means one thing:** this request is taken off its idle timeout.
+- **A server passed to `fetch` means one thing:** this request is taken off its idle timeout,
+  once its body has arrived whole. Until then the server's idle timeout stands.
+- **A body has a time to arrive in, the edge's own `receive`, sixty seconds unless the host
+  says otherwise.** It is counted from the request's arrival to the body's last byte, under `serve`
+  and under `mount` alike, and a body that is late is answered 408 and the connection closed.
+  Cause: a socket that sent the headers of a chat request with a length of 1000, nine bytes
+  and then nothing was still open after 12 s on a server whose idle timeout was 2 s and whose
+  duration limit was 3 s, with no credential: the request had been taken off the idle timeout
+  before its body was read, and the duration limit starts only once a request is decoded. The
+  same socket on a path that reads no body was closed at 4 s. Sixty seconds is nginx's wait
+  for a body and Node's for the headers; Node gives the whole request 300 s. Rejected: the
+  idle timeout alone, which a byte sent now and then never trips and which a mounted edge
+  does not have; starting the duration limit at arrival, since that limit is optional and is
+  the time the motty may run, which a slow upload would then spend. A path that is not chat
+  reads no body, so the server's own timeout is all that holds its socket.
+- **A body is at most `limits.body` bytes, 32 MB unless the host says otherwise.** A stated
+  length over the limit is refused before a byte is read; the bytes are counted as they are
+  read as well, so a body with no stated length, or more of it than was stated, ends at the
+  limit. The answer is a 413 in the API's own error shape, `request_too_large` on Messages,
+  and the connection is closed. Cause: an anonymous 64 MB request to a motty that asks for a
+  caller was read and parsed whole, about 131 MB of resident memory, before its 401. The
+  default is from what the upstreams take: Anthropic refuses a Messages request over 32 MB,
+  OpenAI takes files of 50 MB together and states 512 MB for a request of images, and a
+  request holds its images and files as base64. Of the gateways, LiteLLM's limit is unset
+  unless the host sets one, Vercel's functions take 4.5 MB, and Bun's own server stops at
+  128 MB; no limit was found stated for Portkey or for Vercel's AI gateway. So the default is
+  the smallest limit an upstream served here has: what is over it one of the three refuses
+  anyway, and a host that sends more to another raises it. Rejected: a megabyte or a few, the
+  proxy's habit, which refuses one photograph; no default, which is the defect.
+- **`limits.body` or `receive` that is no finite number of zero or more fails when the host is
+  made,** in words that name the option. Cause: a body limit that was no number refused
+  nothing, with no word of it, and these two are what an anonymous request is bounded by.
+  Rejected: reading such a value as the default, which hides the host's mistake. The other
+  limits are not checked there: the bundle checks the two it enforces on each request, and
+  the duration and the edge's other two times are not checked at all.
+- **What the headers alone settle is settled before the body is read:** that the server is
+  shutting down, the content type, and the stated length. Whether a caller is needed is not
+  among them. A motty says it needs a caller with a part in its chain, which may stand on one
+  route only, and the route is chosen from the decoded request: so the edge cannot refuse an
+  anonymous request without it, and bounds what one can cost by the two limits above instead.
+  Proving the token first would refuse nobody either, since an unknown token is no caller and
+  only the motty says whether that matters. Rejected: refusing at the edge whenever the motty
+  has `auth()` somewhere, which closes a route the author left open.
+- **The model list is shown as a chat request would be let in.** Where the motty has `auth()`
+  anywhere in it, the list and each model in it are answered only to a caller the host's
+  adapter knows, by the same reading of the same headers, and anyone else gets the 401 a chat
+  request gets. A motty with no `auth()` lists to anyone, as it answers anyone. Cause: the
+  list answered with no credential on a motty that needs a caller, so who serves what could
+  be read by anyone who reached the host. Stricter than chat where `auth()` stands on one
+  route only: a list has no route to choose by. Chat still answers to any model name.
+- **Every reply to a request that was let in carries its id, the one on the host's report,**
+  in the header the API's own clients read it from: `x-request-id` on the two OpenAI APIs,
+  `request-id` on Messages, whose error body holds it as `request_id` too, as Anthropic's
+  does. A whole answer, a stream and a failure carry it alike. Cause: only an answer that
+  succeeded held the id, inside its body, so a caller who reported a failure had nothing to
+  match it to a record by. A request refused before it was let in, for its body or its path,
+  has no record and so no id. A request the auth adapter threw on has one where the host was
+  told of it, a model list's too: what was thrown that is no SDK error is on a report, and
+  the reply carries that report's id.
 - **The edge has the last boundary.** Whatever is thrown while a request is taken in is answered
   in the format of the path, and a path that cannot be read is the caller's mistake, a 400. Cause:
   such a path was answered with the server's own error page.
+- **A path nothing is served at is a 404 in an API's error shape, never plain text.** The shape
+  is that of the API whose paths it lies under; under none, Messages for a request that sends
+  `anthropic-version`, as only that API's clients do, and the OpenAI shape for any other. Cause:
+  a client whose base address lacked `/v1` was answered `Not found` as text, which its library
+  could not read as an error.
+- **A missing field is worded the same on every API.** Cause: a body with no model was told
+  "The body needs a model" on two APIs and "model must be a string" on the third, and neither
+  is an upstream's own wording, so nothing was kept by the difference.
 - **Caller headers are not forwarded upstream, but for the ones that say what the body may
   hold.** Such a header is the request's own as a body field is: it is read among its family's
   hints under its own name, and written back as a header to an upstream of the same API. An
@@ -1342,6 +1455,25 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **Bun only for now.** `serve`, the adapters, the bundler and the test runner are Bun's. A
   motty's own code uses web-standard APIs and the async context, so it runs on the Hub too. No
   other runtime is promised.
+- **A published package holds its sources and, beside them, their declaration files. Bun runs the
+  sources; a consumer's compiler reads only the declarations.** Cause: a compiler checks every
+  source it is led to under the consumer's own flags, and skipping library checks skips
+  declaration files only. Measured on a project installed from the packed packages, with sources
+  alone: under Bun's recommended config, which leaves exact optional properties off, 7 errors,
+  all in the host side; under a config that also does not allow an import path ending in `.ts`,
+  358 more, one for every such import. With declarations the same project gave none under either
+  config, with library checks on and off, on TypeScript 5.9 and 7.0. Rejected: making the sources
+  pass under looser flags, which is every import rewritten, still one consumer flag from the next
+  error, and every consumer paying to check the SDK's sources. Also rejected: compiling to
+  JavaScript, a second artefact beside the code the tests ran, for a runtime that needs none.
+- **The declarations are built when a package is packed, from the one shared compiler config.**
+  They are never committed. Rejected: a build config in every package, as the layout rules
+  reject a compiler config in every package.
+- **Inside the workspace a package is always read as its sources,** through an export condition
+  that only the workspace's compiler config names. Cause: once a pack had left declarations
+  behind, the workspace's own type check read them in place of the sources and failed, and the
+  type-cost gate would have measured them. Rejected: deleting them after every pack, which one
+  failed pack defeats.
 - **The served motty is the default export of the file `main` names.** A named export is a part.
 - **Identity comes from `package.json`:** `@acme/coder` is `acme/coder`. A release changes one file.
 - **No manifest file.** Behind the mark is a description collected at load, never by parsing source.

@@ -279,6 +279,7 @@ test.each([false, true])(
         type: 'invalid_request_error',
         message: 'The prompt has no question in it',
       },
+      request_id: reply.headers.get('request-id'),
     });
   },
 );
@@ -352,6 +353,7 @@ test.each([
         type: 'invalid_request_error',
         message: 'Expected temperature to be at most 2, received 9',
       },
+      request_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
     },
   ],
 ])(
@@ -418,7 +420,11 @@ test.each([
   ],
   [
     '/v1/messages',
-    { type: 'error', error: { type: 'api_error', message: 'User not found.' } },
+    {
+      type: 'error',
+      error: { type: 'api_error', message: 'User not found.' },
+      request_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    },
   ],
 ])(
   '%s: a key of the host`s that the upstream refused is a 502 that says what the adapter told',

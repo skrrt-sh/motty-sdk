@@ -51,6 +51,19 @@ test("a token that states no expiry is accepted: whether tokens expire is the is
   expect(await adapter.verify(token)).toEqual({ id: 'service-1' });
 });
 
+test('a token that states no expiry signs nobody in where the host requires one', async () => {
+  const adapter = jwt({ secret: 'host-secret', requiredClaims: ['exp'] });
+  const token = await new SignJWT({})
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject('service-1')
+    .sign(new TextEncoder().encode('host-secret'));
+
+  expect(await adapter.verify(token)).toBeUndefined();
+  expect(
+    await adapter.verify(await signed('host-secret', { sub: 'user-1' })),
+  ).toEqual({ id: 'user-1' });
+});
+
 test('a token signed with another secret, or changed after, means no caller', async () => {
   const adapter = jwt({ secret: 'host-secret' });
   const other = await signed('other-secret', { sub: 'user-1' });
@@ -99,6 +112,68 @@ test('the issuer and the audience are checked when the host names them', async (
   expect(await adapter.verify(neither)).toBeUndefined();
 });
 
+test('the issuer and the audience are not checked when the host names neither', async () => {
+  const adapter = jwt({ secret: 'host-secret' });
+  const token = await new SignJWT({})
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject('user-1')
+    .setIssuer('https://anyone.example')
+    .setAudience('anything')
+    .sign(new TextEncoder().encode('host-secret'));
+
+  expect(await adapter.verify(token)).toEqual({ id: 'user-1' });
+});
+
+test('a host may name several issuers and audiences, and a token of any of them signs its caller in', async () => {
+  const adapter = jwt({
+    secret: 'host-secret',
+    issuer: ['https://id.example', 'https://staff.example'],
+    audience: ['coder', 'desk'],
+  });
+  const mint = (issuer: string, audience: string) =>
+    new SignJWT({})
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('user-1')
+      .setIssuer(issuer)
+      .setAudience(audience)
+      .sign(new TextEncoder().encode('host-secret'));
+
+  expect(
+    await adapter.verify(await mint('https://staff.example', 'desk')),
+  ).toEqual({ id: 'user-1' });
+  expect(
+    await adapter.verify(await mint('https://evil.example', 'desk')),
+  ).toBeUndefined();
+  expect(
+    await adapter.verify(await mint('https://staff.example', 'other')),
+  ).toBeUndefined();
+});
+
+test('a token past its expiry signs its caller in within the tolerance the host allows, and not past it', async () => {
+  const token = await signed('host-secret', { sub: 'user-1', exp: '-30s' });
+
+  expect(
+    await jwt({ secret: 'host-secret', clockTolerance: 60 }).verify(token),
+  ).toEqual({ id: 'user-1' });
+  expect(
+    await jwt({ secret: 'host-secret', clockTolerance: 5 }).verify(token),
+  ).toBeUndefined();
+  expect(await jwt({ secret: 'host-secret' }).verify(token)).toBeUndefined();
+});
+
+test('only a token under an algorithm the host lists signs its caller in', async () => {
+  const adapter = jwt({ secret: 'host-secret', algorithms: ['HS512'] });
+  const listed = await new SignJWT({})
+    .setProtectedHeader({ alg: 'HS512' })
+    .setSubject('user-1')
+    .sign(new TextEncoder().encode('host-secret'));
+
+  expect(await adapter.verify(listed)).toEqual({ id: 'user-1' });
+  expect(
+    await adapter.verify(await signed('host-secret', { sub: 'user-1' })),
+  ).toBeUndefined();
+});
+
 test('a token signed with the private key is verified with the public key', async () => {
   const pair = await generateKeyPair('ES256', { extractable: true });
   const stranger = await generateKeyPair('ES256');
@@ -129,6 +204,28 @@ test('a token of another kind of algorithm than the key means no caller', async 
   expect(await jwt({ key: pem }).verify(byRsa)).toBeUndefined();
   expect(await jwt({ key: pem }).verify(byPublicKey)).toBeUndefined();
   expect(await jwt({ secret: 'host-secret' }).verify(byRsa)).toBeUndefined();
+});
+
+test('a public key of each asymmetric kind verifies a token signed by its private key', async () => {
+  const callers = await Promise.all(
+    ['RS256', 'PS384', 'ES512', 'EdDSA'].map(async (alg) => {
+      const pair = await generateKeyPair(alg, { extractable: true });
+      const adapter = jwt({ key: await exportSPKI(pair.publicKey) });
+      return adapter.verify(
+        await new SignJWT({})
+          .setProtectedHeader({ alg })
+          .setSubject('user-1')
+          .sign(pair.privateKey),
+      );
+    }),
+  );
+
+  expect(callers).toEqual([
+    { id: 'user-1' },
+    { id: 'user-1' },
+    { id: 'user-1' },
+    { id: 'user-1' },
+  ]);
 });
 
 test('a token is verified against the key set the host points at', async () => {
@@ -186,8 +283,50 @@ test('a key set that cannot be read throws instead of naming no caller', async (
     'rejected',
     'rejected',
   ]);
-  await expect(refused.verify(token)).rejects.toThrow(
-    'The key set at http://127.0.0.1:1/jwks.json could not be read',
+});
+
+test('a key set that cannot be read is told without its address, and without what the runtime threw', async () => {
+  const token = await signed('host-secret', { sub: 'user-1' });
+  const server = Bun.serve({
+    port: 0,
+    fetch: () => new Response('down for maintenance', { status: 503 }),
+  });
+  const refused = jwt({
+    jwks: 'http://127.0.0.1:1/jwks.json?token=held-in-the-address',
+  });
+  const answered = jwt({
+    jwks: `${server.url}jwks.json?token=held-in-the-address`,
+  });
+
+  const failures = await Promise.allSettled([
+    refused.verify(token),
+    answered.verify(token),
+  ]);
+  await server.stop(true);
+
+  expect(failures).toHaveProperty(
+    '0.reason.message',
+    'The key set could not be read',
+  );
+  expect(failures).not.toHaveProperty('0.reason.cause');
+  expect(failures).toHaveProperty(
+    '1.reason.message',
+    'The key set could not be read',
+  );
+  expect(failures).toHaveProperty(
+    '1.reason.cause.message',
+    'Expected 200 OK from the JSON Web Key Set HTTP response',
+  );
+});
+
+test('a key set address that holds a name or a password, or is no address, fails when made, in words without it', () => {
+  expect(() =>
+    jwt({ jwks: 'https://reader:held-in-the-address@id.example/jwks' }),
+  ).toThrow(
+    /^The jwt adapter was given a key set address that holds credentials$/,
+  );
+  expect(() => jwt({ jwks: 'held-in-the-address' })).toThrow(
+    /^The jwt adapter was given a key set address that is none$/,
   );
 });
 

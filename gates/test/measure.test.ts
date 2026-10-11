@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { baseCommit, nanosecondsPerCall, typeCost } from '../measure.ts';
+import { baseCommit, nanosecondsPerCall, share, typeCost } from '../measure.ts';
 
 test('the counts are read from the compiler diagnostics', () => {
   expect(
@@ -25,6 +25,33 @@ test('every iteration calls the subject once', async () => {
   }, 500);
   expect(calls).toBe(500);
   expect(nanoseconds).toBeGreaterThan(0);
+});
+
+test('a burst that slows one side in a third of the rounds leaves the share where it was', async () => {
+  const [theirs, ours] = [() => {}, () => {}];
+  let timed = 0;
+  expect(
+    await share(theirs, ours, (subject) => {
+      const round = timed++ >> 1;
+      if (round % 3 === 0) return subject === ours ? 400 : 100;
+      return subject === ours ? 117 : 100;
+    }),
+  ).toBeCloseTo(1.17);
+});
+
+test('the rounds the engine has not compiled yet are left out, and the two take turns at going first', async () => {
+  const [theirs, ours] = [() => {}, () => {}];
+  const order: string[] = [];
+  expect(
+    await share(theirs, ours, (subject) => {
+      order.push(subject === ours ? 'ours' : 'theirs');
+      return subject === ours && order.length <= 200 ? 900 : 100;
+    }),
+  ).toBe(1);
+  expect(order.slice(0, 4)).toEqual(['theirs', 'ours', 'ours', 'theirs']);
+  expect(order.filter((side) => side === 'ours')).toHaveLength(
+    order.length / 2,
+  );
 });
 
 test('a first commit has no base to be timed against, and the next has its parent', async () => {

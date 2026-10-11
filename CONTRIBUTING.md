@@ -49,6 +49,14 @@ core's own plan goes into [CORE.md](CORE.md) the same way.
 - Work happens on a short-lived `<type>/<description>` branch off `main`.
 - A pull request targets `main` and is squashed when its checks pass.
 
+## Releases
+
+- All packages carry one version. A release bumps it in every package in one pull request.
+- A release is an annotated `vX.Y.Z` tag on `main`, or `vX.Y.Z-rc.N` for a pre-release. A tag is
+  never moved.
+- Pushing the tag publishes the packages to npm: a pre-release under the `next` tag, any other
+  under `latest`.
+
 ## Licence
 
 Contributions are accepted under the [Apache-2.0](LICENSE) licence of the repository.

@@ -446,6 +446,29 @@ test("the storage is handed over with the motty's name ahead of every key", asyn
   expect((await hosting(echo(), {})(asked())).host.storage).toBeUndefined();
 });
 
+test('two motties with different names never reach one stored key, a colon or a percent sign in a name or not', async () => {
+  const keys: string[] = [];
+  const storage = {
+    get: async () => undefined,
+    set: async (key: string) => {
+      keys.push(key);
+    },
+    delete: async () => {},
+  };
+  for (const { name, key } of [
+    { name: 'a', key: 'b:x' },
+    { name: 'a:b', key: 'x' },
+    { name: 'a%3Ab', key: 'x' },
+    { name: 'acme/coder', key: 'x' },
+  ]) {
+    const served = motty({ name }).handle(() => answer(''));
+    const { host } = await hosting(served, { storage })(asked());
+    await host.storage?.set(key, 1);
+  }
+
+  expect(keys).toEqual(['a:b:x', 'a%3Ab:x', 'a%253Ab:x', 'acme/coder:x']);
+});
+
 test("an increment is handed over with the motty's name ahead of its key, and its result comes back", async () => {
   const added: unknown[] = [];
   const { host } = await hosting(echo(), {
@@ -879,6 +902,14 @@ test('the duration is kept by the host as a stop that says timed out, and the re
   expect(host.signal.aborted).toBe(false);
   await Bun.sleep(30);
   expect(host.signal.reason).toMatchObject({ name: 'TimeoutError' });
+});
+
+test("the edge's body limit is kept out of the limits the motty reads, as the duration is", async () => {
+  const { host } = await hosting(echo(), {
+    limits: { body: 1024, calls: 3 },
+  })(asked());
+
+  expect(host.limits).toEqual({ calls: 3 });
 });
 
 test("the stop follows the caller's own signal, and is fired with the host's reason", async () => {
@@ -1624,6 +1655,37 @@ test('an SDK error the auth adapter throws refuses the request with no report', 
   expect(reports).toEqual([]);
 });
 
+test('whoever asked is told the id of the report made when the auth adapter threw, and nothing when an SDK error made no report', async () => {
+  const reports: Report[] = [];
+  const told: string[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        throw token === 'sk-ada'
+          ? new Error('The key set is gone')
+          : new Overloaded('The key set is being rotated');
+      },
+    },
+    report: (report) => reports.push(report),
+  });
+
+  await expect(
+    admit({
+      ...asked({ 'x-api-key': 'sk-eve' }),
+      reported: (id) => told.push(id),
+    }),
+  ).rejects.toThrow('The key set is being rotated');
+  await expect(
+    admit({
+      ...asked({ 'x-api-key': 'sk-ada' }),
+      reported: (id) => told.push(id),
+    }),
+  ).rejects.toThrow('The key set is gone');
+
+  expect(reports).toHaveLength(1);
+  expect(told).toEqual(reports.map(({ id }) => id));
+});
+
 test('a request in which no service of the host threw has no failures on its report', async () => {
   const reports: Report[] = [];
   const served = echo();
@@ -1737,6 +1799,52 @@ test('models given as a function are asked for once per request, with the reques
     [second.request.id, 'motty/coder', [], undefined],
   ]);
   expect(upstream.sent('acme/small')).toHaveLength(2);
+});
+
+test('given the headers and no request, the host says only who the caller is: no models are asked for, and what the adapter throws is reported', async () => {
+  const reports: Report[] = [];
+  const told: string[] = [];
+  let models = 0;
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        if (token === 'sk-broken') throw new Error('The key set is gone');
+        return token === 'sk-ada' ? { id: 'ada' } : undefined;
+      },
+    },
+    models: () => {
+      models += 1;
+      return [];
+    },
+    limits: { duration: 10 },
+    report: (report) => reports.push(report),
+  });
+
+  expect(
+    await admit({
+      headers: new Headers({ authorization: 'Bearer sk-ada' }),
+      credentials: ['x-api-key', 'authorization'],
+    }),
+  ).toEqual({ id: 'ada' });
+  expect(
+    await admit({
+      headers: new Headers({ 'x-api-key': 'sk-eve' }),
+      credentials: ['x-api-key', 'authorization'],
+    }),
+  ).toBeUndefined();
+  await expect(
+    admit({
+      headers: new Headers({ 'x-api-key': 'sk-broken' }),
+      credentials: ['x-api-key', 'authorization'],
+      reported: (id) => told.push(id),
+    }),
+  ).rejects.toThrow('The key set is gone');
+
+  expect(models).toBe(0);
+  expect(reports).toMatchObject([
+    { outcome: 'failed', failed: [{ service: 'auth' }] },
+  ]);
+  expect(told).toEqual(reports.map(({ id }) => id));
 });
 
 test('models given as a promise of the list are waited for', async () => {

@@ -2,7 +2,18 @@
   "name": "@mottyjs/core",
   "version": "0.0.0",
   "description": "The motty builder, model calls, fallback, race, retry and timeout, error classes and types: all a motty or a plugin needs.",
+  "keywords": [
+    "motty",
+    "llm",
+    "gateway",
+    "model-routing",
+    "fallback",
+    "bun"
+  ],
   "license": "Apache-2.0",
+  "author": "Skrrt LLC",
+  "homepage": "https://github.com/skrrt-sh/motty-sdk/tree/main/packages/core#readme",
+  "bugs": "https://github.com/skrrt-sh/motty-sdk/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
@@ -10,11 +21,29 @@
   },
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "exports": {
-    ".": "./src/index.ts",
-    "./host": "./src/host.ts"
+    ".": {
+      "@mottyjs/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./host": {
+      "@mottyjs/source": "./src/host.ts",
+      "types": "./dist/host.d.ts",
+      "default": "./src/host.ts"
+    }
+  },
+  "scripts": {
+    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/core/src dist"
   }
 }

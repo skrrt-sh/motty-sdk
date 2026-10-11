@@ -14,17 +14,23 @@ type Events = ReturnType<RunStream[typeof Symbol.asyncIterator]>;
 
 type Read = ReturnType<Events['next']>;
 
+// A request that has a record says its id on every reply, so a caller's
+// complaint can be matched to it.
+function named(codec: Codec, id: string | undefined) {
+  return id === undefined ? {} : { [codec.requestId]: id };
+}
+
 // For facts that are already what the caller may be told.
 export function refused(
   codec: Codec,
   facts: ErrorFacts,
-  headers: { [name: string]: string } = {},
+  id?: string,
 ): Response {
-  const { status, body } = codec.error(facts);
+  const { status, body } = codec.error(facts, id);
   return Response.json(body, {
     status,
     headers: {
-      ...headers,
+      ...named(codec, id),
       // The official client libraries read this before they look at a status.
       'x-should-retry': String(facts.retryable === true),
       ...(facts.retryAfterMs === undefined
@@ -34,8 +40,8 @@ export function refused(
   });
 }
 
-export function failed(codec: Codec, thrown: unknown): Response {
-  return refused(codec, disclosed(toFacts(thrown)));
+export function failed(codec: Codec, thrown: unknown, id?: string): Response {
+  return refused(codec, disclosed(toFacts(thrown)), id);
 }
 
 // The codec writes an honest reply on its own; only the edge can tell the
@@ -87,14 +93,16 @@ export async function whole(
       const read = await events.next();
       if (read.done) throw new Error('The stream ended with no last event');
       const event = read.value;
-      if (event.type === 'error') return refused(codec, event.error);
+      if (event.type === 'error') return refused(codec, event.error, id);
       if (event.type === 'finish') {
-        return Response.json(decoded.collected(held, event, id));
+        return Response.json(decoded.collected(held, event, id), {
+          headers: named(codec, id),
+        });
       }
       held.push(event);
     }
   } catch (thrown) {
-    return failed(codec, thrown);
+    return failed(codec, thrown, id);
   } finally {
     await events.return?.();
   }
@@ -114,6 +122,7 @@ async function* resumed(first: Read, events: Events): RunStream {
 const beat = new TextEncoder().encode(': keep-alive\n\n');
 
 export function streamed(
+  codec: Codec,
   decoded: Decoded,
   first: Read,
   events: Events,
@@ -161,6 +170,7 @@ export function streamed(
   });
   return new Response(body, {
     headers: {
+      ...named(codec, id),
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
       // Asks a buffering proxy to pass each event on as it comes.

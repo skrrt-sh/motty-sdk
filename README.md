@@ -192,4 +192,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](LICENSE). Copyright 2026 Skrrt LLC.

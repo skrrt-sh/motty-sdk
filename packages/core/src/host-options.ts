@@ -83,8 +83,9 @@ export type HostOptions<Settings = AnyOverrides> = {
       ) => readonly ModelAdapter[] | Promise<readonly ModelAdapter[]>);
   storage?: Storage;
   auth?: AuthAdapter;
-  // The duration is in milliseconds and is the host's to enforce.
-  limits?: Limits & { duration?: number };
+  // The duration is in milliseconds and is the host's to enforce. The body
+  // is in bytes and is the edge's.
+  limits?: Limits & { duration?: number; body?: number };
   settings?: Settings;
   // In the host's own unit. Nothing returned leaves the upstream's cost.
   price?: (model: string, usage: Readonly<Usage>) => number | undefined;
@@ -95,16 +96,21 @@ type Calls = Required<Pick<Host, 'models' | 'decisions'>>;
 
 type Price = NonNullable<HostOptions['price']>;
 
-type Asked = {
-  request: Omit<ChatRequest, 'id' | 'headers'>;
+type Signed = {
   headers: Headers;
   // The headers that carry a credential on the caller's wire API, in lower
   // case and in the order they are tried.
   credentials: readonly string[];
+  signal?: AbortSignal;
+  // The auth adapter threw and the host was told: the id is that report's.
+  reported?: (id: string) => void;
+};
+
+type Asked = Signed & {
+  request: Omit<ChatRequest, 'id' | 'headers'>;
   // The credential headers of every other API the host serves: a token sent
   // in one of them is removed too, and signs nobody in.
   removed?: readonly string[];
-  signal?: AbortSignal;
   // The request is over: its work after the response has ended too.
   over?: (record: RequestRecord) => void;
   // Asked once the request is over, when the reply has been written.
@@ -115,6 +121,13 @@ type Admitted = {
   request: ChatRequest;
   host: Host;
   stop: (reason?: unknown) => void;
+};
+
+// With no request nothing is run and nothing asked of the host but who the
+// caller is.
+type Admit = {
+  (asked: Asked): Promise<Admitted>;
+  (signed: Signed): Promise<Caller | undefined>;
 };
 
 function unknown(model: string): ErrorFacts {
@@ -342,7 +355,7 @@ function tokenIn(headers: Headers, name: string): string | undefined {
 export function hosting<Served extends Marked>(
   motty: Served,
   options: HostOptions<Overrides<Served>>,
-): (asked: Asked) => Promise<Admitted>;
+): Admit;
 export function hosting(motty: Marked, options: HostOptions) {
   const { description, version: spoken } = motty[mark];
   if (spoken !== version) {
@@ -352,13 +365,18 @@ export function hosting(motty: Marked, options: HostOptions) {
   }
   const { auth, models = [], price } = options;
   const fixed = adapted(typeof models === 'function' ? [] : models);
-  const prefix = `${description.name}:`;
-  const { duration, ...rest } = options.limits ?? {};
+  // A name may hold a colon: escaped, the first colon of a key ends the name.
+  const prefix = `${description.name.replace(/[%:]/g, encodeURIComponent)}:`;
+  const { duration, body, ...rest } = options.limits ?? {};
   const limits = Object.freeze(rest);
   const settings =
     options.settings === undefined ? unset : copied(options.settings);
 
-  return async (asked: Asked): Promise<Admitted> => {
+  async function admit(asked: Asked): Promise<Admitted>;
+  async function admit(signed: Signed): Promise<Caller | undefined>;
+  async function admit(
+    asked: Signed & Partial<Asked>,
+  ): Promise<Admitted | Caller | undefined> {
     const headers = new Headers(asked.headers);
     const id = crypto.randomUUID();
     let failed: Sealed[] | undefined;
@@ -398,19 +416,19 @@ export function hosting(motty: Marked, options: HostOptions) {
         const error = toFacts(seal('auth', thrown));
         if (failed !== undefined) {
           options.report?.({ ...refused(error), id, settings, failed });
+          asked.reported?.(id);
         }
         throw thrown;
       }
     }
+    const { request } = asked;
+    if (request === undefined) return caller;
     for (const name of asked.removed ?? []) headers.delete(name);
     let calls = fixed;
     if (typeof models === 'function') {
       try {
         calls = adapted(
-          await models(
-            { ...asked.request, id, headers: asked.headers },
-            caller,
-          ),
+          await models({ ...request, id, headers: asked.headers }, caller),
         );
       } catch (thrown) {
         const sealed = seal('models', thrown);
@@ -441,7 +459,7 @@ export function hosting(motty: Marked, options: HostOptions) {
         }
       });
     return {
-      request: { ...asked.request, id, headers },
+      request: { ...request, id, headers },
       host: {
         ...priced(calls, quote, seal),
         signal,
@@ -470,5 +488,6 @@ export function hosting(motty: Marked, options: HostOptions) {
       },
       stop: (reason) => stop.abort(reason),
     };
-  };
+  }
+  return admit;
 }
