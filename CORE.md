@@ -317,6 +317,13 @@ Baselines are recorded at the first milestone; each gate fails a change, not a r
   context and nothing else. The package's manifest is one of those files, read for the version.
   A bundle of the example is built from its own files, the core, the plugins and its schema
   library: nothing of `serve`, the adapters or the host options is in it.
+- **Runtimes:** one set of host cases runs on Bun and on the Workers runtime: a streamed
+  answer, a whole one, a refused caller and a caller who leaves, each with its record. The
+  example's bundle is loaded as a module beside the host side, byte for byte as its build
+  script writes it. Bun is the control, so a case that fails on one runtime alone is that
+  runtime's. The `workerd` binary is a dev dependency of the workspace alone. Rejected: an
+  emulator of the runtime, a second thing to trust where the runtime itself is one file; a
+  test file per runtime, where a case written for one is missing for the next.
 - **Declarations:** both entries, and a class defined on the base error, emit declaration files.
   A plugin is shipped with them.
 

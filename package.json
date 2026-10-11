@@ -41,6 +41,7 @@
     "ai": "7.0.137",
     "playwright": "catalog:",
     "typescript": "catalog:",
+    "workerd": "1.20261008.1",
     "zod": "catalog:"
   }
 }

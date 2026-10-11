@@ -1,4 +1,4 @@
-function event(delta: object, finish: string | null) {
+export function event(delta: object, finish: string | null) {
   return `data: ${JSON.stringify({
     id: 'chatcmpl-1',
     object: 'chat.completion.chunk',
