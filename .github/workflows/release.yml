@@ -37,6 +37,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The checkout may write the tag as the commit it names, annotated or
+      # not, so the tag's own object is fetched before its kind is read.
+      - name: Check the tag is an annotated version tag
+        run: |
+          if ! printf '%s\n' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
+            echo "::error::The tag $GITHUB_REF_NAME is neither vX.Y.Z nor vX.Y.Z-rc.N"
+            exit 1
+          fi
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          kind="$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")"
+          if [ "$kind" != tag ]; then
+            echo "::error::The tag $GITHUB_REF_NAME is lightweight, a release tag is annotated"
+            exit 1
+          fi
+
       - name: Check the tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
