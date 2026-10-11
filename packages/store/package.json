@@ -1,0 +1,22 @@
+{
+  "name": "@mottyjs/store",
+  "version": "0.0.0",
+  "description": "Key-value storage for a motty, kept in whatever storage its host supplies.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
+    "directory": "packages/store"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mottyjs/core": "workspace:*"
+  }
+}

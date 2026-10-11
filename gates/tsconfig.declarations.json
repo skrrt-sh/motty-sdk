@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true
+  },
+  "include": [
+    "../packages/core/src/index.ts",
+    "../packages/core/src/host.ts",
+    "plugin.ts"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "size": {
+    "core": 39460,
+    "coder": 257974
+  },
+  "typeCost": {
+    "instantiations": 25427,
+    "types": 12867
+  }
+}

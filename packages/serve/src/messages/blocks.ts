@@ -1,0 +1,180 @@
+import type { Cache, Media, Part } from '@mottyjs/core/host';
+import { inline } from '../wire/data-url.ts';
+import type { Leaving } from '../wire/fieldless.ts';
+import { copied, type Dict, given } from '../wire/json.ts';
+import { a, unsupported } from '../wire/refusals.ts';
+import { cacheTo } from './cache.ts';
+import { hinted, own } from './family.ts';
+
+// A plain-text document is sent as the text it is, so bytes that are not
+// UTF-8 have no form here.
+function written(data: string): string {
+  try {
+    const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+    const reader = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+    return reader.decode(bytes);
+  } catch {
+    return unsupported(
+      'Anthropic Messages takes no plain-text file that is not UTF-8',
+    );
+  }
+}
+
+// Only what the API lists is sent: any other kind it would answer 400.
+function sourceOf(media: Media, what: string, taken: readonly string[]): Dict {
+  if (media.id !== undefined) return { type: 'file', file_id: media.id };
+  // Another family sends inline bytes as a data address; this one does not.
+  const split = media.url === undefined ? undefined : inline(media.url);
+  const data = media.data ?? split?.data;
+  const mediaType = media.mediaType ?? split?.mediaType;
+  if (mediaType !== undefined && !taken.includes(mediaType)) {
+    unsupported(`Anthropic Messages takes no ${mediaType} ${what}`);
+  }
+  const plain = mediaType === 'text/plain';
+  if (data === undefined) {
+    if (plain) {
+      unsupported('Anthropic Messages takes no text/plain file by address');
+    }
+    return { type: 'url', url: media.url ?? '' };
+  }
+  if (mediaType === undefined) {
+    unsupported(`Anthropic Messages needs the media type of ${what} bytes`);
+  }
+  return plain
+    ? { type: 'text', media_type: mediaType, data: written(data) }
+    : { type: 'base64', media_type: mediaType, data };
+}
+
+function unless<Content extends string | Dict[]>(
+  content: Content,
+): Content | undefined {
+  return content.length === 0 ? undefined : content;
+}
+
+function blockOf(
+  left: Leaving,
+  part: Exclude<Part, { type: 'citation' }>,
+): Dict | undefined {
+  if (part.type === 'provider') {
+    const block = own(part.provider, 'a part');
+    if (Object.keys(block).length === 0) {
+      unsupported('Anthropic Messages cannot carry an empty provider part');
+    }
+    return block;
+  }
+  if (part.type === 'reasoning') {
+    // Reasoning no Anthropic model signed is refused upstream, so it is
+    // left out: another family's, and progress a caller sent back.
+    const { signature, ...rest } = hinted(part.provider);
+    if (typeof signature === 'string') {
+      return { type: 'thinking', thinking: part.text, signature, ...rest };
+    }
+    left.without('reasoning', part);
+    return undefined;
+  }
+  const meant = own(part.provider, `${a(part.type)} part`);
+  const extra = { ...hinted(part.hints), ...meant };
+  const cache = cacheTo(part.cache);
+  // What the upstream of another API ran has no block here; this API's own
+  // comes with the fields it wrote.
+  if (part.type === 'tool_call' || part.type === 'tool_result') {
+    left.without('hosted', part.hosted && Object.keys(meant).length === 0);
+  }
+  switch (part.type) {
+    case 'text':
+    case 'refusal':
+      // The API takes no text block without text.
+      return part.text === ''
+        ? undefined
+        : { type: 'text', text: part.text, ...extra, ...cache };
+    case 'image':
+      if (part.data !== undefined && part.mediaType === undefined) {
+        left.without('image.untyped', part);
+      }
+      return {
+        type: 'image',
+        source: sourceOf(part, 'image', [
+          'image/jpeg',
+          'image/png',
+          'image/gif',
+          'image/webp',
+        ]),
+        ...extra,
+        ...cache,
+      };
+    case 'file':
+      return {
+        type: 'document',
+        source: sourceOf(part, 'file', ['application/pdf', 'text/plain']),
+        ...given({ title: part.name }),
+        ...extra,
+        ...cache,
+      };
+    case 'audio':
+      left.without('audio', part);
+      return undefined;
+    case 'tool_call':
+      if (part.input === undefined) {
+        unsupported(
+          'Anthropic Messages cannot carry tool input that is not JSON',
+        );
+      }
+      return {
+        type: part.hosted === true ? 'server_tool_use' : 'tool_use',
+        id: part.id,
+        name: part.name,
+        input: copied(part.input),
+        ...extra,
+        ...cache,
+      };
+    case 'tool_result':
+      return {
+        type: 'tool_result',
+        tool_use_id: part.id,
+        ...given({
+          content: unless(
+            part.parts === undefined ? part.text : blocksOf(left, part.parts),
+          ),
+        }),
+        ...(part.failed === true ? { is_error: true } : {}),
+        ...extra,
+        ...cache,
+      };
+  }
+}
+
+// A citation annotates the text before it. Only this family's own form can
+// be written: its location fields have no neutral counterpart.
+function cited(left: Leaving, blocks: Dict[], part: Part): Dict[] {
+  const citation = hinted(part.provider);
+  const last = blocks.at(-1);
+  const { type, citations } = last ?? {};
+  const own = Object.keys(citation).length > 0;
+  if (last === undefined || type !== 'text' || !own) {
+    left.without('citation', part);
+    return blocks;
+  }
+  const held = Array.isArray(citations) ? citations : [];
+  return [...blocks.slice(0, -1), { ...last, citations: [...held, citation] }];
+}
+
+// The cache marker of a whole message sits on its last block.
+export function blocksOf(
+  left: Leaving,
+  parts: readonly Part[],
+  cache?: Cache,
+): Dict[] {
+  let blocks: Dict[] = [];
+  for (const part of parts) {
+    if (part.type === 'citation') {
+      blocks = cited(left, blocks, part);
+      continue;
+    }
+    const block = blockOf(left, part);
+    if (block !== undefined) blocks.push(block);
+  }
+  const last = blocks.at(-1);
+  return last === undefined || cache === undefined
+    ? blocks
+    : [...blocks.slice(0, -1), { ...last, ...cacheTo(cache) }];
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@mottyjs/core",
+  "version": "0.0.0",
+  "description": "The motty builder, model calls, fallback, race, retry and timeout, error classes and types: all a motty or a plugin needs.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
+    "directory": "packages/core"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./host": "./src/host.ts"
+  }
+}

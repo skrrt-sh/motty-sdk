@@ -1,0 +1,25 @@
+{
+  "name": "@mottyjs/settings",
+  "version": "0.0.0",
+  "description": "Typed settings for a motty: defaults defined in code, overrides supplied by the host.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
+    "directory": "packages/settings"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mottyjs/core": "workspace:*"
+  },
+  "devDependencies": {
+    "zod": "catalog:"
+  }
+}

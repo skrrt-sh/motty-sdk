@@ -1,0 +1,23 @@
+{
+  "name": "@mottyjs/decision",
+  "version": "0.0.0",
+  "description": "Decision models for a motty: choice, score and noul questions answered with probabilities.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
+    "directory": "packages/decision"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./wire": "./src/wire.ts"
+  },
+  "dependencies": {
+    "@mottyjs/core": "workspace:*"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@acme/coder",
+  "version": "1.0.0",
+  "description": "Sends coding-agent requests to the cheapest model that can handle them.",
+  "private": true,
+  "type": "module",
+  "main": "src/motty.ts",
+  "scripts": {
+    "build": "bun build src/motty.ts --target=node --outfile=dist/motty.js",
+    "test": "bun test ./test",
+    "eval": "bun test --timeout 60000 ./evals/tiers.eval.ts"
+  },
+  "dependencies": {
+    "@mottyjs/adapters": "workspace:*",
+    "@mottyjs/auth": "workspace:*",
+    "@mottyjs/core": "workspace:*",
+    "@mottyjs/decision": "workspace:*",
+    "@mottyjs/serve": "workspace:*",
+    "@mottyjs/settings": "workspace:*",
+    "@mottyjs/store": "workspace:*",
+    "@mottyjs/test": "workspace:*",
+    "zod": "^4.0.0"
+  }
+}

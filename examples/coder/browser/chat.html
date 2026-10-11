@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>coder</title>
+<style>
+  body { font: 14px system-ui; max-width: 40rem; margin: 2rem auto; }
+  label { display: block; margin: 0.5rem 0; }
+  input, select, textarea { width: 100%; box-sizing: border-box; font: inherit; }
+  pre { white-space: pre-wrap; border: 1px solid #bbb; min-height: 2rem; padding: 0.5rem; }
+  #reasoning { color: #666; }
+</style>
+
+<label>Wire format
+  <select id="format">
+    <option value="chat-completions">Chat Completions</option>
+    <option value="responses">Responses</option>
+    <option value="messages">Anthropic Messages</option>
+  </select>
+</label>
+<label>Model <input id="model" value="acme/coder"></label>
+<label>Token <input id="token"></label>
+<label>Conversation id <input id="conversation"></label>
+<label>Prompt <textarea id="prompt" rows="3"></textarea></label>
+<button id="send">Send</button>
+<button id="stop" disabled>Stop</button>
+<p>Status: <span id="status">idle</span></p>
+<h4>Reasoning</h4>
+<pre id="reasoning"></pre>
+<h4>Answer</h4>
+<pre id="answer"></pre>
+
+<script>
+  const field = (id) => document.getElementById(id);
+  const turns = [];
+  let stop = new AbortController();
+
+  // Each format asks for reasoning in its own way, and progress follows it.
+  // What a format's event means is returned in one shape for all three.
+  const formats = {
+    'chat-completions': {
+      path: '/v1/chat/completions',
+      body: (model, messages) => ({ model, messages, stream: true }),
+      read: ({ error, choices }) => {
+        if (error) return { error: error.code };
+        const { reasoning, content } = choices[0]?.delta ?? {};
+        return { reasoning, answer: content };
+      },
+    },
+    responses: {
+      path: '/v1/responses',
+      body: (model, input) => ({
+        model,
+        input,
+        stream: true,
+        reasoning: { summary: 'auto' },
+      }),
+      read: (event) => {
+        switch (event.type) {
+          case 'response.reasoning_summary_part.added':
+            return { paragraph: true };
+          case 'response.reasoning_summary_text.delta':
+            return { reasoning: event.delta };
+          case 'response.output_text.delta':
+            return { answer: event.delta };
+          case 'response.completed':
+            return { done: true };
+          case 'response.failed':
+            return { error: event.response.error.code };
+          default:
+            return {};
+        }
+      },
+    },
+    messages: {
+      path: '/v1/messages',
+      headers: { 'anthropic-version': '2023-06-01' },
+      body: (model, messages) => ({
+        model,
+        messages,
+        stream: true,
+        max_tokens: 1024,
+        thinking: { type: 'adaptive' },
+      }),
+      read: (event) => {
+        switch (event.type) {
+          case 'content_block_start':
+            return { paragraph: event.content_block.type === 'thinking' };
+          case 'content_block_delta':
+            return { reasoning: event.delta.thinking, answer: event.delta.text };
+          case 'message_stop':
+            return { done: true };
+          case 'error':
+            return { error: event.error.type };
+          default:
+            return {};
+        }
+      },
+    },
+  };
+
+  async function* events(response) {
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let held = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      held += value;
+      const frames = held.split('\n\n');
+      held = frames.pop();
+      for (const frame of frames) {
+        const data = frame
+          .split('\n')
+          .filter((line) => line.startsWith('data: '))
+          .map((line) => line.slice(6))
+          .join('\n');
+        if (data !== '') yield data;
+      }
+    }
+  }
+
+  // Resolves with how the reply ended: done, or the error's code.
+  async function shown(response, read) {
+    for await (const data of events(response)) {
+      if (data === '[DONE]') return 'done';
+      const { reasoning, answer, paragraph, done, error } = read(JSON.parse(data));
+      if (error) return `error ${error} (HTTP ${response.status})`;
+      if (done) return 'done';
+      if (paragraph && field('reasoning').textContent !== '') {
+        field('reasoning').append('\n');
+      }
+      if (reasoning) field('reasoning').append(reasoning);
+      if (answer) field('answer').append(answer);
+    }
+    return `error incomplete (HTTP ${response.status})`;
+  }
+
+  async function asked(format, messages) {
+    const response = await fetch(format.path, {
+      method: 'POST',
+      signal: stop.signal,
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${field('token').value}`,
+        ...format.headers,
+        ...(field('conversation').value === ''
+          ? {}
+          : { 'x-conversation-id': field('conversation').value }),
+      },
+      body: JSON.stringify(format.body(field('model').value, messages)),
+    });
+    if (response.ok) return shown(response, format.read);
+    const { error } = await response.json();
+    return `error ${error.code ?? error.type} (HTTP ${response.status})`;
+  }
+
+  async function send() {
+    const question = { role: 'user', content: field('prompt').value };
+    stop = new AbortController();
+    field('reasoning').textContent = '';
+    field('answer').textContent = '';
+    field('status').textContent = 'streaming';
+    field('send').disabled = true;
+    field('stop').disabled = false;
+    try {
+      const ended = await asked(formats[field('format').value], [...turns, question]);
+      if (ended === 'done') {
+        turns.push(question, { role: 'assistant', content: field('answer').textContent });
+      }
+      field('status').textContent = ended;
+    } catch (thrown) {
+      field('status').textContent = stop.signal.aborted
+        ? 'stopped'
+        : `error ${thrown.message}`;
+    }
+    field('send').disabled = false;
+    field('stop').disabled = true;
+  }
+
+  field('send').addEventListener('click', send);
+  field('stop').addEventListener('click', () => stop.abort());
+</script>
+</html>

@@ -1,0 +1,14 @@
+# The storage adapter is tested against a real server, or not at all.
+name: motty-sdk
+
+services:
+  valkey:
+    image: valkey/valkey:9-alpine
+    command: valkey-server --io-threads 4 --save "" --appendonly no
+    ports:
+      - 127.0.0.1:6379:6379
+    healthcheck:
+      test: valkey-cli ping
+      interval: 5s
+      timeout: 3s
+      retries: 10

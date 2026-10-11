@@ -1,0 +1,44 @@
+{
+  "name": "motty",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "examples/*"
+    ],
+    "catalog": {
+      "@biomejs/biome": "2.5.15",
+      "@types/bun": "1.4.2",
+      "jose": "^6.2.12",
+      "playwright": "1.59.1",
+      "typescript": "7.0.2",
+      "zod": "^4"
+    }
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:browser": "bun test --timeout 20000 ./examples/coder/browser/chat.browser.ts",
+    "test:live": "bun test --timeout 60000 ./packages/adapters/test/openrouter.live.ts ./packages/adapters/test/openrouter-media.live.ts ./packages/adapters/test/openrouter-output.live.ts ./packages/adapters/test/openai.live.ts ./packages/adapters/test/anthropic.live.ts ./packages/adapters/test/responses-reasoning.live.ts ./packages/adapters/test/openrouter-open-weight.live.ts ./packages/adapters/test/across-families.live.ts ./packages/adapters/test/responses-gaps.live.ts ./packages/adapters/test/mistral.live.ts ./packages/adapters/test/together.live.ts ./packages/adapters/test/fireworks.live.ts ./packages/adapters/test/typesafe.live.ts",
+    "record": "RECORD=1 bun test gates"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai": "4.0.91",
+    "@biomejs/biome": "catalog:",
+    "@langchain/core": "1.2.17",
+    "@langchain/openai": "1.6.2",
+    "@mastra/core": "1.75.0",
+    "@tanstack/ai": "0.68.0",
+    "@tanstack/ai-openai": "0.29.1",
+    "@types/bun": "catalog:",
+    "ai": "7.0.137",
+    "playwright": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

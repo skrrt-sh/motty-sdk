@@ -1,0 +1,24 @@
+{
+  "name": "@acme/desk",
+  "version": "1.0.0",
+  "description": "A customer-support desk that sends each request to the model fit for what it contains.",
+  "private": true,
+  "type": "module",
+  "main": "src/motty.ts",
+  "scripts": {
+    "build": "bun build src/motty.ts --target=node --outfile=dist/motty.js",
+    "test": "bun test ./test",
+    "eval": "bun test --timeout 60000 ./evals/attachment.eval.ts ./evals/ticket.eval.ts"
+  },
+  "dependencies": {
+    "@mottyjs/adapters": "workspace:*",
+    "@mottyjs/auth": "workspace:*",
+    "@mottyjs/core": "workspace:*",
+    "@mottyjs/decision": "workspace:*",
+    "@mottyjs/serve": "workspace:*",
+    "@mottyjs/settings": "workspace:*",
+    "@mottyjs/store": "workspace:*",
+    "@mottyjs/test": "workspace:*",
+    "zod": "^4.0.0"
+  }
+}

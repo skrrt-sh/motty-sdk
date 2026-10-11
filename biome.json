@@ -1,0 +1,146 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+
+  "files": {
+    "includes": ["**", "!.claude", "!.agents", "!.serena", "!examples"]
+  },
+
+  "formatter": {
+    "indentStyle": "space",
+    "lineEnding": "lf",
+    "lineWidth": 80
+  },
+
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noImportCycles": "error",
+        "noExplicitAny": "error"
+      },
+      "style": {
+        "noNonNullAssertion": "error"
+      }
+    }
+  },
+
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+
+  "overrides": [
+    {
+      "includes": ["packages/*/src/**"],
+      "linter": {
+        "rules": {
+          "style": { "noDefaultExport": "error" },
+          "performance": { "noReExportAll": "error" }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/src/data/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../**"],
+                    "message": "The Data layer imports nothing outside itself."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/src/contract.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["./**", "../**", "!./data/**"],
+                    "message": "The Contract layer imports only the Data layer."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/src/host-options.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "./**",
+                      "../**",
+                      "!./data/**",
+                      "!./contract.ts",
+                      "!./chain/builder.ts"
+                    ],
+                    "message": "Host options import the data, the contract and the type of a motty."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/src/request/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/chain/**"],
+                    "message": "The Request layer never imports the Chain layer."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

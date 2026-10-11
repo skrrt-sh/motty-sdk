@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "checkers": 1
+  },
+  "include": ["../packages/core/src", "../examples/coder/src/motty.ts"]
+}

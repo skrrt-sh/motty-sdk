@@ -1,0 +1,34 @@
+{
+  "name": "@mottyjs/serve",
+  "version": "0.0.0",
+  "description": "The host side of a motty on Bun: serves it as a model over the Chat Completions, Responses and Messages APIs.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
+    "directory": "packages/serve"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./codec": "./src/codec.ts",
+    "./sse": "./src/sse.ts",
+    "./upstream-failure": "./src/wire/upstream-failure.ts",
+    "./messages-failure": "./src/messages/errors.ts",
+    "./retry-after": "./src/wire/retry-after.ts"
+  },
+  "dependencies": {
+    "@mottyjs/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@mottyjs/auth": "workspace:*",
+    "@mottyjs/settings": "workspace:*",
+    "@mottyjs/store": "workspace:*",
+    "@mottyjs/test": "workspace:*",
+    "zod": "catalog:"
+  }
+}

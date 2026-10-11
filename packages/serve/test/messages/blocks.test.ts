@@ -1,0 +1,458 @@
+import { expect, test } from 'bun:test';
+import { Unsupported } from '@mottyjs/core';
+import { blocksOf } from '../../src/messages/blocks.ts';
+import { leaving } from '../../src/wire/fieldless.ts';
+
+test('text and a refusal are text blocks', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'text', text: 'Hello', cache: { ttl: '5m' } },
+      { type: 'refusal', text: 'I cannot help with that.' },
+    ]),
+  ).toEqual([
+    {
+      type: 'text',
+      text: 'Hello',
+      cache_control: { type: 'ephemeral', ttl: '5m' },
+    },
+    { type: 'text', text: 'I cannot help with that.' },
+  ]);
+});
+
+test('an image is written from bytes, an address or a file id', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'image', data: 'iVBORw0KGgo=', mediaType: 'image/png' },
+      { type: 'image', url: 'https://example.com/cat.png' },
+      { type: 'image', id: 'file_011C' },
+      { type: 'image', url: 'data:image/jpeg;base64,/9j/4AAQ' },
+    ]),
+  ).toEqual([
+    {
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' },
+    },
+    {
+      type: 'image',
+      source: { type: 'url', url: 'https://example.com/cat.png' },
+    },
+    { type: 'image', source: { type: 'file', file_id: 'file_011C' } },
+    {
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' },
+    },
+  ]);
+});
+
+test('a file is a document with its title and its own fields', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'file',
+        data: 'JVBERi0xLjQ=',
+        mediaType: 'application/pdf',
+        name: 'Report',
+        provider: { anthropic: { citations: { enabled: true } } },
+      },
+    ]),
+  ).toEqual([
+    {
+      type: 'document',
+      source: {
+        type: 'base64',
+        media_type: 'application/pdf',
+        data: 'JVBERi0xLjQ=',
+      },
+      title: 'Report',
+      citations: { enabled: true },
+    },
+  ]);
+});
+
+test('signed reasoning is a thinking block; unsigned is left out', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'reasoning',
+        text: 'Step one.',
+        provider: { anthropic: { signature: 'EqQBCgIYAhIM' } },
+      },
+      { type: 'reasoning', text: 'Routing to fast' },
+      {
+        type: 'reasoning',
+        text: 'Summary',
+        provider: { 'openai.responses': { encrypted_content: 'gAAAA' } },
+      },
+    ]),
+  ).toEqual([
+    { type: 'thinking', thinking: 'Step one.', signature: 'EqQBCgIYAhIM' },
+  ]);
+});
+
+test('a tool call and its result are written back', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'tool_call', id: 'toolu_01', name: 'get', input: { a: 1 } },
+      {
+        type: 'tool_call',
+        id: 'srvtoolu_01',
+        name: 'web_search',
+        input: { query: 'x' },
+        hosted: true,
+        provider: { anthropic: { type: 'server_tool_use' } },
+      },
+      { type: 'tool_result', id: 'toolu_01', text: '15C' },
+      { type: 'tool_result', id: 'toolu_02', text: '' },
+      {
+        type: 'tool_result',
+        id: 'toolu_03',
+        failed: true,
+        parts: [{ type: 'text', text: 'No such city' }],
+      },
+    ]),
+  ).toEqual([
+    { type: 'tool_use', id: 'toolu_01', name: 'get', input: { a: 1 } },
+    {
+      type: 'server_tool_use',
+      id: 'srvtoolu_01',
+      name: 'web_search',
+      input: { query: 'x' },
+    },
+    { type: 'tool_result', tool_use_id: 'toolu_01', content: '15C' },
+    { type: 'tool_result', tool_use_id: 'toolu_02' },
+    {
+      type: 'tool_result',
+      tool_use_id: 'toolu_03',
+      content: [{ type: 'text', text: 'No such city' }],
+      is_error: true,
+    },
+  ]);
+});
+
+test("this family's citation goes back onto the text before it", () => {
+  const location = {
+    type: 'page_location',
+    cited_text: 'Revenue grew.',
+    document_index: 0,
+    document_title: 'Report',
+    start_page_number: 1,
+    end_page_number: 2,
+  };
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'text', text: 'It grew.' },
+      { type: 'citation', title: 'Report', provider: { anthropic: location } },
+      { type: 'citation', url: 'https://example.com', title: 'Elsewhere' },
+    ]),
+  ).toEqual([{ type: 'text', text: 'It grew.', citations: [location] }]);
+});
+
+test('a provider part of this family is the block itself', () => {
+  const redacted = { type: 'redacted_thinking', data: 'EmwKAhgBEgy3va3pzix' };
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'provider', provider: { anthropic: redacted } },
+    ]),
+  ).toEqual([redacted]);
+});
+
+test('the cache marker of a message sits on its last block', () => {
+  expect(
+    blocksOf(
+      leaving('messages'),
+      [
+        { type: 'text', text: 'one' },
+        { type: 'text', text: 'two' },
+      ],
+      {},
+    ),
+  ).toEqual([
+    { type: 'text', text: 'one' },
+    { type: 'text', text: 'two', cache_control: { type: 'ephemeral' } },
+  ]);
+});
+
+test('what this wire cannot say fails the call', () => {
+  expect(() =>
+    blocksOf(leaving('messages'), [
+      { type: 'audio', data: 'UklGRg==', mediaType: 'audio/wav' },
+    ]),
+  ).toThrow(Unsupported);
+  expect(() =>
+    blocksOf(leaving('messages'), [
+      { type: 'tool_call', id: 'call_1', name: 'get', raw: '{"a":' },
+    ]),
+  ).toThrow(Unsupported);
+  expect(() =>
+    blocksOf(leaving('messages'), [{ type: 'image', data: 'iVBORw0KGgo=' }]),
+  ).toThrow(Unsupported);
+  expect(() =>
+    blocksOf(leaving('messages'), [
+      { type: 'provider', provider: { 'openai.responses': { type: 'x' } } },
+    ]),
+  ).toThrow(Unsupported);
+  expect(() =>
+    blocksOf(leaving('messages'), [
+      {
+        type: 'text',
+        text: 'a',
+        provider: { 'openai.chat': { logprobs: [] } },
+      },
+    ]),
+  ).toThrow(Unsupported);
+  expect(() =>
+    blocksOf(leaving('messages'), [{ type: 'provider', provider: {} }]),
+  ).toThrow(Unsupported);
+});
+
+test('a hosted call or result this API did not write fails the call', () => {
+  expect(() =>
+    blocksOf(leaving('messages'), [
+      {
+        type: 'tool_call',
+        id: 'ws_1',
+        name: 'web_search',
+        input: { query: 'x' },
+        hosted: true,
+      },
+    ]),
+  ).toThrow(
+    'Anthropic Messages cannot carry a call or a result of a tool another upstream ran',
+  );
+  expect(() =>
+    blocksOf(leaving('messages'), [
+      { type: 'tool_result', id: 'ws_1', text: 'Rain', hosted: true },
+    ]),
+  ).toThrow(Unsupported);
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'tool_result',
+        id: 'srvtoolu_01',
+        text: 'Rain',
+        hosted: true,
+        provider: { anthropic: { type: 'web_search_tool_result' } },
+      },
+    ]),
+  ).toEqual([
+    {
+      type: 'web_search_tool_result',
+      tool_use_id: 'srvtoolu_01',
+      content: 'Rain',
+    },
+  ]);
+});
+
+test('a media type the API does not list fails the call', () => {
+  for (const part of [
+    { type: 'image', data: 'Qk0=', mediaType: 'image/bmp' },
+    { type: 'image', url: 'data:image/bmp;base64,Qk0=' },
+    {
+      type: 'image',
+      url: 'https://example.com/a.tiff',
+      mediaType: 'image/tiff',
+    },
+    { type: 'file', data: 'YSxiCg==', mediaType: 'text/csv' },
+    {
+      type: 'file',
+      url: 'https://example.com/a.txt',
+      mediaType: 'text/plain',
+    },
+    { type: 'file', data: '/w==', mediaType: 'text/plain' },
+    {
+      type: 'file',
+      url: 'https://example.com/a.docx',
+      mediaType: 'application/msword',
+    },
+  ] as const) {
+    expect(() => blocksOf(leaving('messages'), [part])).toThrow(Unsupported);
+  }
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'image', data: 'UklGRg==', mediaType: 'image/webp' },
+      { type: 'image', data: 'R0lGOA==', mediaType: 'image/gif' },
+      { type: 'file', url: 'data:application/pdf;base64,JVBERi0=' },
+      { type: 'file', id: 'file_011C', mediaType: 'text/plain' },
+    ]),
+  ).toHaveLength(4);
+});
+
+test('text with nothing in it is no block', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'text', text: '' },
+      { type: 'refusal', text: '' },
+      { type: 'text', text: '', cache: {} },
+      {
+        type: 'tool_result',
+        id: 'toolu_01',
+        parts: [{ type: 'text', text: '' }],
+      },
+    ]),
+  ).toEqual([{ type: 'tool_result', tool_use_id: 'toolu_01' }]);
+});
+
+test('a cache marker is written on an image, a document and tool blocks', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      { type: 'image', id: 'file_011C', cache: {} },
+      { type: 'file', id: 'file_011D', cache: { ttl: '1h' } },
+      { type: 'tool_call', id: 'toolu_01', name: 'get', input: {}, cache: {} },
+      { type: 'tool_result', id: 'toolu_01', text: 'ok', cache: { ttl: '5m' } },
+    ]),
+  ).toEqual([
+    {
+      type: 'image',
+      source: { type: 'file', file_id: 'file_011C' },
+      cache_control: { type: 'ephemeral' },
+    },
+    {
+      type: 'document',
+      source: { type: 'file', file_id: 'file_011D' },
+      cache_control: { type: 'ephemeral', ttl: '1h' },
+    },
+    {
+      type: 'tool_use',
+      id: 'toolu_01',
+      name: 'get',
+      input: {},
+      cache_control: { type: 'ephemeral' },
+    },
+    {
+      type: 'tool_result',
+      tool_use_id: 'toolu_01',
+      content: 'ok',
+      cache_control: { type: 'ephemeral', ttl: '5m' },
+    },
+  ]);
+});
+
+test('what its own family hinted on a part goes on its block; another family`s does not', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'text',
+        text: 'Look',
+        hints: { anthropic: { note: 'a' }, 'openai.chat': { lang: 'en' } },
+      },
+      {
+        type: 'image',
+        url: 'https://x.test/cat.png',
+        hints: {
+          anthropic: { transformations: { oversized_image: 'error' } },
+          'openai.chat': { detail: 'high' },
+        },
+      },
+      {
+        type: 'file',
+        id: 'file_011C',
+        hints: { anthropic: { context: 'Q3 figures' } },
+      },
+    ]),
+  ).toEqual([
+    { type: 'text', text: 'Look', note: 'a' },
+    {
+      type: 'image',
+      source: { type: 'url', url: 'https://x.test/cat.png' },
+      transformations: { oversized_image: 'error' },
+    },
+    {
+      type: 'document',
+      source: { type: 'file', file_id: 'file_011C' },
+      context: 'Q3 figures',
+    },
+  ]);
+});
+
+test('a plain-text file is a document of the text it holds', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'file',
+        data: 'R3Jhc3MgaXMgZ3LDvG4u',
+        mediaType: 'text/plain',
+        name: 'Facts',
+      },
+      { type: 'file', url: 'data:text/plain;base64,aGk=' },
+    ]),
+  ).toEqual([
+    {
+      type: 'document',
+      source: {
+        type: 'text',
+        media_type: 'text/plain',
+        data: 'Grass is grün.',
+      },
+      title: 'Facts',
+    },
+    {
+      type: 'document',
+      source: { type: 'text', media_type: 'text/plain', data: 'hi' },
+    },
+  ]);
+});
+
+test.each([
+  [
+    'image bytes of no named type',
+    { type: 'image', data: 'iVBORw0=' },
+    'Anthropic Messages cannot carry image bytes of no named media type',
+  ],
+  [
+    'file bytes of no named type',
+    { type: 'file', data: 'JVBERi0=' },
+    'Anthropic Messages needs the media type of file bytes',
+  ],
+  [
+    'a plain-text file that is not UTF-8',
+    { type: 'file', data: '/w==', mediaType: 'text/plain' },
+    'Anthropic Messages takes no plain-text file that is not UTF-8',
+  ],
+  [
+    'a plain-text file by address',
+    { type: 'file', url: 'https://x.test/a.txt', mediaType: 'text/plain' },
+    'Anthropic Messages takes no text/plain file by address',
+  ],
+  [
+    'sound by address',
+    { type: 'audio', url: 'https://x.test/a.wav' },
+    'Anthropic Messages cannot carry audio',
+  ],
+] as const)('%s fails the call before it is sent', (_, part, message) => {
+  const sent = () => blocksOf(leaving('messages'), [part]);
+  expect(sent).toThrow(Unsupported);
+  expect(sent).toThrow(message);
+});
+
+test('a tool answers with text, an image and a document', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'tool_result',
+        id: 'toolu_01',
+        parts: [
+          { type: 'text', text: 'The chart:' },
+          { type: 'image', data: 'iVBORw0=', mediaType: 'image/png' },
+          { type: 'file', url: 'https://x.test/a.pdf', name: 'Report' },
+        ],
+      },
+    ]),
+  ).toEqual([
+    {
+      type: 'tool_result',
+      tool_use_id: 'toolu_01',
+      content: [
+        { type: 'text', text: 'The chart:' },
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0=' },
+        },
+        {
+          type: 'document',
+          source: { type: 'url', url: 'https://x.test/a.pdf' },
+          title: 'Report',
+        },
+      ],
+    },
+  ]);
+});
