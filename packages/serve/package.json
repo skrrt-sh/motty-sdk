@@ -2,7 +2,20 @@
   "name": "@mottyjs/serve",
   "version": "0.0.0",
   "description": "The host side of a motty on Bun: serves it as a model over the Chat Completions, Responses and Messages APIs.",
+  "keywords": [
+    "motty",
+    "llm",
+    "gateway",
+    "openai-compatible",
+    "chat-completions",
+    "responses-api",
+    "messages-api",
+    "bun"
+  ],
   "license": "Apache-2.0",
+  "author": "Skrrt LLC",
+  "homepage": "https://github.com/skrrt-sh/motty-sdk/tree/main/packages/serve#readme",
+  "bugs": "https://github.com/skrrt-sh/motty-sdk/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
@@ -10,16 +23,50 @@
   },
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "exports": {
-    ".": "./src/index.ts",
-    "./codec": "./src/codec.ts",
-    "./sse": "./src/sse.ts",
-    "./upstream-failure": "./src/wire/upstream-failure.ts",
-    "./messages-failure": "./src/messages/errors.ts",
-    "./retry-after": "./src/wire/retry-after.ts"
+    ".": {
+      "@mottyjs/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./codec": {
+      "@mottyjs/source": "./src/codec.ts",
+      "types": "./dist/codec.d.ts",
+      "default": "./src/codec.ts"
+    },
+    "./sse": {
+      "@mottyjs/source": "./src/sse.ts",
+      "types": "./dist/sse.d.ts",
+      "default": "./src/sse.ts"
+    },
+    "./upstream-failure": {
+      "@mottyjs/source": "./src/wire/upstream-failure.ts",
+      "types": "./dist/wire/upstream-failure.d.ts",
+      "default": "./src/wire/upstream-failure.ts"
+    },
+    "./messages-failure": {
+      "@mottyjs/source": "./src/messages/errors.ts",
+      "types": "./dist/messages/errors.d.ts",
+      "default": "./src/messages/errors.ts"
+    },
+    "./retry-after": {
+      "@mottyjs/source": "./src/wire/retry-after.ts",
+      "types": "./dist/wire/retry-after.d.ts",
+      "default": "./src/wire/retry-after.ts"
+    }
+  },
+  "scripts": {
+    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/serve/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*"

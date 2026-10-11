@@ -5,6 +5,7 @@
     "module": "Preserve",
     "moduleDetection": "force",
     "types": ["bun"],
+    "customConditions": ["@mottyjs/source"],
 
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,

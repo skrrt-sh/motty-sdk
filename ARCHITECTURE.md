@@ -1140,6 +1140,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **The edge has the last boundary.** Whatever is thrown while a request is taken in is answered
   in the format of the path, and a path that cannot be read is the caller's mistake, a 400. Cause:
   such a path was answered with the server's own error page.
+- **A path nothing is served at is a 404 in an API's error shape, never plain text.** The shape
+  is that of the API whose paths it lies under; under none, Messages for a request that sends
+  `anthropic-version`, as only that API's clients do, and the OpenAI shape for any other. Cause:
+  a client whose base address lacked `/v1` was answered `Not found` as text, which its library
+  could not read as an error.
+- **A missing field is worded the same on every API.** Cause: a body with no model was told
+  "The body needs a model" on two APIs and "model must be a string" on the third, and neither
+  is an upstream's own wording, so nothing was kept by the difference.
 - **Caller headers are not forwarded upstream.**
 
 ### Wire fidelity
@@ -1172,14 +1180,6 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   key replaces the shared key's whole field, however deep either goes. For a tool, a tool
   choice, and what a message or a part says in `provider`, the shared key is no entry: the two
   APIs share no shape there, so only an API's own key is one, and without it the call fails
-- **A path nothing is served at is a 404 in an API's error shape, never plain text.** The shape
-  is that of the API whose paths it lies under; under none, Messages for a request that sends
-  `anthropic-version`, as only that API's clients do, and the OpenAI shape for any other. Cause:
-  a client whose base address lacked `/v1` was answered `Not found` as text, which its library
-  could not read as an error.
-- **A missing field is worded the same on every API.** Cause: a body with no model was told
-  "The body needs a model" on two APIs and "model must be a string" on the third, and neither
-  is an upstream's own wording, so nothing was kept by the difference.
   with `Unsupported`.
   Cause: which OpenAI API is spoken is the host's choice, so an author who wrote
   `openai.responses` had to know the host. Rejected: flat prefixed names, which work only where
@@ -1441,6 +1441,25 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **Bun only for now.** `serve`, the adapters, the bundler and the test runner are Bun's. A
   motty's own code uses web-standard APIs and the async context, so it runs on the Hub too. No
   other runtime is promised.
+- **A published package holds its sources and, beside them, their declaration files. Bun runs the
+  sources; a consumer's compiler reads only the declarations.** Cause: a compiler checks every
+  source it is led to under the consumer's own flags, and skipping library checks skips
+  declaration files only. Measured on a project installed from the packed packages, with sources
+  alone: under Bun's recommended config, which leaves exact optional properties off, 7 errors,
+  all in the host side; under a config that also does not allow an import path ending in `.ts`,
+  358 more, one for every such import. With declarations the same project gave none under either
+  config, with library checks on and off, on TypeScript 5.9 and 7.0. Rejected: making the sources
+  pass under looser flags, which is every import rewritten, still one consumer flag from the next
+  error, and every consumer paying to check the SDK's sources. Also rejected: compiling to
+  JavaScript, a second artefact beside the code the tests ran, for a runtime that needs none.
+- **The declarations are built when a package is packed, from the one shared compiler config.**
+  They are never committed. Rejected: a build config in every package, as the layout rules
+  reject a compiler config in every package.
+- **Inside the workspace a package is always read as its sources,** through an export condition
+  that only the workspace's compiler config names. Cause: once a pack had left declarations
+  behind, the workspace's own type check read them in place of the sources and failed, and the
+  type-cost gate would have measured them. Rejected: deleting them after every pack, which one
+  failed pack defeats.
 - **The served motty is the default export of the file `main` names.** A named export is a part.
 - **Identity comes from `package.json`:** `@acme/coder` is `acme/coder`. A release changes one file.
 - **No manifest file.** Behind the mark is a description collected at load, never by parsing source.

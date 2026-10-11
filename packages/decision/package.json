@@ -2,7 +2,18 @@
   "name": "@mottyjs/decision",
   "version": "0.0.0",
   "description": "Decision models for a motty: choice, score and noul questions answered with probabilities.",
+  "keywords": [
+    "motty",
+    "llm",
+    "gateway",
+    "decision-model",
+    "classification",
+    "bun"
+  ],
   "license": "Apache-2.0",
+  "author": "Skrrt LLC",
+  "homepage": "https://github.com/skrrt-sh/motty-sdk/tree/main/packages/decision#readme",
+  "bugs": "https://github.com/skrrt-sh/motty-sdk/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
@@ -10,12 +21,30 @@
   },
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "exports": {
-    ".": "./src/index.ts",
-    "./wire": "./src/wire.ts"
+    ".": {
+      "@mottyjs/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./wire": {
+      "@mottyjs/source": "./src/wire.ts",
+      "types": "./dist/wire.d.ts",
+      "default": "./src/wire.ts"
+    }
+  },
+  "scripts": {
+    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/decision/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*"

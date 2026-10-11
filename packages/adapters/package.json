@@ -2,7 +2,21 @@
   "name": "@mottyjs/adapters",
   "version": "0.0.0",
   "description": "Host-side adapters for a motty: model providers, Redis storage and JWT auth.",
+  "keywords": [
+    "motty",
+    "llm",
+    "gateway",
+    "openai",
+    "anthropic",
+    "openrouter",
+    "redis",
+    "jwt",
+    "bun"
+  ],
   "license": "Apache-2.0",
+  "author": "Skrrt LLC",
+  "homepage": "https://github.com/skrrt-sh/motty-sdk/tree/main/packages/adapters#readme",
+  "bugs": "https://github.com/skrrt-sh/motty-sdk/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/skrrt-sh/motty-sdk.git",
@@ -10,28 +24,110 @@
   },
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "exports": {
-    "./openai": "./src/openai.ts",
-    "./anthropic": "./src/anthropic.ts",
-    "./openrouter": "./src/openrouter.ts",
-    "./deepseek": "./src/deepseek.ts",
-    "./moonshot": "./src/moonshot.ts",
-    "./zai": "./src/zai.ts",
-    "./dashscope": "./src/dashscope.ts",
-    "./minimax": "./src/minimax.ts",
-    "./groq": "./src/groq.ts",
-    "./mistral": "./src/mistral.ts",
-    "./together": "./src/together.ts",
-    "./fireworks": "./src/fireworks.ts",
-    "./ollama": "./src/ollama.ts",
-    "./local": "./src/local.ts",
-    "./takes": "./src/takes.ts",
-    "./typesafe": "./src/typesafe.ts",
-    "./redis": "./src/redis.ts",
-    "./jwt": "./src/jwt.ts"
+    "./openai": {
+      "@mottyjs/source": "./src/openai.ts",
+      "types": "./dist/openai.d.ts",
+      "default": "./src/openai.ts"
+    },
+    "./anthropic": {
+      "@mottyjs/source": "./src/anthropic.ts",
+      "types": "./dist/anthropic.d.ts",
+      "default": "./src/anthropic.ts"
+    },
+    "./openrouter": {
+      "@mottyjs/source": "./src/openrouter.ts",
+      "types": "./dist/openrouter.d.ts",
+      "default": "./src/openrouter.ts"
+    },
+    "./deepseek": {
+      "@mottyjs/source": "./src/deepseek.ts",
+      "types": "./dist/deepseek.d.ts",
+      "default": "./src/deepseek.ts"
+    },
+    "./moonshot": {
+      "@mottyjs/source": "./src/moonshot.ts",
+      "types": "./dist/moonshot.d.ts",
+      "default": "./src/moonshot.ts"
+    },
+    "./zai": {
+      "@mottyjs/source": "./src/zai.ts",
+      "types": "./dist/zai.d.ts",
+      "default": "./src/zai.ts"
+    },
+    "./dashscope": {
+      "@mottyjs/source": "./src/dashscope.ts",
+      "types": "./dist/dashscope.d.ts",
+      "default": "./src/dashscope.ts"
+    },
+    "./minimax": {
+      "@mottyjs/source": "./src/minimax.ts",
+      "types": "./dist/minimax.d.ts",
+      "default": "./src/minimax.ts"
+    },
+    "./groq": {
+      "@mottyjs/source": "./src/groq.ts",
+      "types": "./dist/groq.d.ts",
+      "default": "./src/groq.ts"
+    },
+    "./mistral": {
+      "@mottyjs/source": "./src/mistral.ts",
+      "types": "./dist/mistral.d.ts",
+      "default": "./src/mistral.ts"
+    },
+    "./together": {
+      "@mottyjs/source": "./src/together.ts",
+      "types": "./dist/together.d.ts",
+      "default": "./src/together.ts"
+    },
+    "./fireworks": {
+      "@mottyjs/source": "./src/fireworks.ts",
+      "types": "./dist/fireworks.d.ts",
+      "default": "./src/fireworks.ts"
+    },
+    "./ollama": {
+      "@mottyjs/source": "./src/ollama.ts",
+      "types": "./dist/ollama.d.ts",
+      "default": "./src/ollama.ts"
+    },
+    "./local": {
+      "@mottyjs/source": "./src/local.ts",
+      "types": "./dist/local.d.ts",
+      "default": "./src/local.ts"
+    },
+    "./takes": {
+      "@mottyjs/source": "./src/takes.ts",
+      "types": "./dist/takes.d.ts",
+      "default": "./src/takes.ts"
+    },
+    "./typesafe": {
+      "@mottyjs/source": "./src/typesafe.ts",
+      "types": "./dist/typesafe.d.ts",
+      "default": "./src/typesafe.ts"
+    },
+    "./redis": {
+      "@mottyjs/source": "./src/redis.ts",
+      "types": "./dist/redis.d.ts",
+      "default": "./src/redis.ts"
+    },
+    "./jwt": {
+      "@mottyjs/source": "./src/jwt.ts",
+      "types": "./dist/jwt.d.ts",
+      "default": "./src/jwt.ts"
+    }
+  },
+  "scripts": {
+    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/adapters/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*",
