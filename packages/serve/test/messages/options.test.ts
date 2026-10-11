@@ -197,6 +197,44 @@ test('only this wire`s own headers are sent and a foreign hint dropped', () => {
   });
 });
 
+test('a header that says what the body may hold is a hint, and is sent back as a header', () => {
+  const { options } = optionsOf(
+    { max_tokens: 64 },
+    { 'anthropic-beta': 'context-management-2025-06-27' },
+  );
+  expect(options).toEqual({
+    maxTokens: 64,
+    hints: { anthropic: { 'anthropic-beta': 'context-management-2025-06-27' } },
+  });
+  expect(optionsTo(leaving('messages'), options, undefined)).toEqual({
+    headers: {
+      'content-type': 'application/json',
+      accept: 'text/event-stream',
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'context-management-2025-06-27',
+    },
+    fields: { max_tokens: 64 },
+  });
+});
+
+test('such a header said as an option replaces the hint whole', () => {
+  expect(
+    optionsTo(
+      leaving('messages'),
+      {
+        hints: { anthropic: { 'anthropic-beta': 'effort-2025-11-24' } },
+        provider: { anthropic: { 'anthropic-beta': 'files-api-2025-04-14' } },
+      },
+      undefined,
+    ).headers,
+  ).toEqual({
+    'content-type': 'application/json',
+    accept: 'text/event-stream',
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'files-api-2025-04-14',
+  });
+});
+
 test('what this wire cannot say fails the call', () => {
   expect(() => optionsTo(leaving('messages'), {}, {})).toThrow(Unsupported);
   expect(() =>

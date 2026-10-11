@@ -4,7 +4,7 @@ import type { Leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, isDict } from '../wire/json.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { effortless, sampling } from '../wire/taken.ts';
-import { hinted, marked, noted, own } from './family.ts';
+import { hinted, marked, noted, own, parted } from './family.ts';
 import { reasoningOf, reasoningTo, unsaid } from './reasoning.ts';
 import { choiceOf, choiceTo } from './tools.ts';
 
@@ -36,7 +36,10 @@ function outputOf(format: Json | undefined): JsonOutput | undefined {
 
 // Whatever the body holds that is not named here changes the meaning for
 // all this codec knows, so it travels as this family's own and is sent back.
-export function optionsOf(settings: Dict): {
+export function optionsOf(
+  settings: Dict,
+  heard: Dict = {},
+): {
   options: Options;
   output?: JsonOutput;
   shown: boolean;
@@ -75,6 +78,7 @@ export function optionsOf(settings: Dict): {
     }),
     ...noted({
       ...given({ metadata, cache_control: cache, service_tier: tier }),
+      ...heard,
       ...kept,
     }),
   };
@@ -124,14 +128,16 @@ export function optionsTo(
   left.without('presencePenalty', options.presencePenalty);
   left.without('frequencyPenalty', options.frequencyPenalty);
   left.without('seed', options.seed);
-  const provider = own(options.provider, 'options');
+  const told = parted(own(options.provider, 'options'));
+  const hint = parted(hinted(options.hints));
+  const provider = told.rest;
   const { max_tokens: limit } = defaults;
   const {
     thinking: shape,
     output_config: steer,
     metadata,
     ...loose
-  } = hinted(options.hints);
+  } = hint.rest;
   const { thinking: said, output_config: config } = provider;
   const { thinking, effort } = reasoningTo(
     left,
@@ -153,6 +159,9 @@ export function optionsTo(
         : undefined;
   return {
     headers: {
+      // An option outranks a hint, as with a body field.
+      ...hint.headers,
+      ...told.headers,
       'content-type': 'application/json',
       accept: 'text/event-stream',
       'anthropic-version': '2023-06-01',

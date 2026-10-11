@@ -161,11 +161,13 @@ test('a request of this family reaches the upstream with the same meaning', () =
   );
   const sent = messages.encode('claude-opus-5-5', request);
   expect(sent.body).toEqual(body);
-  // Nothing of the caller's headers is sent on, its key and betas included.
+  // Of the caller's headers only its betas are sent on, never its key: a
+  // field of the body means nothing without the beta that turns it on.
   expect(sent.headers).toEqual({
     'content-type': 'application/json',
     accept: 'text/event-stream',
     'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'context-management-2025-06-27',
   });
 });
 

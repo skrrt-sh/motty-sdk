@@ -3,7 +3,7 @@ import type { Decoded } from '../codec.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import { given, isDict } from '../wire/json.ts';
 import { invalid } from '../wire/refusals.ts';
-import { marked, noted } from './family.ts';
+import { heard, marked, noted } from './family.ts';
 import { formless } from './formless.ts';
 import { collected } from './message.ts';
 import { optionsOf } from './options.ts';
@@ -55,7 +55,7 @@ export function decode(body: Json, headers: Headers): Decoded {
   if (stream !== undefined && typeof stream !== 'boolean') {
     invalid('stream must be true or false');
   }
-  const { options, output, shown } = optionsOf(settings);
+  const { options, output, shown } = optionsOf(settings, heard(headers));
   return {
     request: {
       model,

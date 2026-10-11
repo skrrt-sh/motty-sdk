@@ -36,7 +36,9 @@ The decisions are in [ARCHITECTURE.md](ARCHITECTURE.md), with their causes. In s
   what names the host's account is cut from the message the caller and the motty are told.
 - **An adapter address that holds a name or a password fails when the adapter is made,** in words
   that do not hold it.
-- **Caller headers are not forwarded upstream.**
+- **Caller headers are not forwarded upstream,** but for an API's own that say what the body may
+  hold: every `anthropic-*` header but the version, to an upstream that speaks Anthropic
+  Messages. No credential is sent in one, and every other header stays with the host.
 - **A guard test plants a marked secret in every adapter the package exports** and fails if a
   motty, its caller or another origin comes to hold it.
 
