@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { nanosecondsPerCall, typeCost } from '../measure.ts';
+import { baseCommit, nanosecondsPerCall, typeCost } from '../measure.ts';
 
 test('the counts are read from the compiler diagnostics', () => {
   expect(
@@ -25,6 +25,25 @@ test('every iteration calls the subject once', async () => {
   }, 500);
   expect(calls).toBe(500);
   expect(nanoseconds).toBeGreaterThan(0);
+});
+
+test('a first commit has no base to be timed against, and the next has its parent', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'motty-first-'));
+  try {
+    const git = (...words: string[]) =>
+      $`git -c user.name=gate -c user.email=gate@motty.test -c commit.gpgsign=false ${words}`
+        .cwd(folder)
+        .quiet();
+    await git('init', '--initial-branch=main');
+    await git('commit', '--allow-empty', '--message=first');
+    expect(await baseCommit(folder)).toBeUndefined();
+
+    await git('commit', '--allow-empty', '--message=second');
+    const head = (await git('rev-parse', 'HEAD')).text().trim();
+    expect(await baseCommit(folder)).toBe(`${head}^`);
+  } finally {
+    await rm(folder, { recursive: true });
+  }
 });
 
 test('an SDK error raised in the bundle the example ships keeps the name of its class', async () => {
