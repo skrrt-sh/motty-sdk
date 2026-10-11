@@ -5,6 +5,10 @@ the `motty` builder, `model`, the combinators `fallback`, `race`, `retry` and `t
 `reroute`, `think`, the error classes and the types. It has no dependencies, and only what is
 imported ends up in a motty's bundle.
 
+```sh
+bun add @mottyjs/core
+```
+
 ```ts
 import { fallback, model, motty, race, retry, reroute } from "@mottyjs/core";
 ```

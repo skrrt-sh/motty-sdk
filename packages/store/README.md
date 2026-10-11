@@ -4,6 +4,10 @@ A plugin of the Motty SDK. A motty is stateless by default; what must survive a 
 through `store`: `get`, `set`, `delete` and `increment` over whatever storage the host supplies.
 The host puts the motty's name ahead of every key.
 
+```sh
+bun add @mottyjs/store
+```
+
 ```ts
 import { store } from "@mottyjs/store";
 ```

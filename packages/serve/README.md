@@ -5,6 +5,10 @@ export Bun starts; `mount(motty, options)` returns `fetch` and `close` for a hos
 server of its own. Both serve the motty as a model over the Chat Completions, Responses and
 Messages APIs. This package is never in a motty's bundle.
 
+```sh
+bun add @mottyjs/serve
+```
+
 ```ts
 import { mount, serve } from "@mottyjs/serve";
 ```

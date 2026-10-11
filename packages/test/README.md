@@ -4,6 +4,10 @@ The test kit of the Motty SDK, used with the author's own test runner. `fake` an
 models, `memory` is storage for a test, and `run` is the whole lifecycle of a request without the
 wire. Cases, tables and coverage stay with the runner.
 
+```sh
+bun add --dev @mottyjs/test
+```
+
 ```ts
 import { fake, memory, on, run } from "@mottyjs/test";
 ```

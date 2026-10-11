@@ -4,6 +4,10 @@ A plugin of the Motty SDK. `settings(groups)` defines a motty's settings in code
 schema whose every value has a default. A part that uses them reads them typed from the context,
 and a host may override any subset. A bad override fails when the host supplies it.
 
+```sh
+bun add @mottyjs/settings
+```
+
 ```ts
 import { settings, type Settings } from "@mottyjs/settings";
 ```
