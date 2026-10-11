@@ -253,10 +253,16 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   cannot serve fails that call with `UnknownModel`, and `fallback` moves on. No check at start.
 - **Combinators return models, so they nest:** `fallback(...models)`, `race(...models)`, which
   cancels the losers, `retry(model, times)`, `timeout(model, ms)`.
-- **`retry` repeats only retryable failures,** honours retry-after, and counts retries, not tries.
+- **`retry` repeats only retryable failures,** honours a retry-after of thirty seconds or less,
+  and counts retries, not tries.
   With no retry-after it waits half a second, doubling each time, up to thirty seconds. Rejected:
   retrying at once, a hot loop against an upstream that is already overloaded. `Aborted` and
   `LimitReached` are never repeated, whatever an upstream says.
+- **A retry-after longer than those thirty seconds is not waited for:** the call ends at once
+  with that failure, so a `fallback` can move on. Cause: an upstream that answered 429 with a
+  retry-after of a day held the request, and a streaming caller with it, for as long as the
+  host set no duration limit, which is optional. Rejected: waiting the thirty seconds and
+  calling again, which calls an upstream that said not to.
 - **When every model failed, `fallback` throws the last failure,** and `race` throws the failure of
   the model listed first.
 - **Once the request is stopped, a combinator throws the stop's error.** When that is the SDK's
@@ -384,7 +390,7 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **A provider's table belongs to its adapter and a family's to its codec.** A provider that
   speaks a shared wire format names its own codes in its dialect, read before the family's, for
   a failed response and for a failure told inside a stream alike. A failure a provider tells
-  with no error object is stated by its dialect, which says what error such a body or chunk
+  with no `error` field is stated by its dialect, which says what error such a body or chunk
   holds; the family's reader looks for none, and the family's table holds the family's own
   codes.
 - **By status alone:** 401 and 403 are `UpstreamRefused`; 402 is `QuotaExceeded`; 404 with an
@@ -416,7 +422,8 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **Whether a failure may be retried is the upstream's to say, and the caller is told.** A retry
   flag and a retry-after an upstream sends replace the kind's defaults: a spent quota and a rate
   limit no wait can meet are not retried. The reply carries the flag in the header the official
-  client libraries read before they look at a status.
+  client libraries read before they look at a status, and a `retry-after` only for a wait that
+  is a finite number of zero or more, in whole seconds rounded up.
 - **A spent balance or limit is `QuotaExceeded`, in the upstream's words.** It is the host's
   account, yet the caller may be the one who can act: a request that asks for less output may
   fit what is left. A sentence that holds a link is left out, since the link goes to the host's
@@ -488,7 +495,10 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **A secret an upstream echoes as a field's name is cut as a value is, at every depth.** Two
   names the cut makes equal are both kept, the later numbered. Cause: a key echoed as a field
   name reached the motty in the error's provider facts.
-- **A field named as the prototype is a field like any other,** in a record and in parsed JSON.
+- **A field named `__proto__` is a field like any other,** in a caller's body, an upstream's
+  stream, a record and the settings: it is kept as a field and nothing is inherited from it.
+  Cause: such a field was dropped from what was passed on and inherited by what read it, so an
+  upstream's stream could forge its own finish reason and usage.
 - **A key of twenty characters or more is cut whole, by four characters of either end and by
   eight of its middle.** An end is cut only at that edge of a name: a beginning not preceded,
   an end not followed, by a letter, a digit, `_` or `-`. A mask leaves a key's ends there, and
@@ -540,6 +550,9 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   and "Internal error". It was not written for a caller and can hold anything: a query, a key, a
   path. That holds for whatever threw it, the motty, a plugin or an adapter, and after it has
   crossed the host contract as facts.
+- **A thrown value that throws again while it is read is told and recorded as that same plain
+  failure, quoting nothing:** a `message` that throws when read, a proxy. Cause: it left the
+  request with no last event and no record, against the rule that running never throws.
 - **What a service of the host throws that is no SDK error reaches the motty as an SDK error
   that names the service, with nothing of the thrown value:** storage, decisions, the function
   that supplies the models, a model adapter. Of a model call it says that the call to that
@@ -637,6 +650,10 @@ core stays what every motty uses, and a plugin is proven possible by being writt
 - **The host supplies overrides; the motty never fetches them** nor reads the environment. They are
   checked when the host supplies them, which may be per request. Rejected: values compiled into the
   bundle, a version per retuning, and overrides in `store`, which only a request can write.
+- **Settings are frozen at every depth of plain data,** the defaults once when loaded and an
+  override when merged, so a write throws in the motty that makes it. Cause: the defaults were
+  one object handed to every request, and a hook that wrote to it changed what every later
+  caller read: measured, a threshold of 0.5 read 99 on the next request.
 - **Only bounded values are settings:** a model name if its schema lists the names, never a prompt.
 - **One settings part per served motty;** a plugin takes arguments. A caller cannot set them.
 - **A second settings definition anywhere in a served motty fails at load,** whether its groups
@@ -696,6 +713,9 @@ core stays what every motty uses, and a plugin is proven possible by being writt
   `probabilities` per option and `confidence`; a score has `score`, `probabilities` per level and
   `confidence`; a noul has `noul`, the probability of yes. Thresholds go on probabilities: Jev
   and Laya differ on confidence, which on Laya is another measure, normalised entropy.
+- **A score's answer is held to its question:** a probability for each level, and a finite score
+  within the levels. Confidence is only required to be finite, the two servers measuring it
+  differently.
 - **What Laya adds to an answer is typed as optional, under Laya's names:** on every answer its
   confidence in the answer and the probability it would act; on a noul its own confidence; on a
   choice and a score Jev's confidence formula computed from the same probabilities, the one
@@ -907,6 +927,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   needs are set after it, by name in any letter case. `anthropic-version` is one of them: the
   codec speaks that version, and another version is another wire. A key or a header no request
   can carry fails when the adapter is made, in the adapter's words and without the value.
+- **A prefix, an `api` and a bearer's caller id are checked when the adapter is made too.**
+  Cause: an empty prefix served names that began with a slash.
 - **A connection's body field is a default, and the request's own field replaces it whole.** What
   a caller sent in the upstream's format, what the author set on the call and what a neutral
   option translates to are all the request's. Top-level only: a request's `thinking` replaces the
@@ -1345,6 +1367,18 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   turns that hold only tool results are joined in order, each result with its own fields and
   marker; a turn with fields of its own stays apart. Cause: the two OpenAI APIs send a message or
   an item per result, and Anthropic asks for all results of one assistant turn together.
+- **A tool call an Anthropic upstream ends with no input text is told as `{}` arguments, and
+  empty arguments a caller of an OpenAI API echoes are read as an empty input.** Cause: such a
+  call reached those callers as an empty string, which no client parses and OpenAI itself never
+  sends, and the echoed turn was then refused, so every loop with a tool that takes no
+  arguments ended on its second turn.
+- **A custom tool call is told by the upstream's mark or by the custom tools the caller
+  declared,** so it is written as custom whichever API answered. Cause: one a Responses
+  upstream answered was written to a Chat Completions caller as a function call whose
+  arguments were not JSON.
+- **A function tool with no parameters decodes to an empty object schema, on both OpenAI APIs.**
+- **A citation's title is its own `title` when that is text, otherwise the document's,** whole
+  and streamed alike.
 - **File bytes of a named type that came with no name are given one for an OpenAI API:**
   `file.pdf`, from the type. Cause: both refuse `file_data` with no `filename`, and an Anthropic
   document has no title to give. Bytes of no named type are given none.
@@ -1356,6 +1390,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **A Chat Completions stream that reaches its done mark finished.** With no reason said it
   stopped; one that ends with no mark was cut. Cause: a router's reply of sound alone says no
   reason, so a complete reply ended as a failure worth another, paid, try.
+- **A Chat Completions stream chunk whose `error` is a sentence is a failure with that message,**
+  as a failed response is. Cause: a cut answer was recorded and delivered as complete, and no
+  retry or fallback saw a failure.
 - **A dialect may say that the reason an ending is told apart by is the provider's own.** A stop
   sequence is then kept as the upstream's word for the ending, which an Anthropic Messages caller
   is written back; where a dialect cannot tell it from a stop, nothing changes.

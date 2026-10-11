@@ -57,6 +57,9 @@ The decisions are in [ARCHITECTURE.md](ARCHITECTURE.md), with their causes. In s
   with a credential and for one with none, and what its headers alone settle is settled before
   it is read.
 - **The model list of a motty that asks for a caller is shown only to a caller the host knows.**
+- **A field named `__proto__` is a field like any other,** in a caller's body, an upstream's
+  stream and the settings: it is kept, and nothing is inherited from it. Cause: through such a
+  field an upstream's stream could forge its own finish reason and usage.
 - **A guard test plants a marked secret in every adapter the package exports** and fails if a
   motty, its caller or another origin comes to hold it.
 
