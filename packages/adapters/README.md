@@ -3,8 +3,9 @@
 The adapters of the Motty SDK: plain objects a host passes in its host options, one import path
 each. Model providers: `openai`, `anthropic`, `openrouter`, `deepseek`, `moonshot`, `zai`,
 `dashscope`, `minimax`, `groq`, `mistral`, `together`, `fireworks`, `ollama`, `local` and
-`typesafe`. Storage: `redis`. Auth: `jwt`. A credential stays inside the adapter the host made and
-never enters a motty's code. This package is never in a motty's bundle.
+`typesafe`. Storage: `redis`. Auth: `jwt` and `bearer`, or an object of the host's own. A
+credential stays inside the adapter the host made and never enters a motty's code. This package is
+never in a motty's bundle.
 
 ```ts
 import { openai } from "@mottyjs/adapters/openai";
@@ -29,6 +30,51 @@ export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL })
   ],
   storage: redis({ url: REDIS_URL }),
   auth: jwt({ jwks: JWKS_URL }),
+}));
+```
+
+`jwt` verifies a signed token against exactly one of a key set address (`jwks`), a public key in
+PEM (`key`) or a shared secret (`secret`), and gives its `sub` as the caller's id. By default it
+checks the signature and the times the token itself states, and a token that states no expiry is
+accepted. Every further check is the host's to add: beside the way of verifying, `jwt` takes the
+options of `jose`'s `jwtVerify`, all optional. A host whose identity provider signs tokens for
+several applications with one key set should name the issuer and the audience:
+
+```ts
+jwt({
+  jwks: JWKS_URL,
+  issuer: "https://id.acme.example/",
+  audience: "desk",
+  requiredClaims: ["exp"],
+  clockTolerance: 30,
+});
+```
+
+`bearer`, from the same import path, takes one plain secret and gives the caller the id the host
+named, for a service that holds a long-lived credential:
+
+```ts
+import { bearer } from "@mottyjs/adapters/jwt";
+
+bearer({ secret: OPS_TOKEN, id: "ops" });
+```
+
+Both are conveniences. Auth is the host's own to write: the `auth` option takes any object with a
+`verify` function, which is given the token the caller sent and returns the caller, or `undefined`
+for nobody, at once or as a promise. A lookup of an API key in the host's own table, here its
+`ownerOf`:
+
+```ts
+import { ownerOf } from "./keys";
+
+export default serve(desk, ({ OPENAI_KEY }) => ({
+  models: [openai({ key: OPENAI_KEY })],
+  auth: {
+    verify: async (token) => {
+      const owner = await ownerOf(token);
+      return owner === undefined ? undefined : { id: owner };
+    },
+  },
 }));
 ```
 

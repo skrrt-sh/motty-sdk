@@ -999,13 +999,45 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **A bearer token is read as RFC 6750 says,** the scheme in any case and then exactly one token,
   the way Elysia's bearer plugin reads it. A key header's value is the token as it is. With no
   token there is no caller, and the adapter is not asked.
+- **Auth is the host's own to write: the `auth` option takes any object with a `verify`
+  function,** which is given the token and answers the caller or nothing, at once or later. A
+  lookup in the host's own table of keys is one; `jwt` and `bearer` are two ready-made ones and
+  nothing more. Cause: how a caller is proven differs with every host, and a self-host exists to
+  be fitted to its own. Rejected: a helper that makes an adapter, a name for a plain object.
 - **A signed token is verified by `jwt`,** which is `jose` and supports what `jose` supports: a
   key set, a public key or a shared secret, exactly one of them, returning `sub` as the caller's id
-  with no `store` and no lookup. A plain bearer secret is supported too, and must itself be a token
-  a header can carry. Unlike Elysia's jwt plugin, the key sits with the host, never in the motty.
+  with no `store` and no lookup. Unlike Elysia's jwt plugin, the key sits with the host, never in
+  the motty.
+- **Every check of a signed token beyond its signature is the host's to name.** Beside the way of
+  verifying, `jwt` takes the checks `jose` takes, all of them optional and handed on as given:
+  the issuers, the audiences, the algorithms, a tolerance for clocks, the claims a token must
+  state, its longest age, and what else the library has. A check that is named is held, and one
+  that is not is not made; the times a token itself states are always held. Cause: whose tokens
+  a host takes, for whom and for how long is its own business. Rejected: requiring an issuer, an
+  audience and an expiry of every host, which was tried: it refused hosts whose tokens are their
+  own business and made the ready-made adapter useless to them. Rejected: a list of checks of
+  our own, a copy that falls behind the library's.
 - **A signed token with no expiry is accepted.** Whether tokens expire is the issuer's decision,
-  and a long-lived service token is a real case; one that states an expiry is held to it. Rejected:
+  and a long-lived service token is a real case; one that states an expiry is held to it, and a
+  host that wants one of every token names it among the claims a token must state. Rejected:
   requiring `exp`, which refuses tokens the host's own issuer chose to make.
+- **`jwt` names no algorithms of its own.** Cause: with none named, `jose` takes only a signature
+  of the kind the key is for. A public key verifies no HMAC signature, so the classic forgery, a
+  token signed with the public key as a secret, signs nobody in; a shared secret verifies no
+  asymmetric one; a key set offers no key for an HMAC one; an unsigned token is never taken.
+  Rejected: algorithms fixed by the kind of key, a second guard over one the library holds, and
+  one the host could not change.
+- **A key set that cannot be read is the host's failure and is thrown,** not told as no caller,
+  which would tell a caller with a valid token to sign in again. Its message never holds the
+  address, and what the runtime threw while fetching is not kept with it: an address may carry a
+  token in its query, the thrown message is in the record the host's `report` is handed, and a
+  runtime may write the address into its own failure. What the verifying library says of an
+  answer it could not use is kept as the cause. The address is held to the rule of every
+  adapter's address: one that holds a name or a password, or is no address, fails when the
+  adapter is made, in words without it.
+- **A plain bearer secret is verified by `bearer`,** which gives the caller the id the host
+  named. The secret must itself be a token a header can carry, and it is compared in a time
+  that does not depend on what was sent.
 - **With no `auth` adapter there is nothing to verify against,** so `auth()` rejects the request.
 - **One storage adapter, not a driver collection.** `redis` speaks the Redis protocol, tested on
   Valkey, and is Bun's built-in client. Its server must keep a key's expiry on a plain write:

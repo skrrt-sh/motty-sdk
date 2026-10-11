@@ -55,3 +55,12 @@ No cut can know these, so the SDK does not claim them:
   with a credential and for one with none, and what its headers alone settle is settled before
   it is read.
 - **The model list of a motty that asks for a caller is shown only to a caller the host knows.**
+- A key under 20 characters that an upstream echoes masked, in part, or inside a longer run of
+  letters, digits, `-`, `_` or dots. Such a key may be an ordinary word, as a local server's
+  placeholder is, and cutting its fragments cut words out of messages. Use a key of 20 characters
+  or more.
+- A fragment of a longer key shorter than the lengths above: under 4 characters of an end, an end
+  that does not stand at the edge of a name, or under 8 characters of the middle.
+- A connection header's value, or a part of one, under 16 characters, and any fragment of a
+  value or a part: a header may hold a flag, a date, a version or a word. Put a secret of 16
+  characters or more in a header, standing as a value or a part of its own.

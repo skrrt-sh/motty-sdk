@@ -4,16 +4,18 @@ import {
   createRemoteJWKSet,
   errors,
   type JWTVerifyGetKey,
+  type JWTVerifyOptions,
   jwtVerify,
 } from 'jose';
 
 // Exactly one way to check the signature: the address of a key set, a public
-// key in PEM or a shared secret.
-export type JwtOptions = { issuer?: string; audience?: string } & (
-  | { jwks: string | undefined; key?: never; secret?: never }
-  | { key: string | undefined; jwks?: never; secret?: never }
-  | { secret: string | undefined; jwks?: never; key?: never }
-);
+// key in PEM or a shared secret. Every further check is the host's to name.
+export type JwtOptions = JWTVerifyOptions &
+  (
+    | { jwks: string | undefined; key?: never; secret?: never }
+    | { key: string | undefined; jwks?: never; secret?: never }
+    | { secret: string | undefined; jwks?: never; key?: never }
+  );
 
 function given(adapter: string, name: string, value: string | undefined) {
   if (value === undefined || value === '') {
@@ -27,8 +29,19 @@ function given(adapter: string, name: string, value: string | undefined) {
 // are kept here to tell them from everything a token can cause.
 const unread = new WeakSet<Error>();
 
+// The address may hold a token, so no refusal quotes it, and what a runtime
+// threw while fetching, which may, is not kept as the cause.
 function keySet(address: string): JWTVerifyGetKey {
-  const read = createRemoteJWKSet(new URL(address));
+  const url = URL.parse(address);
+  if (url === null) {
+    throw new Error('The jwt adapter was given a key set address that is none');
+  }
+  if (url.username !== '' || url.password !== '') {
+    throw new Error(
+      'The jwt adapter was given a key set address that holds credentials',
+    );
+  }
+  const read = createRemoteJWKSet(url);
   return (header, signed) =>
     read(header, signed).catch((cause: unknown) => {
       if (
@@ -38,9 +51,10 @@ function keySet(address: string): JWTVerifyGetKey {
       ) {
         throw cause;
       }
-      const error = new Error(`The key set at ${address} could not be read`, {
-        cause,
-      });
+      const error = new Error(
+        'The key set could not be read',
+        cause instanceof errors.JOSEError ? { cause } : {},
+      );
       unread.add(error);
       throw error;
     });
@@ -49,7 +63,7 @@ function keySet(address: string): JWTVerifyGetKey {
 // A token that states no expiry is accepted: whether tokens expire is the
 // issuer's to decide, and one that states an expiry is held to it.
 export function jwt(options: JwtOptions): AuthAdapter {
-  const { jwks, key, secret, ...claims } = options;
+  const { jwks, key, secret, ...checks } = options;
   // Past the types, a second way to verify would be ignored without a word.
   if (['jwks', 'key', 'secret'].filter((way) => way in options).length !== 1) {
     throw new Error(
@@ -65,7 +79,7 @@ export function jwt(options: JwtOptions): AuthAdapter {
   return {
     verify: async (sent) => {
       try {
-        const { payload } = await jwtVerify(sent, verifier, claims);
+        const { payload } = await jwtVerify(sent, verifier, checks);
         return typeof payload.sub === 'string' && payload.sub !== ''
           ? { id: payload.sub }
           : undefined;
