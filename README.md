@@ -1,13 +1,48 @@
 # Motty SDK
 
-A motty is a gateway with real logic between LLMs and agents. To its caller it is just another
-model: a chat request in, an answer out. Inside, it is a small program that decides which model
-to call, in what order, with what changes. It has no weights: it is routing and policy.
+A motty is a model made of code, not weights. An agent calls it like any other LLM: it sends a
+chat request and gets an answer. Inside, your TypeScript code decides which real models answer,
+in what order, with what changes, and what is remembered.
 
-The SDK is the open-source toolkit for building motties. A caller changes the URL and the model
-name, and keeps its format: a motty is served over the Chat Completions, Responses and Messages
-APIs. The logic is plain TypeScript, the same code self-hosted and on the Hub, a service that hosts
-motties. It is not a backend framework and not an agent framework.
+LLMs are layer 1. A motty is layer 2: a model built on top of them, between them and agents. It
+takes over what an agent would otherwise carry around every model call. The agent keeps its loop
+and its tools. The SDK is the open-source toolkit for building motties: fast, and as high or as
+low level as you need.
+
+## What a motty does
+
+- **Chooses which model answers:** by plain rules, by a decision model such as Jev or Laya, or by
+  reading an answer before it is sent and asking a stronger model.
+- **Makes many models answer as one:** a race, a fallback, a plan written by one model and carried
+  out by another, a panel of providers whose answers another model merges.
+- **Keeps what outlives a request:** the tier a conversation reached or a caller's spend today,
+  behind the endpoint, for every app that calls it.
+- **Changes what goes in and what comes out:** a policy placed first, a long thread summarised,
+  card numbers removed from the stream.
+
+## How it is built
+
+- **Any client can call it.** A caller changes the URL and the model name, and keeps its format:
+  the Chat Completions, Responses and Messages APIs.
+- **The logic is plain code.** Other gateways are set up in config and take code as a plugin, and
+  an auto-router picks by rules of its own. A motty is all code: typed, yours to change, and
+  tested with scripted models and no wire.
+- **It is one file and never holds a provider key.** A motty builds apart from whatever runs it.
+  The server, the provider adapters and the keys stay with the host, so the same file runs
+  self-hosted and on the Hub, a service that hosts motties.
+
+## Where it fits
+
+- **As your gateway.** Served with the host's auth, limits and a record of every request, a motty
+  is the gateway: one endpoint in front of every provider.
+- **Beside a gateway you have.** Behind it as one of its models, or in front of it with the
+  gateway as the upstream.
+- **Inside your own server.** `mount` gives a motty as a `fetch` handler, so your own HTTP routes
+  and the motty share one server.
+- **As deep as you need.** Start with `fallback` and `race`. Go down to a provider's own options
+  on one call, or write your own adapter, auth or plugin.
+
+It is not an agent framework: it has no agent loop and runs no tools.
 
 ## Status
 
@@ -88,10 +123,40 @@ test("a short question without tools goes to the quick tier", async () => {
 });
 ```
 
+## Examples
+
+Three motties, each with a README that follows one request through it:
+
+- [`examples/coder`](examples/coder) sends coding-agent requests to the cheapest model that can
+  handle them.
+- [`examples/council`](examples/council) puts a hard question to models of three providers and
+  has a stronger model merge what they said, within a spending limit.
+- [`examples/desk`](examples/desk) is a customer-support desk served as one model.
+
+The reasons behind the design, and what was rejected, are in [ARCHITECTURE.md](ARCHITECTURE.md).
+The core's own plan is in [CORE.md](CORE.md).
+
+## Packages
+
+| Package | Kind | Holds |
+| --- | --- | --- |
+| [`@mottyjs/core`](packages/core) | Core | The builder, model calls, `fallback`, `race`, `retry`, `timeout`, answers, error classes, types |
+| [`@mottyjs/store`](packages/store) | Plugin | Key-value storage that outlives a request |
+| [`@mottyjs/decision`](packages/decision) | Plugin | Decision models and their questions |
+| [`@mottyjs/auth`](packages/auth) | Plugin | A part that requires an identified caller |
+| [`@mottyjs/settings`](packages/settings) | Plugin | Typed settings a host may override |
+| [`@mottyjs/test`](packages/test) | Test kit | Scripted models, in-memory storage, `run` |
+| [`@mottyjs/serve`](packages/serve) | Host side | `serve`, `mount` and the three wire APIs. Never in a bundle |
+| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, and auth: `jwt`, `bearer`, or the host's own object with a `verify` function |
+
+Only the core has no dependencies. Plugins compile into the motty's bundle; the host side never
+does.
+
 ## Speed
 
-The same calls are made through Motty and through four other SDKs: the Vercel AI SDK, Mastra,
-LangChain JS and TanStack AI. The upstream is a stub that answers inside the process, so a
+A motty is one more step in every call, so what the SDK adds to one is measured. The same calls
+are made through Motty and through four other SDKs: the Vercel AI SDK, Mastra, LangChain JS and
+TanStack AI. The upstream is a stub that answers inside the process, so a
 figure is what an SDK adds to a call, never a model's own latency. A gate runs the comparison
 on every change and fails when a rival does not take more than 1.1 times Motty's time, or when
 its program is not larger. One entry is listed as a known loss and is held to the opposite: it
@@ -128,35 +193,6 @@ ahead:
 - **To measure it yourself:** `bun gates/bench/rivals/compare.ts` prints the same figures with
   each call's 99th percentile.
 
-## Packages
-
-| Package | Kind | Holds |
-| --- | --- | --- |
-| [`@mottyjs/core`](packages/core) | Core | The builder, model calls, `fallback`, `race`, `retry`, `timeout`, answers, error classes, types |
-| [`@mottyjs/store`](packages/store) | Plugin | Key-value storage that outlives a request |
-| [`@mottyjs/decision`](packages/decision) | Plugin | Decision models and their questions |
-| [`@mottyjs/auth`](packages/auth) | Plugin | A part that requires an identified caller |
-| [`@mottyjs/settings`](packages/settings) | Plugin | Typed settings a host may override |
-| [`@mottyjs/test`](packages/test) | Test kit | Scripted models, in-memory storage, `run` |
-| [`@mottyjs/serve`](packages/serve) | Host side | `serve`, `mount` and the three wire APIs. Never in a bundle |
-| [`@mottyjs/adapters`](packages/adapters) | Host side | Model providers, Redis storage, and auth: `jwt`, `bearer`, or the host's own object with a `verify` function |
-
-Only the core has no dependencies. Plugins compile into the motty's bundle; the host side never
-does.
-
-## Examples
-
-Three motties, each with a README that follows one request through it:
-
-- [`examples/coder`](examples/coder) sends coding-agent requests to the cheapest model that can
-  handle them.
-- [`examples/council`](examples/council) puts a hard question to models of three providers and
-  has a stronger model merge what they said, within a spending limit.
-- [`examples/desk`](examples/desk) is a customer-support desk served as one model.
-
-The reasons behind the design, and what was rejected, are in [ARCHITECTURE.md](ARCHITECTURE.md).
-The core's own plan is in [CORE.md](CORE.md).
-
 ## Running the checks
 
 ```sh
@@ -181,6 +217,8 @@ How far each model provider's adapter is proven differs, and the difference is s
   `fireworks`.
 - **Only against stubs built from the vendor's reference so far:** `deepseek`, `moonshot`, `zai`,
   `dashscope`, `minimax`, `groq`, `ollama`, `local`.
+- **No gateway is tested yet,** neither calling a motty nor called by one. The nearest proven is
+  `openrouter`, a router, as an upstream.
 
 ## Security
 
