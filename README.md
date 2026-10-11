@@ -213,22 +213,22 @@ one, Motty is ahead.
 
 | | Motty | AI SDK | Mastra | LangChain | TanStack AI |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Text, 20 chunks | 38.6 µs | 1.42× | 6.67× | 0.53× | 3.03× |
-| Stream, 20 chunks | 40.4 µs | 8.60× | 11.63× | 2.91× | 3.11× |
-| Stream, 200 chunks | 259 µs | 9.26× | 7.83× | 3.79× | 3.71× |
-| Structured output stream, 20 chunks | 52.9 µs | 10.05× | 13.64× | 3.40× | 2.86× |
-| Served over HTTP, 200 chunks | 460 µs | 4.51× | 3.48× | 2.93× | 2.30× |
-| Cold start, import to first streamed answer | 21.5 ms | 1.94× | 8.56× | 3.09× | 2.33× |
-| Minified program size | 237 KB | 2.61× | 23.89× | 4.87× | 3.02× |
+| Text, 20 chunks | 37.1 µs | 1.40× | 6.30× | 0.53× | 2.96× |
+| Stream, 20 chunks | 37.5 µs | 8.10× | 9.94× | 2.95× | 3.02× |
+| Stream, 200 chunks | 224 µs | 8.41× | 6.43× | 3.51× | 3.45× |
+| Structured output stream, 20 chunks | 48.1 µs | 9.02× | 11.07× | 3.29× | 2.74× |
+| Served over HTTP, 200 chunks | 457 µs | 4.49× | 3.54× | 2.92× | 2.27× |
+| Cold start, import to first streamed answer | 21.9 ms | 1.78× | 8.01× | 2.98× | 2.21× |
+| Minified program size | 240 KB | 2.58× | 23.60× | 4.81× | 2.98× |
 
 Motty is behind in one place, a non-streamed text call against LangChain. Motty always reads a
 stream upstream, and that is the entry the gate lists as a known loss.
 
-The figures were measured on 2026-10-11 on an Apple M4 Max with Bun 1.4.2, against `ai` 7.0.137,
-`@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0. They come from 15
-rounds of 20,000 chunks after one discarded, with the SDKs taking turns in one process. To
-measure it yourself, run `bun gates/bench/rivals/compare.ts`, which prints the same figures with
-each call's 99th percentile.
+The figures are those of Motty 0.1.0, measured on 2026-10-11 on an Apple M4 Max with Bun 1.4.2,
+against `ai` 7.0.137, `@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0.
+They come from 15 rounds of 20,000 chunks after one discarded, with the SDKs taking turns in one
+process. To measure it yourself, run `bun gates/bench/rivals/compare.ts`, which prints the same
+figures with each call's 99th percentile.
 
 ## Running the checks
 
