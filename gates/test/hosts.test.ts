@@ -28,7 +28,12 @@ describe.each(Object.entries(runtimes))('on %s', (_name, start) => {
   });
 
   function ask(
-    sent: { token?: string; stream?: boolean; signal?: AbortSignal } = {},
+    sent: {
+      token?: string;
+      stream?: boolean;
+      signal?: AbortSignal;
+      question?: string;
+    } = {},
   ): Promise<Response> {
     return runtime.fetch(
       new Request(`${runtime.address}/v1/chat/completions`, {
@@ -40,7 +45,12 @@ describe.each(Object.entries(runtimes))('on %s', (_name, start) => {
         body: JSON.stringify({
           model: 'acme/coder',
           stream: sent.stream ?? true,
-          messages: [{ role: 'user', content: 'What does git stash do?' }],
+          messages: [
+            {
+              role: 'user',
+              content: sent.question ?? 'What does git stash do?',
+            },
+          ],
         }),
         signal: sent.signal ?? null,
       }),
@@ -94,4 +104,22 @@ describe.each(Object.entries(runtimes))('on %s', (_name, start) => {
     expect(seen.length).toBeGreaterThan(1);
     expect(seen).not.toContain(false);
   }, 20_000);
+
+  test('a run of streamed requests, each answered by one model, opens far fewer upstream connections than it makes calls', async () => {
+    const before = provider.connections();
+    for (let sent = 0; sent < 30; sent += 1) {
+      // A question this long is past the tier whose two models race, where
+      // the one that loses is stopped and its connection is rightly lost.
+      const reply = await ask({
+        question: 'What does git stash do? '.repeat(20),
+      });
+      await pieces(reply);
+      expect(await provider.reported()).toMatchObject({
+        outcome: 'completed',
+        path: ['chat', 'standard'],
+      });
+    }
+
+    expect(provider.connections() - before).toBeLessThan(4);
+  }, 60_000);
 });

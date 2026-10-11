@@ -25,10 +25,12 @@ export function host(motty: Marked, at: { upstream: string; records: string }) {
     storage: memory(),
     auth: bearer({ secret: 's3cret', id: 'ada' }),
     report: (report: Report) => {
-      fetch(at.records, {
-        method: 'POST',
-        body: JSON.stringify(report),
-      }).finally(() => delivery(report.id).resolve());
+      // A reply left unread costs its connection. A record that is lost is
+      // said here, as the case that waits for it knows only that none came.
+      fetch(at.records, { method: 'POST', body: JSON.stringify(report) })
+        .then((reply) => reply.arrayBuffer())
+        .catch((thrown) => console.error('A record was not delivered', thrown))
+        .finally(() => delivery(report.id).resolve());
     },
   }));
 

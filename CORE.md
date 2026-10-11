@@ -321,9 +321,15 @@ Baselines are recorded at the first milestone; each gate fails a change, not a r
   answer, a whole one, a refused caller and a caller who leaves, each with its record. The
   example's bundle is loaded as a module beside the host side, byte for byte as its build
   script writes it. Bun is the control, so a case that fails on one runtime alone is that
-  runtime's. The `workerd` binary is a dev dependency of the workspace alone. Rejected: an
-  emulator of the runtime, a second thing to trust where the runtime itself is one file; a
-  test file per runtime, where a case written for one is missing for the next.
+  runtime's. The `workerd` binary is a dev dependency of the workspace alone. A last case
+  holds that a run of streamed requests, each answered by one model, opens far fewer upstream
+  connections than it makes calls. An adapter once left a body before its end and paid a
+  connection for every call, and no gate saw it, because the other gates put a stub in place
+  of `fetch` and this one never counted. Rejected: an emulator of the runtime, a second thing
+  to trust where the runtime itself is one file; a test file per runtime, where a case written
+  for one is missing for the next; timing a real socket, where a network filter on one
+  developer's machine put about 40 ms on every loopback connection, so a time would have
+  measured the machine and a count does not.
 - **Declarations:** both entries, and a class defined on the base error, emit declaration files.
   A plugin is shipped with them.
 
