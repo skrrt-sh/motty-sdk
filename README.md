@@ -220,18 +220,18 @@ one, Motty is ahead.
 
 | | Motty | AI SDK | Mastra | LangChain | TanStack AI |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Text, 20 chunks | 40.1 µs | 1.37× | 6.41× | 0.52× | 2.84× |
-| Stream, 20 chunks | 39.1 µs | 7.83× | 9.65× | 2.82× | 2.88× |
-| Stream, 200 chunks | 230 µs | 8.42× | 6.34× | 3.47× | 3.42× |
-| Structured output stream, 20 chunks | 49.8 µs | 9.08× | 11.43× | 3.26× | 2.75× |
-| Served over HTTP, 200 chunks | 475 µs | 4.57× | 3.59× | 2.95× | 2.34× |
-| Cold start, import to first streamed answer | 21.9 ms | 1.84× | 8.30× | 3.09× | 2.31× |
-| Minified program size | 245 KB | 2.53× | 23.12× | 4.71× | 2.92× |
+| Text, 20 chunks | 39.6 µs | 1.36× | 5.97× | 0.49× | 2.81× |
+| Stream, 20 chunks | 39.5 µs | 7.66× | 9.23× | 2.75× | 2.82× |
+| Stream, 200 chunks | 227 µs | 8.15× | 6.11× | 3.45× | 3.37× |
+| Structured output stream, 20 chunks | 49.4 µs | 8.88× | 10.99× | 3.19× | 2.67× |
+| Served over HTTP, 200 chunks | 467 µs | 4.29× | 3.21× | 2.83× | 2.23× |
+| Cold start, import to first streamed answer | 21.2 ms | 1.89× | 8.22× | 2.98× | 2.26× |
+| Minified program size | 247 KB | 2.51× | 22.93× | 4.67× | 2.90× |
 
 Motty is behind in one place, a non-streamed text call against LangChain. Motty always reads a
 stream upstream, and that is the entry the gate lists as a known loss.
 
-The figures are those of Motty 0.1.0 with the changes since, measured on 2026-10-12 on an Apple
+The figures are those of this repository as it stood on 2026-10-12, measured that day on an Apple
 M4 Max with Bun 1.4.2, against `ai` 7.0.137, `@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and
 `@tanstack/ai` 0.68.0.
 They come from 15 rounds of 20,000 chunks after one discarded, with the SDKs taking turns in one

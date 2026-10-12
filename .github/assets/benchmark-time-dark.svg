@@ -4,86 +4,86 @@
 <text x="0" y="78" font-size="13" font-weight="600" fill="#f0f6fc">Text, 20 chunks</text>
 <line x1="86" x2="86" y1="89" y2="199" stroke="#3d444d" stroke-width="1"/>
 <text x="78" y="104" font-size="12" text-anchor="end" fill="#f0f6fc" font-weight="600">Motty</text>
-<path d="M86 94h25.6574542623589a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-25.6574542623589z" fill="#3987e5"/>
-<text x="122.6574542623589" y="104" font-size="12" fill="#f0f6fc" font-weight="600">40.1 µs</text>
+<path d="M86 94h27.80050718512257a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-27.80050718512257z" fill="#3987e5"/>
+<text x="124.80050718512257" y="104" font-size="12" fill="#f0f6fc" font-weight="600">39.6 µs</text>
 <text x="78" y="126" font-size="12" text-anchor="end" fill="#9198a1">AI SDK</text>
-<path d="M86 116h36.603347606072404a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-36.603347606072404z" fill="#6e7681"/>
-<text x="133.60334760607242" y="126" font-size="12" fill="#f0f6fc">54.9 µs<tspan fill="#9198a1" font-weight="400">  1.4×</tspan></text>
+<path d="M86 116h38.96280642434489a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-38.96280642434489z" fill="#6e7681"/>
+<text x="135.96280642434488" y="126" font-size="12" fill="#f0f6fc">53.5 µs<tspan fill="#9198a1" font-weight="400">  1.4×</tspan></text>
 <text x="78" y="148" font-size="12" text-anchor="end" fill="#9198a1">Mastra</text>
 <path d="M86 138h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#6e7681"/>
-<text x="283" y="148" font-size="12" fill="#f0f6fc">256.9 µs<tspan fill="#9198a1" font-weight="400">  6.4×</tspan></text>
+<text x="283" y="148" font-size="12" fill="#f0f6fc">236.6 µs<tspan fill="#9198a1" font-weight="400">  6.0×</tspan></text>
 <text x="78" y="170" font-size="12" text-anchor="end" fill="#9198a1">LangChain</text>
-<path d="M86 160h11.161541455819386a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-11.161541455819386z" fill="#6e7681"/>
-<text x="108.16154145581939" y="170" font-size="12" fill="#f0f6fc">20.5 µs<tspan fill="#9198a1" font-weight="400">  0.5×</tspan></text>
+<path d="M86 160h11.65934065934066a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-11.65934065934066z" fill="#6e7681"/>
+<text x="108.65934065934066" y="170" font-size="12" fill="#f0f6fc">19.5 µs<tspan fill="#9198a1" font-weight="400">  0.5×</tspan></text>
 <text x="78" y="192" font-size="12" text-anchor="end" fill="#9198a1">TanStack AI</text>
-<path d="M86 182h80.90463215258856a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-80.90463215258856z" fill="#6e7681"/>
-<text x="177.90463215258856" y="192" font-size="12" fill="#f0f6fc">114.8 µs<tspan fill="#9198a1" font-weight="400">  2.8×</tspan></text>
+<path d="M86 182h85.29839391377853a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-85.29839391377853z" fill="#6e7681"/>
+<text x="182.2983939137785" y="192" font-size="12" fill="#f0f6fc">111.2 µs<tspan fill="#9198a1" font-weight="400">  2.8×</tspan></text>
 <text x="430" y="78" font-size="13" font-weight="600" fill="#f0f6fc">Stream, 20 chunks</text>
 <line x1="516" x2="516" y1="89" y2="199" stroke="#3d444d" stroke-width="1"/>
 <text x="508" y="104" font-size="12" text-anchor="end" fill="#f0f6fc" font-weight="600">Motty</text>
-<path d="M516 94h15.70034473614426a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-15.70034473614426z" fill="#3987e5"/>
-<text x="542.7003447361443" y="104" font-size="12" fill="#f0f6fc" font-weight="600">39.1 µs</text>
+<path d="M516 94h16.646492434663a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-16.646492434663z" fill="#3987e5"/>
+<text x="543.646492434663" y="104" font-size="12" fill="#f0f6fc" font-weight="600">39.5 µs</text>
 <text x="508" y="126" font-size="12" text-anchor="end" fill="#9198a1">AI SDK</text>
-<path d="M516 116h150.27738000530363a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-150.27738000530363z" fill="#6e7681"/>
-<text x="677.2773800053036" y="126" font-size="12" fill="#f0f6fc">306.2 µs<tspan fill="#9198a1" font-weight="400">  7.8×</tspan></text>
+<path d="M516 116h154.1678129298487a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-154.1678129298487z" fill="#6e7681"/>
+<text x="681.1678129298487" y="126" font-size="12" fill="#f0f6fc">302.6 µs<tspan fill="#9198a1" font-weight="400">  7.7×</tspan></text>
 <text x="508" y="148" font-size="12" text-anchor="end" fill="#9198a1">Mastra</text>
 <path d="M516 138h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#6e7681"/>
-<text x="713" y="148" font-size="12" fill="#f0f6fc">377.1 µs<tspan fill="#9198a1" font-weight="400">  9.7×</tspan></text>
+<text x="713" y="148" font-size="12" fill="#f0f6fc">363.5 µs<tspan fill="#9198a1" font-weight="400">  9.2×</tspan></text>
 <text x="508" y="170" font-size="12" text-anchor="end" fill="#9198a1">LangChain</text>
-<path d="M516 160h51.62450278440731a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-51.62450278440731z" fill="#6e7681"/>
-<text x="578.6245027844074" y="170" font-size="12" fill="#f0f6fc">110.4 µs<tspan fill="#9198a1" font-weight="400">  2.8×</tspan></text>
+<path d="M516 160h52.9738651994498a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-52.9738651994498z" fill="#6e7681"/>
+<text x="579.9738651994498" y="170" font-size="12" fill="#f0f6fc">109.0 µs<tspan fill="#9198a1" font-weight="400">  2.8×</tspan></text>
 <text x="508" y="192" font-size="12" text-anchor="end" fill="#9198a1">TanStack AI</text>
-<path d="M516 182h52.88411561919915a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-52.88411561919915z" fill="#6e7681"/>
-<text x="579.8841156191992" y="192" font-size="12" fill="#f0f6fc">112.9 µs<tspan fill="#9198a1" font-weight="400">  2.9×</tspan></text>
+<path d="M516 182h54.38514442916094a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-54.38514442916094z" fill="#6e7681"/>
+<text x="581.385144429161" y="192" font-size="12" fill="#f0f6fc">111.7 µs<tspan fill="#9198a1" font-weight="400">  2.8×</tspan></text>
 <text x="0" y="244" font-size="13" font-weight="600" fill="#f0f6fc">Stream, 200 chunks</text>
 <line x1="86" x2="86" y1="255" y2="365" stroke="#3d444d" stroke-width="1"/>
 <text x="78" y="270" font-size="12" text-anchor="end" fill="#f0f6fc" font-weight="600">Motty</text>
-<path d="M86 260h18.52076990556788a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-18.52076990556788z" fill="#3987e5"/>
-<text x="115.52076990556787" y="270" font-size="12" fill="#f0f6fc" font-weight="600">230 µs</text>
+<path d="M86 260h19.181671853203135a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-19.181671853203135z" fill="#3987e5"/>
+<text x="116.18167185320314" y="270" font-size="12" fill="#f0f6fc" font-weight="600">227 µs</text>
 <text x="78" y="292" font-size="12" text-anchor="end" fill="#9198a1">AI SDK</text>
 <path d="M86 282h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#6e7681"/>
-<text x="283" y="292" font-size="12" fill="#f0f6fc">1,938 µs<tspan fill="#9198a1" font-weight="400">  8.4×</tspan></text>
+<text x="283" y="292" font-size="12" fill="#f0f6fc">1,864 µs<tspan fill="#9198a1" font-weight="400">  8.2×</tspan></text>
 <text x="78" y="314" font-size="12" text-anchor="end" fill="#9198a1">Mastra</text>
-<path d="M86 304h139.77212446462664a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-139.77212446462664z" fill="#6e7681"/>
-<text x="236.77212446462664" y="314" font-size="12" fill="#f0f6fc">1,466 µs<tspan fill="#9198a1" font-weight="400">  6.3×</tspan></text>
+<path d="M86 304h139.74879278892584a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-139.74879278892584z" fill="#6e7681"/>
+<text x="236.74879278892584" y="314" font-size="12" fill="#f0f6fc">1,410 µs<tspan fill="#9198a1" font-weight="400">  6.1×</tspan></text>
 <text x="78" y="336" font-size="12" text-anchor="end" fill="#9198a1">LangChain</text>
-<path d="M86 326h74.93544558542752a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-74.93544558542752z" fill="#6e7681"/>
-<text x="171.93544558542752" y="336" font-size="12" fill="#f0f6fc">805 µs<tspan fill="#9198a1" font-weight="400">  3.5×</tspan></text>
+<path d="M86 326h76.0552634402833a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-76.0552634402833z" fill="#6e7681"/>
+<text x="173.05526344028328" y="336" font-size="12" fill="#f0f6fc">785 µs<tspan fill="#9198a1" font-weight="400">  3.5×</tspan></text>
 <text x="78" y="358" font-size="12" text-anchor="end" fill="#9198a1">TanStack AI</text>
-<path d="M86 348h73.87656741833943a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-73.87656741833943z" fill="#6e7681"/>
-<text x="170.87656741833945" y="358" font-size="12" fill="#f0f6fc">794 µs<tspan fill="#9198a1" font-weight="400">  3.4×</tspan></text>
+<path d="M86 348h73.88389312157958a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-73.88389312157958z" fill="#6e7681"/>
+<text x="170.88389312157958" y="358" font-size="12" fill="#f0f6fc">764 µs<tspan fill="#9198a1" font-weight="400">  3.4×</tspan></text>
 <text x="430" y="244" font-size="13" font-weight="600" fill="#f0f6fc">Structured output stream, 20 chunks</text>
 <line x1="516" x2="516" y1="255" y2="365" stroke="#3d444d" stroke-width="1"/>
 <text x="508" y="270" font-size="12" text-anchor="end" fill="#f0f6fc" font-weight="600">Motty</text>
-<path d="M516 260h12.72026859869235a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-12.72026859869235z" fill="#3987e5"/>
-<text x="539.7202685986923" y="270" font-size="12" fill="#f0f6fc" font-weight="600">49.8 µs</text>
+<path d="M516 260h13.32373569582872a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-13.32373569582872z" fill="#3987e5"/>
+<text x="540.3237356958288" y="270" font-size="12" fill="#f0f6fc" font-weight="600">49.4 µs</text>
 <text x="508" y="292" font-size="12" text-anchor="end" fill="#9198a1">AI SDK</text>
-<path d="M516 282h146.952465099841a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-146.952465099841z" fill="#6e7681"/>
-<text x="673.952465099841" y="292" font-size="12" fill="#f0f6fc">449.6 µs<tspan fill="#9198a1" font-weight="400">  9.1×</tspan></text>
+<path d="M516 282h150.05500184569954a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-150.05500184569954z" fill="#6e7681"/>
+<text x="677.0550018456995" y="292" font-size="12" fill="#f0f6fc">439.3 µs<tspan fill="#9198a1" font-weight="400">  8.9×</tspan></text>
 <text x="508" y="314" font-size="12" text-anchor="end" fill="#9198a1">Mastra</text>
 <path d="M516 304h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#6e7681"/>
-<text x="713" y="314" font-size="12" fill="#f0f6fc">565.9 µs<tspan fill="#9198a1" font-weight="400">  11×</tspan></text>
+<text x="713" y="314" font-size="12" fill="#f0f6fc">541.8 µs<tspan fill="#9198a1" font-weight="400">  11×</tspan></text>
 <text x="508" y="336" font-size="12" text-anchor="end" fill="#9198a1">LangChain</text>
-<path d="M516 326h50.8612829121753a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-50.8612829121753z" fill="#6e7681"/>
-<text x="577.8612829121753" y="336" font-size="12" fill="#f0f6fc">163.4 µs<tspan fill="#9198a1" font-weight="400">  3.3×</tspan></text>
+<path d="M516 326h51.37283130306387a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-51.37283130306387z" fill="#6e7681"/>
+<text x="578.3728313030639" y="336" font-size="12" fill="#f0f6fc">157.9 µs<tspan fill="#9198a1" font-weight="400">  3.2×</tspan></text>
 <text x="508" y="358" font-size="12" text-anchor="end" fill="#9198a1">TanStack AI</text>
-<path d="M516 348h41.99752606467574a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-41.99752606467574z" fill="#6e7681"/>
-<text x="568.9975260646758" y="358" font-size="12" fill="#f0f6fc">137.0 µs<tspan fill="#9198a1" font-weight="400">  2.8×</tspan></text>
+<path d="M516 348h42.67589516426726a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-42.67589516426726z" fill="#6e7681"/>
+<text x="569.6758951642672" y="358" font-size="12" fill="#f0f6fc">133.1 µs<tspan fill="#9198a1" font-weight="400">  2.7×</tspan></text>
 <text x="0" y="410" font-size="13" font-weight="600" fill="#f0f6fc">Served over HTTP, 200 chunks</text>
 <line x1="86" x2="86" y1="421" y2="531" stroke="#3d444d" stroke-width="1"/>
 <text x="78" y="436" font-size="12" text-anchor="end" fill="#f0f6fc" font-weight="600">Motty</text>
-<path d="M86 426h37.77255047230969a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-37.77255047230969z" fill="#3987e5"/>
-<text x="134.7725504723097" y="436" font-size="12" fill="#f0f6fc" font-weight="600">475 µs</text>
+<path d="M86 426h40.49608512346918a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-40.49608512346918z" fill="#3987e5"/>
+<text x="137.4960851234692" y="436" font-size="12" fill="#f0f6fc" font-weight="600">467 µs</text>
 <text x="78" y="458" font-size="12" text-anchor="end" fill="#9198a1">AI SDK</text>
 <path d="M86 448h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#6e7681"/>
-<text x="283" y="458" font-size="12" fill="#f0f6fc">2,160 µs<tspan fill="#9198a1" font-weight="400">  4.6×</tspan></text>
+<text x="283" y="458" font-size="12" fill="#f0f6fc">1,992 µs<tspan fill="#9198a1" font-weight="400">  4.3×</tspan></text>
 <text x="78" y="480" font-size="12" text-anchor="end" fill="#9198a1">Mastra</text>
-<path d="M86 470h145.8814595295425a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-145.8814595295425z" fill="#6e7681"/>
-<text x="242.8814595295425" y="480" font-size="12" fill="#f0f6fc">1,704 µs<tspan fill="#9198a1" font-weight="400">  3.6×</tspan></text>
+<path d="M86 470h138.5a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-138.5z" fill="#6e7681"/>
+<text x="235.5" y="480" font-size="12" fill="#f0f6fc">1,494 µs<tspan fill="#9198a1" font-weight="400">  3.2×</tspan></text>
 <text x="78" y="502" font-size="12" text-anchor="end" fill="#9198a1">LangChain</text>
-<path d="M86 492h119.27653269123913a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-119.27653269123913z" fill="#6e7681"/>
-<text x="216.27653269123914" y="502" font-size="12" fill="#f0f6fc">1,401 µs<tspan fill="#9198a1" font-weight="400">  3.0×</tspan></text>
+<path d="M86 492h121.85926520778959a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-121.85926520778959z" fill="#6e7681"/>
+<text x="218.85926520778958" y="502" font-size="12" fill="#f0f6fc">1,320 µs<tspan fill="#9198a1" font-weight="400">  2.8×</tspan></text>
 <text x="78" y="524" font-size="12" text-anchor="end" fill="#9198a1">TanStack AI</text>
-<path d="M86 514h93.12909798110762a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-93.12909798110762z" fill="#6e7681"/>
-<text x="190.12909798110763" y="524" font-size="12" fill="#f0f6fc">1,104 µs<tspan fill="#9198a1" font-weight="400">  2.3×</tspan></text>
+<path d="M86 514h94.74774141738607a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-94.74774141738607z" fill="#6e7681"/>
+<text x="191.74774141738607" y="524" font-size="12" fill="#f0f6fc">1,036 µs<tspan fill="#9198a1" font-weight="400">  2.2×</tspan></text>
 </svg>
