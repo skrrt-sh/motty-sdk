@@ -7,8 +7,8 @@
 <p align="center"><strong>A model made of code, not weights</strong></p>
 
 <p align="center">
-  Agents call a motty like any other LLM. Inside, your TypeScript decides<br>
-  which real models answer, in what order, and what is remembered.
+  The layer below your agents. To them it is one more model.<br>
+  Inside, it is your TypeScript, built to fit the stack you already have.
 </p>
 
 <p align="center">
@@ -20,49 +20,54 @@
 
 ---
 
-A motty is a model made of code, not weights. An agent calls it like any other LLM, sending a
-chat request and getting an answer back. Inside, your TypeScript code decides which real models
-answer, in what order, with what changes, and what is remembered.
+A motty is a model made of code, not weights. The Motty SDK is the open-source toolkit for
+building them.
 
-LLMs are layer 1. A motty is layer 2, a model built on top of them that sits between them and
-agents. It takes over what an agent would otherwise carry around every model call, and the agent
-keeps its loop and its tools. The SDK is the open-source toolkit for building motties. It is
-fast, and as high or as low level as you need.
+LLMs are layer 1. A motty is layer 2, built on top of them and below your agents. To everything
+above it, it is one more model. Inside, it is your TypeScript, with the whole request in its
+hands and no limit on what it does before it answers.
 
-## What a motty does
+## It fits what you already have
 
-- **Chooses which model answers** by plain rules, by a decision model such as Jev or Laya, or by
-  reading an answer before it is sent and asking a stronger model.
-- **Makes many models answer as one** in a race, a fallback, a plan written by one model and
-  carried out by another, or a panel of providers whose answers another model merges.
-- **Keeps what outlives a request**, such as the tier a conversation reached or a caller's spend
-  today, behind the endpoint and for every app that calls it.
-- **Changes what goes in and what comes out**, with a policy placed first, a long thread
-  summarised, or card numbers removed from the stream.
-
-## How it is built
-
-- **Any client can call it.** A caller changes the URL and the model name and keeps its format,
-  whether that is the Chat Completions, Responses or Messages API.
-- **The logic is plain code.** Other gateways are set up in config and take code as a plugin, and
-  an auto-router picks by rules of its own. A motty is all code. It is typed, yours to change,
-  and tested with scripted models and no wire.
-- **It is one file and never holds a provider key.** A motty builds apart from whatever runs it.
-  The server, the provider adapters and the keys stay with the host, so the same file runs
+- **Nothing above it changes.** A caller changes the URL and the model name and keeps its format,
+  whether that is the Chat Completions, Responses or Messages API. An agent does not know it is
+  talking to a motty.
+- **Nothing below it changes.** A motty calls the providers you already use, through adapters,
+  and you can write your own.
+- **It goes where you need it.** A motty can be your gateway, served with the host's auth, limits
+  and a record of every request. It can sit behind a gateway you have as one of its models, or in
+  front of it. `mount` gives it as a `fetch` handler inside your own HTTP server.
+- **Your keys stay with you.** A motty is one file, built apart from whatever runs it. The
+  server, the adapters and the provider keys stay with the host, so the same file runs
   self-hosted and on the Hub, a service that hosts motties.
 
-## Where it fits
+## What the code inside can do
 
-- **As your gateway.** Served with the host's auth, limits and a record of every request, a motty
-  is the gateway, one endpoint in front of every provider.
-- **Beside a gateway you have.** Behind it as one of its models, or in front of it with the
-  gateway as the upstream.
-- **Inside your own server.** `mount` gives a motty as a `fetch` handler, so your own HTTP routes
-  and the motty share one server.
-- **As deep as you need.** Start with `fallback` and `race`. Go down to a provider's own options
-  on one call, or write your own adapter, auth or plugin.
+- **Read the whole request.** The messages, the tools, the options, the caller's headers and who
+  the caller is are all there.
+- **Call any model, more than once and in any order.** That is one model, several in a race, a
+  fallback chain, a retry, or a decision model such as Jev or Laya that picks. The host sets how
+  many calls one request may make.
+- **Answer without a model.** An answer can be written by hand.
+- **Change the prompt before it goes up and the answer as it streams down.**
+- **Keep state that outlives a request.** Every caller of the same URL shares it.
+- **Call anything outside** with `fetch`.
+- **Be put together from parts.** Middleware, modules and plugins compose into one motty, with
+  typed settings the host may override.
 
-A motty is not an agent framework. It has no agent loop and runs no tools.
+## What follows from that
+
+A router, a gateway, a cache, a fallback, a guardrail, a memory that agents share, a model that
+merges other models. None of these is a feature of the SDK. Each is your own code over the same
+few abilities, and so is whatever nobody has named yet.
+
+Other gateways are set up in config and take code as a plugin, and an auto-router picks by rules
+of its own. A motty is all code. It is typed, yours to change, and tested with scripted models
+and no wire. It is fast, and as high or as low level as you need. Start with `fallback` and
+`race`, and go down to a provider's own options on one call, or to your own adapter, auth or
+plugin.
+
+A motty is not an agent. It has no agent loop and runs no tools.
 
 ## Status
 

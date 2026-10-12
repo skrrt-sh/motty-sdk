@@ -2,12 +2,18 @@
 
 ## What a motty is
 
-A motty is a layer-2 model. LLMs are layer 1, and a motty is a model made of code on top of them,
-between them and agents. To its caller it is just another model, a chat request in and an answer
-out. Inside, it decides which models answer, in what order, with what changes, and what is
-remembered. It has no weights, only routing and policy. The SDK is the open-source toolkit for
-building motties; the Hub is a service that hosts and sells them.
+A motty is a layer-2 model. LLMs are layer 1, and a motty is a model made of code on top of them
+and below agents. To its caller it is just another model, a chat request in and an answer out,
+and an agent does not know it is calling one. Inside, it is plain code that holds the whole
+request and may do anything before it answers. It has no weights. The SDK is the open-source
+toolkit for building motties; the Hub is a service that hosts and sells them.
 
+- **It is a toolkit, not a list of features.** A router, a gateway, a cache, a fallback or a
+  memory that agents share is each a motty's own code over the same few abilities: reading the
+  request, calling models, answering by hand, changing the prompt and the answer, `store` and
+  `fetch`.
+- **It fits the stack that is already there.** Above it, a caller changes the URL and the model
+  name. Below it, the same providers are called, through adapters.
 - **It takes what surrounds a model call, and the agent keeps its loop and its tools.** That is
   the choice of model, several models answering as one, what outlives a request, and what is
   changed on the way in and out. Rejected: running the caller's tools, which makes a motty a
@@ -979,6 +985,18 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   stream and the usage in it, and `store` on Responses, where no state is held.
 - **A chat connection takes no time limit.** Retry and time limits are the motty's combinators,
   and a second pair underneath would multiply them.
+- **A stream that said its last event is read to the end of its body, so its connection is
+  kept.** The reading goes on behind the call, for 65,536 bytes or one second at the most. A
+  call stopped before its last event is cancelled as before, and a signal fired after it stops
+  nothing, since whoever ends a request fires it for every call that request made. Cause: an
+  upstream that ends its body in a later write than its last event was left before that end,
+  which cost the connection, and 350 calls in a row opened 303 of them where a body passed
+  through whole opened 2. On the Workers runtime every call opened one, and behind a local
+  Workers runtime a call to a real provider reached its first byte about 300 ms sooner once the
+  connection was kept. Rejected:
+  cancelling at the last event, which pays for a new connection on every call; holding the last
+  event until the body ends, where an upstream that holds its body open would hold the answer;
+  and reading on with no bound, which an upstream that never ends its body would leak.
 - **A decision server's own request fields are the host's to state, on the adapter, never the
   author's on a call.** `typesafe` takes them as `body`, beside `headers`, in the server's own
   names. Laya takes controls Jev refuses outright, a longer state limit, a confidence floor, a
@@ -1119,6 +1137,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   handler and stops no listener. `serve` is for a serve file, whose default export Bun starts: it
   also drains on a stop signal, stops the listener and ends the process. Cause: with one function
   for both, a host that mounted two motties lost its own shutdown to ours.
+- **`mount` runs wherever the web-standard APIs and the async context do; `serve` stays Bun's.**
+  A host on a runtime with no environment to read states its options from what it holds. On
+  the Workers runtime the host turns the request signal flag on: without it a caller who left
+  is never seen, and the request runs to its end. Cause: `mount` read the environment by Bun's
+  own name, so on any other runtime it threw before a request arrived.
 - **In development a serve file is reloaded by Bun's own `--watch`,** which starts the process
   again when the motty or a file it imports changes; the SDK adds nothing for it. Rejected:
   `--hot`, which evaluates the file again in the same process, so the handlers of earlier

@@ -40,7 +40,7 @@ type Undeclared<Given, Declared> = (
   : never;
 
 type Options<Served, Given> = (
-  env: typeof Bun.env,
+  env: typeof process.env,
 ) => HostOptions<Given & Undeclared<Given, Overrides<Served>>>;
 
 // One reason for a request refused at shutdown and for one stopped by it.
@@ -58,7 +58,8 @@ export function mount<
   const { name } = description;
   const started = new Date();
   const { begin, landed, stopAll } = flights();
-  const given = options(Bun.env);
+  // A runtime with Node's globals off has no environment to read.
+  const given = options(typeof process === 'undefined' ? {} : process.env);
   // Made first: it refuses a limit that is no number, the body's among them.
   const admit = hosting(motty, given);
   const drain = bound('drain', edge.drain) ?? 25_000;

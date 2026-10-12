@@ -88,6 +88,24 @@ export async function told(response: Response): Promise<string> {
   return text;
 }
 
+// A body left before its end costs its connection, and the next call pays
+// for a new one. What follows a stream's last event is read for that, as far
+// as a failure is and for a second: an upstream may never end its body.
+export async function spent(body: NonNullable<Response['body']>) {
+  const reader = body.getReader();
+  const late = setTimeout(() => reader.cancel().catch(() => {}), 1000);
+  try {
+    for (let left = most; left > 0; ) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      left -= value.length;
+    }
+    await reader.cancel();
+  } finally {
+    clearTimeout(late);
+  }
+}
+
 const named = /[\p{L}\p{N}_-]/u;
 
 // A dot joins two characters of a name, and ends a sentence after one.
