@@ -65,6 +65,8 @@ const taking: { [Option in Fieldless]?: Taken } = {
   'presencePenalty.model': { ...lenient, presencePenalty: false },
   'frequencyPenalty.model': { ...lenient, frequencyPenalty: false },
   'reasoning.model': { ...lenient, effort: false },
+  'reasoning.adaptive': { ...lenient, adaptive: false },
+  'reasoning.level': { ...lenient, effort: ['low', 'high'] },
 };
 
 // The dialect of a row that only an upstream with words of its own leaves out.
@@ -146,6 +148,10 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
     },
   },
   'reasoning.model': {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { reasoning: { effort: 'high' } },
+  },
+  'reasoning.adaptive': {
     messages: [{ role: 'user', text: 'Hi' }],
     options: { reasoning: { effort: 'high' } },
   },
@@ -244,6 +250,10 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
   'reasoning.exclude': {
     messages: [{ role: 'user', text: 'Hi' }],
     options: { reasoning: { effort: 'low', exclude: true } },
+  },
+  'user.long': {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { user: 'u'.repeat(65) },
   },
   hosted: {
     messages: [

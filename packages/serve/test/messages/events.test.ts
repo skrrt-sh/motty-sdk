@@ -222,6 +222,13 @@ test('input JSON deltas are fragments of the tool call they belong to', async ()
     },
     {
       type: 'tool_call',
+      id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+      arguments: '',
+      ended: true,
+      block: 0,
+    },
+    {
+      type: 'tool_call',
       id: 'srvtoolu_014hJH82Qum7Td6UV8gDXThB',
       name: 'web_search',
       arguments: '',
@@ -250,11 +257,15 @@ test('input JSON deltas are fragments of the tool call they belong to', async ()
 });
 
 test.each([
-  ['tool_use', {}],
-  ['server_tool_use', { hosted: true }],
+  [
+    'tool_use',
+    {},
+    [{ type: 'tool_call', id: 'toolu_01', arguments: '', ended: true }],
+  ],
+  ['server_tool_use', { hosted: true }, []],
 ])(
   'a %s block that ends with no input said is told as an empty object, once',
-  async (type, hosted) => {
+  async (type, hosted, whole) => {
     const chunks = await read(
       {
         type: 'content_block_start',
@@ -284,8 +295,45 @@ test.each([
       { type: 'tool_call', id: 'toolu_01', name: 'get_time', ...hosted },
       { type: 'tool_call', id: 'toolu_01', arguments: '', block: 0 },
       { type: 'tool_call', id: 'toolu_01', arguments: '{}', block: 0 },
+      ...whole,
     ]);
-    expect(chunks).toHaveLength(4);
+    expect(chunks).toHaveLength(4 + whole.length);
+  },
+);
+
+test.each(['max_tokens', 'tool_use'])(
+  'a call that is the last block of a reply that stopped for %s is not said to have ended',
+  async (reason) => {
+    const chunks = await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'tool_use', id: 'toolu_01', name: 'write' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '{"text":"half' },
+      },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: reason } },
+      { type: 'message_stop' },
+    );
+    expect(chunks.slice(0, -1)).toEqual([
+      {
+        type: 'tool_call',
+        id: 'toolu_01',
+        name: 'write',
+        arguments: '',
+        block: 0,
+      },
+      {
+        type: 'tool_call',
+        id: 'toolu_01',
+        arguments: '{"text":"half',
+        block: 0,
+      },
+    ]);
   },
 );
 
@@ -661,3 +709,644 @@ test('a streamed citation whose title is null is titled by its document, as one 
   expect(whole).toEqual({ type: 'citation', ...told });
   expect(streamed).toEqual({ type: 'citation', ...told, block: 0 });
 });
+
+test('what a message says beside the fields read here rides on the finish', async () => {
+  expect(
+    await read(
+      {
+        type: 'message_start',
+        message: {
+          id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-opus-5-5',
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          container: null,
+          future_message_field: { kept: true },
+          usage: {
+            input_tokens: 25,
+            output_tokens: 1,
+            cache_creation: { ephemeral_1h_input_tokens: 100 },
+            service_tier: 'standard',
+            inference_geo: 'us',
+            server_tool_use: null,
+          },
+        },
+      },
+      {
+        type: 'message_delta',
+        delta: {
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          container: {
+            id: 'container_011',
+            expires_at: '2026-10-12T10:00:00Z',
+          },
+          future_delta_field: 'kept',
+        },
+        usage: {
+          output_tokens: 40,
+          server_tool_use: { web_search_requests: 1 },
+          future_count: 3,
+        },
+        context_management: { applied_edits: [] },
+        future_event_field: 'kept',
+      },
+      { type: 'message_stop' },
+    ),
+  ).toEqual([
+    {
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'end_turn',
+      id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+      model: 'claude-opus-5-5',
+      usage: { input: 25, output: 40 },
+      provider: {
+        anthropic: {
+          future_message_field: { kept: true },
+          container: {
+            id: 'container_011',
+            expires_at: '2026-10-12T10:00:00Z',
+          },
+          future_delta_field: 'kept',
+          usage: {
+            cache_creation: { ephemeral_1h_input_tokens: 100 },
+            service_tier: 'standard',
+            inference_geo: 'us',
+            server_tool_use: { web_search_requests: 1 },
+            future_count: 3,
+          },
+          message_delta: {
+            context_management: { applied_edits: [] },
+            future_event_field: 'kept',
+          },
+        },
+      },
+    },
+  ]);
+});
+
+test('a message that says nothing more leaves a finish with no data of its own', async () => {
+  expect(
+    await read(
+      {
+        type: 'message_start',
+        message: {
+          id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-opus-5-5',
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 25, output_tokens: 1 },
+        },
+      },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 40 },
+      },
+      { type: 'message_stop' },
+    ),
+  ).toEqual([
+    {
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'end_turn',
+      id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+      model: 'claude-opus-5-5',
+      usage: { input: 25, output: 40 },
+    },
+  ]);
+});
+
+test('a block told whole is told when it ends, with what its deltas said', async () => {
+  const chunks = await read(
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'mcp_tool_use',
+        id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+        name: 'echo',
+        server_name: 'example-mcp',
+        input: {},
+      },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: '{"param1":' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: ' "value1"}' },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'content_block_start',
+      index: 1,
+      content_block: {
+        type: 'mcp_tool_result',
+        tool_use_id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+        is_error: false,
+        content: [{ type: 'text', text: 'value1' }],
+      },
+    },
+    { type: 'content_block_stop', index: 1 },
+    {
+      type: 'content_block_start',
+      index: 2,
+      content_block: { type: 'compaction', content: null },
+    },
+    {
+      type: 'content_block_delta',
+      index: 2,
+      delta: {
+        type: 'compaction_delta',
+        content: 'Summary so far',
+        encrypted_content: 'EuYBCkQYAiJA',
+      },
+    },
+    { type: 'content_block_stop', index: 2 },
+    {
+      type: 'content_block_start',
+      index: 3,
+      content_block: { type: 'text', text: '' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 3,
+      delta: { type: 'text_delta', text: 'Done.' },
+    },
+    { type: 'content_block_stop', index: 3 },
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      usage: { output_tokens: 15 },
+    },
+    { type: 'message_stop' },
+  );
+  expect(chunks.slice(0, -1)).toEqual([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+          name: 'echo',
+          server_name: 'example-mcp',
+          input: { param1: 'value1' },
+        },
+      },
+    },
+    {
+      type: 'provider',
+      block: 1,
+      provider: {
+        anthropic: {
+          type: 'mcp_tool_result',
+          tool_use_id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+          is_error: false,
+          content: [{ type: 'text', text: 'value1' }],
+        },
+      },
+    },
+    {
+      type: 'provider',
+      block: 2,
+      provider: {
+        anthropic: {
+          type: 'compaction',
+          content: 'Summary so far',
+          encrypted_content: 'EuYBCkQYAiJA',
+        },
+      },
+    },
+    { type: 'text', text: 'Done.', block: 3 },
+  ]);
+});
+
+test('a block told whole that never ends is still told before the finish', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'compaction', content: 'Summary so far' },
+      },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 15 },
+      },
+      { type: 'message_stop' },
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: { type: 'compaction', content: 'Summary so far' },
+      },
+    },
+    { type: 'finish', reason: 'stop' },
+  ]);
+});
+
+test('a block told whole is still told when the upstream fails before it ends', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_01',
+          name: 'echo',
+          server_name: 'example',
+          input: {},
+        },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '{"text": "hi"}' },
+      },
+      {
+        type: 'error',
+        error: { type: 'overloaded_error', message: 'Overloaded' },
+      },
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_01',
+          name: 'echo',
+          server_name: 'example',
+          input: { text: 'hi' },
+        },
+      },
+    },
+    { type: 'error', error: { code: 'overloaded' } },
+  ]);
+});
+
+test('a block told whole is still told when the stream is cut before it ends', async () => {
+  expect(
+    await read({
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'web_search_tool_result',
+        tool_use_id: 'srvtoolu_01',
+        content: [],
+      },
+    }),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_01',
+          content: [],
+        },
+      },
+    },
+    { type: 'error', error: { code: 'upstream_failed' } },
+  ]);
+});
+
+test('a block told whole is still told when the upstream itself fails, and the failure is thrown as it was', async () => {
+  const failure = new Error('socket closed');
+  async function* upstream() {
+    yield {
+      data: JSON.stringify({
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'compaction', content: 'Summary' },
+      }),
+    };
+    throw failure;
+  }
+  const stream = events(upstream());
+
+  expect(await stream.next()).toEqual({
+    done: false,
+    value: {
+      type: 'provider',
+      block: 0,
+      provider: { anthropic: { type: 'compaction', content: 'Summary' } },
+    },
+  });
+  await expect(stream.next()).rejects.toBe(failure);
+});
+
+test('a block told whole is still told when an event after it cannot be read', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'compaction', content: 'Summary' },
+      },
+      'not an event',
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: { anthropic: { type: 'compaction', content: 'Summary' } },
+    },
+    { type: 'error', error: { code: 'upstream_failed' } },
+  ]);
+});
+
+test('a delta read here that comes inside a block told whole is part of that block', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'future_block', text: '', thinking: 'Hm' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Hel' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'lo' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'thinking_delta', thinking: 'm.' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'signature_delta', signature: 'EqQB' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'citations_delta', citation: { cited_text: 'Hello' } },
+      },
+      { type: 'content_block_stop', index: 0 },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 15 },
+      },
+      { type: 'message_stop' },
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'future_block',
+          text: 'Hello',
+          thinking: 'Hmm.',
+          signature: 'EqQB',
+          citations: [{ cited_text: 'Hello' }],
+        },
+      },
+    },
+    { type: 'finish', reason: 'stop' },
+  ]);
+});
+
+test.each([
+  [
+    'the stream is cut',
+    { type: 'ping' },
+    { code: 'upstream_failed', message: expect.stringContaining('closed') },
+  ],
+  [
+    'the upstream fails',
+    { type: 'error', error: { type: 'overloaded_error', message: 'Busy' } },
+    { code: 'overloaded' },
+  ],
+])(
+  'a block told whole whose input was cut when %s is told with input that reads as failed',
+  async (_, last, error) => {
+    expect(
+      await read(
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'mcp_tool_use', id: 'mcptoolu_01', input: {} },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '{"q":' },
+        },
+        last,
+      ),
+    ).toMatchObject([
+      {
+        type: 'provider',
+        block: 0,
+        provider: {
+          anthropic: {
+            type: 'mcp_tool_use',
+            id: 'mcptoolu_01',
+            input: { INVALID_JSON: '{"q":' },
+          },
+        },
+      },
+      { type: 'error', error },
+    ]);
+  },
+);
+
+test('a block that starts where one told whole never ended is told after it, and is not part of it', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_01',
+          content: [],
+        },
+      },
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'text', text: '' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'hello' },
+      },
+      { type: 'content_block_stop', index: 0 },
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_01',
+          content: [],
+        },
+      },
+    },
+    { type: 'text', text: 'hello', block: 0 },
+    { type: 'error' },
+  ]);
+});
+
+test('blocks told whole that name no place are each told', async () => {
+  expect(
+    await read(
+      { type: 'content_block_start', content_block: { type: 'a_block', v: 1 } },
+      { type: 'content_block_start', content_block: { type: 'b_block', v: 2 } },
+      { type: 'content_block_stop' },
+    ),
+  ).toMatchObject([
+    { type: 'provider', provider: { anthropic: { type: 'a_block', v: 1 } } },
+    { type: 'provider', provider: { anthropic: { type: 'b_block', v: 2 } } },
+    { type: 'error' },
+  ]);
+});
+
+test('a block told whole that never ends is told before the block that starts after it', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'compaction', content: 'Summary' },
+      },
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'tool_use', id: 'toolu_01', name: 'f' },
+      },
+      { type: 'content_block_stop', index: 1 },
+    ),
+  ).toMatchObject([
+    { type: 'provider', block: 0 },
+    { type: 'tool_call', id: 'toolu_01', name: 'f', block: 1 },
+    { type: 'tool_call', id: 'toolu_01', arguments: '{}', block: 1 },
+    { type: 'error' },
+  ]);
+});
+
+test('a block held through a hundred thousand deltas is built once, not once for each', async () => {
+  const said = Array.from({ length: 100_000 }, (_, at) => ({ [`k${at}`]: 1 }));
+  const [told] = await read(
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'future_block' },
+    },
+    ...said.map((fields) => ({
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'future_delta', ...fields },
+    })),
+    { type: 'content_block_stop', index: 0 },
+  );
+  expect(told).toEqual({
+    type: 'provider',
+    block: 0,
+    provider: {
+      anthropic: {
+        type: 'future_block',
+        ...Object.fromEntries(said.flatMap((fields) => Object.entries(fields))),
+      },
+    },
+  });
+});
+
+test.each(['tool_use', 'server_tool_use'])(
+  'a %s block keeps every field not read here, an empty one and one named as a field of another block too',
+  async (type) => {
+    const unread = {
+      signature: 'SG',
+      text: 'T',
+      thinking: 'TH',
+      caller: null,
+      a: [],
+      b: {},
+      c: 0,
+      d: '',
+      e: false,
+    };
+    const [call] = await read({
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type, id: 'toolu_01', name: 'f', input: {}, ...unread },
+    });
+    expect(call).toEqual({
+      type: 'tool_call',
+      id: 'toolu_01',
+      name: 'f',
+      arguments: '',
+      block: 0,
+      ...(type === 'tool_use'
+        ? { provider: { anthropic: unread } }
+        : { hosted: true, provider: { anthropic: { ...unread, type } } }),
+    });
+  },
+);
+
+test('input said after its block ended is not the call`s', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'tool_use', id: 'toolu_01', name: 'f' },
+      },
+      { type: 'content_block_stop', index: 0 },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: 'LATE' },
+      },
+    ),
+  ).toMatchObject([
+    { type: 'tool_call', id: 'toolu_01', arguments: '' },
+    { type: 'tool_call', id: 'toolu_01', arguments: '{}' },
+    { type: 'error' },
+  ]);
+});
+
+test.each([null, {}, { text: 'kindless' }])(
+  'a block that starts as %j has no kind and is no block',
+  async (block) => {
+    expect(
+      await read(
+        { type: 'content_block_start', index: 0, content_block: block },
+        { type: 'content_block_stop', index: 0 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+        { type: 'message_stop' },
+      ),
+    ).toMatchObject([{ type: 'finish', reason: 'stop' }]);
+  },
+);

@@ -314,7 +314,7 @@ test('each thinking setting decides whether the reply shows progress', async () 
 test('a field named as the prototype is a field like any other, from the body to the upstream', () => {
   const { request } = decode(
     parsed(
-      '{"model":"coder","max_tokens":1024,"__proto__":{"polluted":"yes"},"messages":[{"role":"user","__proto__":{"polluted":"yes"},"content":[{"type":"text","text":"Hello","__proto__":{"polluted":"yes"}}]}]}',
+      '{"model":"coder","max_tokens":1024,"__proto__":{"polluted":"yes"},"messages":[{"role":"user","__proto__":{"polluted":"yes"},"content":[{"__proto__":{"polluted":"yes"},"type":"text","text":"Hello"}]}]}',
     ) ?? null,
     new Headers(),
   );
@@ -334,6 +334,6 @@ test('a field named as the prototype is a field like any other, from the body to
     '{"anthropic":{"__proto__":{"polluted":"yes"}}}',
   );
   expect(JSON.stringify(encode('claude-haiku-5-5', request).body)).toBe(
-    '{"__proto__":{"polluted":"yes"},"max_tokens":1024,"model":"claude-haiku-5-5","messages":[{"role":"user","content":[{"type":"text","text":"Hello","__proto__":{"polluted":"yes"}}],"__proto__":{"polluted":"yes"}}],"stream":true}',
+    '{"__proto__":{"polluted":"yes"},"max_tokens":1024,"model":"claude-haiku-5-5","messages":[{"role":"user","content":[{"__proto__":{"polluted":"yes"},"type":"text","text":"Hello"}],"__proto__":{"polluted":"yes"}}],"stream":true}',
   );
 });

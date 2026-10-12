@@ -385,6 +385,7 @@ test.each([
   [{ type: 'tool_call', id: 'call_1', arguments: { q: 'motty' } }],
   [{ type: 'tool_call', id: 'call_1', arguments: '', name: 7 }],
   [{ type: 'tool_call', id: 'call_1', arguments: '', hosted: 'yes' }],
+  [{ type: 'tool_call', id: 'call_1', arguments: '', ended: 'yes' }],
   [{ type: 'tool_result', output: 'found' }],
   [{ type: 'tool_result', id: 'call_1' }],
   [{ type: 'tool_result', id: 'call_1', output: () => 'found' }],

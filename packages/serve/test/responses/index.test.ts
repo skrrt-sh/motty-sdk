@@ -303,6 +303,7 @@ async function* upstream() {
         type: 'function_call',
         call_id: 'call_1',
         name: 'weather',
+        namespace: 'multi_agent_v1',
         arguments: '',
       },
     },
@@ -317,10 +318,60 @@ async function* upstream() {
       delta: '"Oslo"}',
     },
     {
+      type: 'response.output_item.done',
+      output_index: 2,
+      item: {
+        id: 'fc_up',
+        type: 'function_call',
+        status: 'completed',
+        call_id: 'call_1',
+        name: 'weather',
+        namespace: 'multi_agent_v1',
+        arguments: '{"city":"Oslo"}',
+      },
+    },
+    {
+      type: 'response.output_item.done',
+      output_index: 3,
+      item: { id: 'ws_up', type: 'web_search_call', status: 'completed' },
+    },
+    {
+      type: 'response.output_item.added',
+      output_index: 4,
+      item: {
+        id: 'ctc_up',
+        type: 'custom_tool_call',
+        status: 'in_progress',
+        call_id: 'call_2',
+        input: '',
+        name: 'exec',
+      },
+    },
+    {
+      type: 'response.custom_tool_call_input.delta',
+      output_index: 4,
+      delta: '1+1\n',
+    },
+    {
+      type: 'response.output_item.done',
+      output_index: 4,
+      item: {
+        id: 'ctc_up',
+        type: 'custom_tool_call',
+        status: 'completed',
+        call_id: 'call_2',
+        input: '1+1\n',
+        name: 'exec',
+      },
+    },
+    {
       type: 'response.completed',
       response: {
         id: 'resp_up',
         model: 'gpt-5-2025-08-07',
+        status: 'completed',
+        end_turn: false,
+        service_tier: 'priority',
         usage: {
           input_tokens: 40,
           input_tokens_details: { cached_tokens: 32 },
@@ -348,12 +399,34 @@ test("an upstream's reply written back to the caller keeps what the model sent",
   const sent = await Array.fromAsync(
     decoded.streamed(responses.events(upstream()), 'r1'),
   );
+  expect(
+    sent.flatMap(({ event, data }) =>
+      event === 'response.output_item.done'
+        ? [field(field(parsed(data), 'item'), 'type')]
+        : [],
+    ),
+  ).toEqual([
+    'reasoning',
+    'message',
+    'function_call',
+    'web_search_call',
+    'custom_tool_call',
+  ]);
+  expect(
+    sent.flatMap(({ event }) =>
+      event?.startsWith('response.custom_tool_call') ? [event] : [],
+    ),
+  ).toEqual([
+    'response.custom_tool_call_input.delta',
+    'response.custom_tool_call_input.done',
+  ]);
   expect(parsed(sent.at(-1)?.data ?? '')).toMatchObject({
     type: 'response.completed',
     response: {
       id: 'resp_r1',
       model: 'coder',
       status: 'completed',
+      end_turn: false,
       output: [
         {
           id: 'rs_up',
@@ -387,7 +460,16 @@ test("an upstream's reply written back to the caller keeps what the model sent",
           status: 'completed',
           call_id: 'call_1',
           name: 'weather',
+          namespace: 'multi_agent_v1',
           arguments: '{"city":"Oslo"}',
+        },
+        { id: 'ws_up', type: 'web_search_call', status: 'completed' },
+        {
+          id: 'ctc_r1_4',
+          type: 'custom_tool_call',
+          call_id: 'call_2',
+          name: 'exec',
+          input: '1+1\n',
         },
       ],
       usage: {
@@ -399,6 +481,7 @@ test("an upstream's reply written back to the caller keeps what the model sent",
       },
     },
   });
+  expect(sent.at(-1)?.data).not.toContain('service_tier');
 });
 
 test('a collected reply sent back as input reaches the upstream as the model wrote it', async () => {
@@ -421,6 +504,7 @@ test('a collected reply sent back as input reaches the upstream as the model wro
         { role: 'user', content: 'Weather in Oslo?' },
         ...output,
         { type: 'function_call_output', call_id: 'call_1', output: '4C' },
+        { type: 'custom_tool_call_output', call_id: 'call_2', output: '2' },
       ],
     },
     new Headers(),
@@ -463,9 +547,19 @@ test('a collected reply sent back as input reaches the upstream as the model wro
       status: 'completed',
       call_id: 'call_1',
       name: 'weather',
+      namespace: 'multi_agent_v1',
       arguments: '{"city":"Oslo"}',
     },
+    { id: 'ws_up', type: 'web_search_call', status: 'completed' },
+    {
+      id: 'ctc_r1_4',
+      type: 'custom_tool_call',
+      call_id: 'call_2',
+      name: 'exec',
+      input: '1+1\n',
+    },
     { type: 'function_call_output', call_id: 'call_1', output: '4C' },
+    { type: 'custom_tool_call_output', call_id: 'call_2', output: '2' },
   ]);
 });
 
@@ -1324,3 +1418,126 @@ test('a picture whose type neither the upstream nor its bytes say fails a caller
       .collected([chunk], finish, 'r1'),
   ).toMatchObject({ output: [item] });
 });
+
+test('a call an Anthropic upstream ended is done for a caller of this API before the item of the next block opens', async () => {
+  const { streamed } = responses.decode(
+    { model: 'coder', input: 'Weather in Oslo?', stream: true },
+    new Headers(),
+  );
+  const sent = await Array.fromAsync(
+    streamed(
+      messages.events(
+        (async function* () {
+          for (const event of [
+            {
+              type: 'content_block_start',
+              index: 0,
+              content_block: {
+                type: 'tool_use',
+                id: 'toolu_1',
+                name: 'weather',
+              },
+            },
+            {
+              type: 'content_block_delta',
+              index: 0,
+              delta: {
+                type: 'input_json_delta',
+                partial_json: '{"city":"Oslo"}',
+              },
+            },
+            { type: 'content_block_stop', index: 0 },
+            {
+              type: 'content_block_start',
+              index: 1,
+              content_block: { type: 'tool_use', id: 'toolu_2', name: 'time' },
+            },
+            { type: 'content_block_stop', index: 1 },
+            { type: 'message_delta', delta: { stop_reason: 'tool_use' } },
+            { type: 'message_stop' },
+          ]) {
+            yield { data: JSON.stringify(event) };
+          }
+        })(),
+      ),
+      'r1',
+    ),
+  );
+  expect(
+    sent.flatMap(({ event, data }) =>
+      event === 'response.output_item.added' ||
+      event === 'response.output_item.done'
+        ? [[event, field(field(parsed(data), 'item'), 'call_id')]]
+        : [],
+    ),
+  ).toEqual([
+    ['response.output_item.added', 'toolu_1'],
+    ['response.output_item.done', 'toolu_1'],
+    ['response.output_item.added', 'toolu_2'],
+    ['response.output_item.done', 'toolu_2'],
+  ]);
+  expect(parsed(sent.at(-1)?.data ?? '')).toMatchObject({
+    response: {
+      output: [
+        {
+          call_id: 'toolu_1',
+          status: 'completed',
+          arguments: '{"city":"Oslo"}',
+        },
+        { call_id: 'toolu_2', status: 'completed', arguments: '{}' },
+      ],
+    },
+  });
+});
+
+test.each([
+  [
+    'Chat Completions',
+    chatCompletions.decode(
+      { model: 'coder', messages: [{ role: 'user', content: 'Hi' }] },
+      new Headers(),
+    ),
+  ],
+  [
+    'Anthropic Messages',
+    messages.decode(
+      {
+        model: 'coder',
+        max_tokens: 64,
+        messages: [{ role: 'user', content: 'Hi' }],
+      },
+      new Headers(),
+    ),
+  ],
+  [
+    'Responses',
+    responses.decode({ model: 'coder', input: 'Hi' }, new Headers()),
+  ],
+])(
+  'a caller of %s is sent nothing of the word that a call ended, and no more frames for a chunk that says only that',
+  async (_, { streamed }) => {
+    async function* run(ended: Chunk[]): RunStream {
+      yield {
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'weather',
+        arguments: '{}',
+      };
+      yield* ended;
+      yield { type: 'text', text: 'Done.' };
+      yield { type: 'finish', reason: 'tool_calls' };
+    }
+
+    const frames = await Array.fromAsync(
+      streamed(
+        run([{ type: 'tool_call', id: 'call_1', arguments: '', ended: true }]),
+        'r1',
+      ),
+    );
+
+    expect(frames.filter(({ data }) => data.includes('ended'))).toEqual([]);
+    expect(frames).toHaveLength(
+      (await Array.fromAsync(streamed(run([]), 'r1'))).length,
+    );
+  },
+);

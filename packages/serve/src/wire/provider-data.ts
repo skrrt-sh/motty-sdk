@@ -1,6 +1,6 @@
 import type { ProviderData } from '@mottyjs/core/host';
 import type { LeftOut } from '../codec.ts';
-import { copied, type Dict, dict, isDict } from './json.ts';
+import { copied, type Dict, dict, isDict, without } from './json.ts';
 import { unsupported } from './refusals.ts';
 
 // A null, an empty list and an empty object say what leaving the field out
@@ -25,6 +25,9 @@ export function providerData(
   vendor?: string,
   elsewhere?: ReadonlySet<string>,
 ) {
+  // A call the caller's own tools run is read this way, with no refusal: what
+  // it holds for another API alone came with an answer the author copied, and
+  // failing on it would end a conversation on its first turn across families.
   function mine(data: ProviderData | undefined): Dict {
     const fields = data?.[key];
     return fields === undefined ? {} : dict(copied(fields));
@@ -40,11 +43,24 @@ export function providerData(
       : { ...dict(copied(shared)), ...mine(data) };
   }
 
+  // The fields are named so an author knows what to take out, and by name
+  // alone, since a value may be a secret. A long list ends in a count.
   function refused(data: ProviderData | undefined, what: string): void {
     const [other] = Object.keys(data ?? {});
-    if (other !== undefined) {
-      unsupported(`${api} cannot carry ${what} of ${other}`);
-    }
+    if (other === undefined) return;
+    const fields = data?.[other];
+    const names =
+      typeof fields === 'object' && fields !== null && !Array.isArray(fields)
+        ? Object.keys(fields)
+        : [];
+    const more = names.length - 5;
+    const listed =
+      more > 0
+        ? `${names.slice(0, 5).join(', ')} and ${more} more`
+        : names.join(', ');
+    unsupported(
+      `${api} cannot carry ${what} of ${other}${listed === '' ? '' : `: ${listed}`}`,
+    );
   }
 
   // A map with no entry for this API changes the meaning in a way this wire
@@ -71,11 +87,7 @@ export function providerData(
 
   function kept(fields: Dict, alien: Dict): Dict {
     const names = Object.keys(alien);
-    return names.length === 0
-      ? fields
-      : Object.fromEntries(
-          Object.entries(fields).filter(([name]) => !names.includes(name)),
-        );
+    return names.length === 0 ? fields : without(fields, names);
   }
 
   // A request's options are where an API's own fields are named, so there
@@ -119,5 +131,5 @@ export function providerData(
     return Object.keys(fields).length === 0 ? {} : { hints: { [key]: fields } };
   }
 
-  return { hinted, own, addressed, marked, noted };
+  return { hinted, own, mine, addressed, marked, noted };
 }

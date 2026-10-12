@@ -269,6 +269,50 @@ test('the prompt starts as the request: messages, tools, options and output', as
   });
 });
 
+test('headers stated on a prompt reach the adapter as they were stated', async () => {
+  const host = stubHost({ 'acme/small': says('{}') });
+
+  await told(
+    motty({ name: 'relay' }).handle(({ request, prompt }) => {
+      prompt.options = {
+        ...prompt.options,
+        headers: Object.fromEntries(request.headers),
+      };
+      return model('acme/small').complete(prompt);
+    }),
+    host,
+    ask(new Headers({ 'x-session': 's-1', 'X-Title': 'Coder' })),
+  );
+
+  expect(host.sent('acme/small')[0]?.options).toEqual({
+    headers: { 'x-session': 's-1', 'x-title': 'Coder' },
+  });
+});
+
+test('headers the caller`s options held are copied into the prompt, and the request keeps its own', async () => {
+  const host = stubHost({ 'acme/small': says('{}') });
+  const request = {
+    ...ask(),
+    options: { headers: { 'x-session': 's-1' } },
+  };
+
+  await told(
+    motty({ name: 'relay' }).handle(({ prompt }) => {
+      if (prompt.options?.headers !== undefined) {
+        prompt.options.headers['x-session'] = 's-2';
+      }
+      return model('acme/small').complete(prompt);
+    }),
+    host,
+    request,
+  );
+
+  expect(host.sent('acme/small')[0]?.options).toEqual({
+    headers: { 'x-session': 's-2' },
+  });
+  expect(request.options).toEqual({ headers: { 'x-session': 's-1' } });
+});
+
 test('a beforeHandle that throws rejects the request with its error', async () => {
   const seen = await told(
     motty({ name: 'coder' })

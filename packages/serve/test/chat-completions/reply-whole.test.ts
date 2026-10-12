@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import type { Chunk } from '@mottyjs/core/host';
 import { collected } from '../../src/chat-completions/reply-whole.ts';
 
 test('text is collected into one completion with its usage', () => {
@@ -417,5 +418,257 @@ test('a field of sound named as the prototype is a field like any other', () => 
 
   expect(JSON.stringify(reply)).toContain(
     '"audio":{"id":"audio_1","__proto__":{"x":1},"data":"UklG"}',
+  );
+});
+
+test('what a tool call came with is collected into the call, where it sat', () => {
+  expect(
+    collected(
+      [
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          name: 'weather',
+          arguments: '{"city":',
+          provider: {
+            'openai.chat': {
+              extra_content: { google: { thought_signature: 'c2ln' } },
+              function: { signature: 'c2ln' },
+            },
+          },
+        },
+        {
+          type: 'tool_call',
+          id: 'call_b',
+          name: 'shell',
+          arguments: 'ls',
+          provider: {
+            'openai.chat': { type: 'custom', custom: { signature: 'c2ln' } },
+          },
+        },
+        { type: 'tool_call', id: 'call_a', arguments: '"Oslo"}' },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            {
+              extra_content: { google: { thought_signature: 'c2ln' } },
+              id: 'call_a',
+              type: 'function',
+              function: {
+                signature: 'c2ln',
+                name: 'weather',
+                arguments: '{"city":"Oslo"}',
+              },
+            },
+            {
+              id: 'call_b',
+              type: 'custom',
+              custom: { signature: 'c2ln', name: 'shell', input: 'ls' },
+            },
+          ],
+        },
+      },
+    ],
+  });
+});
+
+test('what a later fragment of a tool call came with is collected too', () => {
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: '{}',
+          provider: { 'openai.chat': { extra_content: { a: 1 } } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            {
+              extra_content: { a: 1 },
+              id: 'call_a',
+              type: 'function',
+              function: { name: 'weather', arguments: '{}' },
+            },
+          ],
+        },
+      },
+    ],
+  });
+});
+
+test('a tool call with nothing of this API`s is collected as its own fields alone', () => {
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '{}' },
+        {
+          type: 'tool_call',
+          id: 'call_b',
+          name: 'now',
+          arguments: '{}',
+          provider: { 'openai.responses': { namespace: 'time' } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toEqual({
+    id: 'chatcmpl-req_1',
+    object: 'chat.completion',
+    created: expect.any(Number),
+    model: 'coder',
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: null,
+          refusal: null,
+          tool_calls: [
+            {
+              id: 'call_a',
+              type: 'function',
+              function: { name: 'weather', arguments: '{}' },
+            },
+            {
+              id: 'call_b',
+              type: 'function',
+              function: { name: 'now', arguments: '{}' },
+            },
+          ],
+        },
+        logprobs: null,
+        finish_reason: 'tool_calls',
+      },
+    ],
+  });
+});
+
+test.each([
+  [
+    { index: 9, id: 'call_stray' },
+    { id: 'call_late', type: 'stray' },
+    { type: 'function', function: { name: 'shell', arguments: 'ls' } },
+  ],
+  [
+    {},
+    { function: { name: 'stray', arguments: 'stray', input: 'stray' } },
+    { type: 'function', function: { name: 'shell', arguments: 'ls' } },
+  ],
+  [
+    {
+      type: 'custom',
+      custom: { name: 'stray', arguments: 'stray', input: 'stray' },
+    },
+    {},
+    { type: 'custom', custom: { name: 'shell', input: 'ls' } },
+  ],
+])(
+  'a carried field never takes the place of the call`s own: %j, then %j',
+  (first, second, call) => {
+    expect(
+      collected(
+        [
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            name: 'shell',
+            arguments: 'l',
+            provider: { 'openai.chat': first },
+          },
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            arguments: 's',
+            provider: { 'openai.chat': second },
+          },
+        ],
+        { type: 'finish', reason: 'tool_calls' },
+        { id: 'req_1', model: 'coder', muted: false },
+      ),
+    ).toHaveProperty('choices.0.message.tool_calls', [
+      { id: 'call_a', ...call },
+    ]);
+  },
+);
+
+test('what a later fragment not marked as its custom call holds inside is collected inside the custom object', () => {
+  expect(
+    collected(
+      [
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          name: 'shell',
+          arguments: 'l',
+          provider: {
+            'openai.chat': { type: 'custom', custom: { early: 1 } },
+          },
+        },
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: 's',
+          provider: {
+            'openai.chat': { function: { signature: 'sig' }, late: 1 },
+          },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toHaveProperty('choices.0.message.tool_calls', [
+    {
+      late: 1,
+      id: 'call_a',
+      type: 'custom',
+      custom: { early: 1, signature: 'sig', name: 'shell', input: 'ls' },
+    },
+  ]);
+});
+
+test('a call of many fragments that each carry a field of their own is collected whole', () => {
+  const whole = collected(
+    [
+      { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+      ...Array.from(
+        { length: 40_000 },
+        (_, at): Chunk => ({
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: 'x',
+          provider: {
+            'openai.chat': { [`k${at}`]: at, function: { [`f${at}`]: at } },
+          },
+        }),
+      ),
+    ],
+    { type: 'finish', reason: 'tool_calls' },
+    { id: 'req_1', model: 'coder', muted: false },
+  );
+
+  expect(whole).toHaveProperty('choices.0.message.tool_calls.0.k39999', 39_999);
+  expect(whole).toHaveProperty(
+    'choices.0.message.tool_calls.0.function.f39999',
+    39_999,
+  );
+  expect(whole).toHaveProperty(
+    'choices.0.message.tool_calls.0.function.arguments',
+    'x'.repeat(40_000),
   );
 });

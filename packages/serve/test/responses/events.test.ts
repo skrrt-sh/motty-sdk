@@ -460,11 +460,18 @@ test('argument deltas are fragments of one call, and a call ends in tool_calls',
     },
     { type: 'tool_call', id: 'call_1', arguments: '{"city"', block: 1 },
     { type: 'tool_call', id: 'call_1', arguments: ':"Oslo"}', block: 1 },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '',
+      ended: true,
+      block: 1,
+    },
     { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
   ]);
 });
 
-test('an item sent whole, with no deltas before it, is still read in full', async () => {
+test('an item sent whole, with no deltas before it, is still read in full, a custom call marked and a function call not', async () => {
   expect(
     await Array.fromAsync(
       events(
@@ -492,19 +499,46 @@ test('an item sent whole, with no deltas before it, is still read in full', asyn
               input: '*** Begin',
             },
           },
+          {
+            type: 'response.output_item.done',
+            output_index: 2,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              call_id: 'call_2',
+              arguments: '{}',
+              name: 'time',
+            },
+          },
           { type: 'response.completed', response: { status: 'completed' } },
         ),
       ),
     ),
   ).toEqual([
-    { type: 'text', text: 'Hello', block: 0 },
+    {
+      type: 'text',
+      text: 'Hello',
+      block: 0,
+      provider: { 'openai.responses': { phase: 'final_answer' } },
+    },
     { type: 'refusal', text: 'No more.', block: 0 },
     {
       type: 'tool_call',
       id: 'call_1',
       name: 'patch',
       arguments: '*** Begin',
+      ended: true,
       block: 1,
+      provider: { 'openai.responses': { type: 'custom_tool_call' } },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_2',
+      name: 'time',
+      arguments: '{}',
+      ended: true,
+      block: 2,
     },
     { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
   ]);
@@ -691,6 +725,88 @@ test('the first text of a message says its phase', async () => {
   ]);
 });
 
+test('a phase told only as the item ends, after its text, is told in text that is empty', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: { type: 'message', role: 'assistant', content: [] },
+          },
+          { type: 'response.output_text.delta', output_index: 0, delta: 'a' },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              type: 'message',
+              role: 'assistant',
+              phase: 'commentary',
+              content: [{ type: 'output_text', text: 'a', annotations: [] }],
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    { type: 'text', text: 'a', block: 0 },
+    {
+      type: 'text',
+      text: '',
+      block: 0,
+      provider: { 'openai.responses': { phase: 'commentary' } },
+    },
+    { type: 'finish', reason: 'stop', rawReason: 'completed' },
+  ]);
+});
+
+test('a phase is told before a citation that comes ahead of the text, and once', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: { type: 'message', role: 'assistant', phase: 'commentary' },
+          },
+          {
+            type: 'response.output_text.annotation.added',
+            output_index: 0,
+            annotation: { type: 'url_citation', url: 'https://x.test' },
+          },
+          { type: 'response.output_text.delta', output_index: 0, delta: 'a' },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: { type: 'message', role: 'assistant', phase: 'commentary' },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'text',
+      text: '',
+      block: 0,
+      provider: { 'openai.responses': { phase: 'commentary' } },
+    },
+    {
+      type: 'citation',
+      url: 'https://x.test',
+      block: 0,
+      provider: {
+        'openai.responses': { type: 'url_citation', url: 'https://x.test' },
+      },
+    },
+    { type: 'text', text: 'a', block: 0 },
+    { type: 'finish', reason: 'stop', rawReason: 'completed' },
+  ]);
+});
+
 test('an annotation is a citation, and an item of no known kind is passed on', async () => {
   expect(
     await Array.fromAsync(
@@ -773,6 +889,11 @@ test('an incomplete response finishes with the reason it was cut for', async () 
     rawReason: 'max_output_tokens',
     id: 'resp_1',
     usage: { input: 3, output: 64 },
+    provider: {
+      'openai.responses': {
+        incomplete_details: { reason: 'max_output_tokens' },
+      },
+    },
   });
   expect(await last('content_filter')).toMatchObject({
     reason: 'content_filter',
@@ -782,10 +903,82 @@ test('an incomplete response finishes with the reason it was cut for', async () 
     reason: 'other',
     rawReason: 'steered',
   });
-  expect(await last()).toMatchObject({
+  expect(await last()).toEqual({
+    type: 'finish',
     reason: 'other',
     rawReason: 'incomplete',
+    id: 'resp_1',
+    usage: { input: 3, output: 64 },
   });
+});
+
+test('of what a response says beside what is read, only what tells the outcome rides on its finish', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse({
+          type: 'response.completed',
+          response: {
+            end_turn: false,
+            incomplete_details: null,
+            service_tier: 'priority',
+            prompt_cache_key: 'k',
+            safety_identifier: 's',
+            made_up: { a: [1] },
+          },
+        }),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'completed',
+      provider: { 'openai.responses': { end_turn: false } },
+    },
+  ]);
+});
+
+test('a piece of a call that comes after its item was done is not read', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: { type: 'function_call', call_id: 'call_1', name: 'time' },
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              type: 'function_call',
+              call_id: 'call_1',
+              name: 'time',
+              arguments: '{"x":',
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: '1}',
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    { type: 'tool_call', id: 'call_1', name: 'time', arguments: '', block: 0 },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '{"x":',
+      ended: true,
+      block: 0,
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
 });
 
 test('a failed response is the one error that ends the stream', async () => {
@@ -1015,3 +1208,403 @@ test('a message sent whole, with no deltas before it, keeps its annotations', as
     { type: 'finish', reason: 'stop', rawReason: 'completed' },
   ]);
 });
+
+test('a call that comes whole, with nothing before it, says what else its item held', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{"message":"say hi"}',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '{"message":"say hi"}',
+      ended: true,
+      block: 0,
+      provider: { 'openai.responses': { namespace: 'multi_agent_v1' } },
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('a call whose arguments come only with its end says what else its item held at its start', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            item: {
+              id: 'fc_000ee',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_BeCk',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+            output_index: 0,
+          },
+          {
+            type: 'response.function_call_arguments.done',
+            arguments: '{"message":"say hi"}',
+            item_id: 'fc_000ee',
+            output_index: 0,
+          },
+          {
+            type: 'response.output_item.done',
+            item: {
+              id: 'fc_000ee',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{"message":"say hi"}',
+              call_id: 'call_BeCk',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+            output_index: 0,
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_BeCk',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { namespace: 'multi_agent_v1' } },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_BeCk',
+      arguments: '{"message":"say hi"}',
+      ended: true,
+      block: 0,
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('the end of a call that holds more than its opening told says what it holds', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              caller: 'model',
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: '{}',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{}',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              caller: 'model',
+              namespace: 'agents',
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { caller: 'model' } },
+    },
+    { type: 'tool_call', id: 'call_1', arguments: '{}', block: 0 },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '',
+      ended: true,
+      block: 0,
+      provider: {
+        'openai.responses': { caller: 'model', namespace: 'agents' },
+      },
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('a piece of a call that comes before its item waits for it, and goes out under its id and name', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: '{"a"',
+          },
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_REAL',
+              name: 'f',
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: ':1}',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{"a":1}',
+              call_id: 'call_REAL',
+              name: 'f',
+            },
+          },
+          {
+            type: 'response.custom_tool_call_input.delta',
+            output_index: 1,
+            delta: '1+',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 1,
+            item: {
+              id: 'ctc_1',
+              type: 'custom_tool_call',
+              status: 'completed',
+              input: '1+1',
+              call_id: 'call_2',
+              name: 'exec',
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 2,
+            delta: '{}',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 2,
+            item: { type: 'function_call', call_id: 'call_3', name: 'time' },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_REAL',
+      name: 'f',
+      arguments: '{"a"',
+      block: 0,
+    },
+    { type: 'tool_call', id: 'call_REAL', arguments: ':1}', block: 0 },
+    {
+      type: 'tool_call',
+      id: 'call_REAL',
+      arguments: '',
+      ended: true,
+      block: 0,
+    },
+    {
+      type: 'tool_call',
+      id: 'call_2',
+      name: 'exec',
+      arguments: '1+1',
+      ended: true,
+      block: 1,
+      provider: { 'openai.responses': { type: 'custom_tool_call' } },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_3',
+      name: 'time',
+      arguments: '{}',
+      ended: true,
+      block: 2,
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('the end of a call says again what its item holds otherwise than its opening told', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: null,
+              caller: { a: 1 },
+            },
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'agents',
+              caller: { a: 2 },
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { namespace: null, caller: { a: 1 } } },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '',
+      ended: true,
+      block: 0,
+      provider: {
+        'openai.responses': { namespace: 'agents', caller: { a: 2 } },
+      },
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test.each([
+  [
+    'completed',
+    [{ type: 'tool_call', id: 'call_1', arguments: '', ended: true, block: 0 }],
+  ],
+  ['incomplete', []],
+] as const)(
+  'the end of a call that holds what its opening told and is %s says only whether the call is whole',
+  async (status, whole) => {
+    expect(
+      await Array.fromAsync(
+        events(
+          sse(
+            {
+              type: 'response.output_item.added',
+              output_index: 0,
+              item: {
+                id: 'fc_1',
+                type: 'function_call',
+                status: 'in_progress',
+                arguments: '',
+                call_id: 'call_1',
+                name: 'spawn_agent',
+                namespace: 'agents',
+                caller: { kind: 'model', tools: ['a', { b: null }] },
+              },
+            },
+            {
+              type: 'response.function_call_arguments.delta',
+              output_index: 0,
+              delta: '{}',
+            },
+            {
+              type: 'response.output_item.done',
+              output_index: 0,
+              item: {
+                id: 'fc_1',
+                type: 'function_call',
+                status,
+                arguments: '{}',
+                call_id: 'call_1',
+                name: 'spawn_agent',
+                namespace: 'agents',
+                caller: { kind: 'model', tools: ['a', { b: null }] },
+              },
+            },
+            { type: 'response.completed', response: {} },
+          ),
+        ),
+      ),
+    ).toEqual([
+      {
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'spawn_agent',
+        arguments: '',
+        block: 0,
+        provider: {
+          'openai.responses': {
+            namespace: 'agents',
+            caller: { kind: 'model', tools: ['a', { b: null }] },
+          },
+        },
+      },
+      { type: 'tool_call', id: 'call_1', arguments: '{}', block: 0 },
+      ...whole,
+      { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+    ]);
+  },
+);

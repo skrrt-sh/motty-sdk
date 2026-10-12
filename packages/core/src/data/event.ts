@@ -14,6 +14,7 @@ type KnownChunk =
       readonly name?: string;
       readonly arguments: string;
       readonly hosted?: boolean;
+      readonly ended?: boolean;
     }
   | {
       readonly type: 'tool_result';
@@ -128,13 +129,10 @@ function loose(value: unknown): value is Loose {
   return typeof value === 'object' && value !== null;
 }
 
-function maybeText(value: unknown): boolean {
-  return value === undefined || typeof value === 'string';
-}
-
-function maybeFlag(value: unknown): boolean {
-  return value === undefined || typeof value === 'boolean';
-}
+const maybe = (kind: 'string' | 'boolean') => (value: unknown) =>
+  value === undefined || typeof value === kind;
+const maybeText = maybe('string');
+const maybeFlag = maybe('boolean');
 
 function maybeData(value: unknown): boolean {
   return value === undefined || (loose(value) && !Array.isArray(value));
@@ -182,7 +180,8 @@ function isChunk(value: Loose): value is Chunk {
         typeof value.id === 'string' &&
         typeof value.arguments === 'string' &&
         maybeText(value.name) &&
-        maybeFlag(value.hosted)
+        maybeFlag(value.hosted) &&
+        maybeFlag(value.ended)
       );
     case 'tool_result':
       return (

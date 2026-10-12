@@ -971,3 +971,136 @@ test('a million calls in one message are each an item, not a stack too deep', ()
 
   expect(input).toHaveLength(1_000_000);
 });
+
+test('a call with free text and its result are written as custom where no tool was declared', () => {
+  expect(
+    inputOf(
+      leaving('responses'),
+      [
+        {
+          role: 'assistant',
+          parts: [
+            { type: 'tool_call', id: 'call_1', name: 'exec', input: '1+1\n' },
+            { type: 'tool_call', id: 'call_2', name: 'time', input: {} },
+          ],
+        },
+        {
+          role: 'tool',
+          parts: [
+            { type: 'tool_result', id: 'call_1', text: '2' },
+            { type: 'tool_result', id: 'call_2', text: 'noon' },
+          ],
+        },
+      ],
+      new Set(),
+    ).input,
+  ).toEqual([
+    {
+      call_id: 'call_1',
+      name: 'exec',
+      type: 'custom_tool_call',
+      input: '1+1\n',
+    },
+    { call_id: 'call_2', name: 'time', type: 'function_call', arguments: '{}' },
+    { type: 'custom_tool_call_output', call_id: 'call_1', output: '2' },
+    { type: 'function_call_output', call_id: 'call_2', output: 'noon' },
+  ]);
+});
+
+test('a tool call that holds only another API`s data is written as its own fields alone', () => {
+  expect(
+    inputOf(
+      leaving('responses'),
+      [
+        {
+          role: 'assistant',
+          parts: [
+            {
+              type: 'tool_call',
+              id: 'call_1',
+              name: 'time',
+              input: {},
+              provider: { anthropic: { caller: { type: 'direct' } } },
+            },
+            {
+              type: 'tool_call',
+              id: 'call_2',
+              name: 'now',
+              input: {},
+              provider: {
+                anthropic: { caller: { type: 'direct' } },
+                'openai.responses': { namespace: 'time' },
+              },
+            },
+          ],
+        },
+      ],
+      new Set(),
+    ).input,
+  ).toEqual([
+    { call_id: 'call_1', name: 'time', type: 'function_call', arguments: '{}' },
+    {
+      namespace: 'time',
+      call_id: 'call_2',
+      name: 'now',
+      type: 'function_call',
+      arguments: '{}',
+    },
+  ]);
+});
+
+test('a tool result that holds only another API`s data still fails the call', () => {
+  expect(() =>
+    inputOf(
+      leaving('responses'),
+      [
+        {
+          role: 'tool',
+          parts: [
+            {
+              type: 'tool_result',
+              id: 'call_1',
+              text: 'noon',
+              provider: { anthropic: { type: 'web_search_tool_result' } },
+            },
+          ],
+        },
+      ],
+      new Set(),
+    ),
+  ).toThrow(
+    new Unsupported(
+      'The Responses API cannot carry a tool result of anthropic: type',
+    ),
+  );
+});
+
+test.each([
+  [{}, { type: 'function_call', arguments: '{}' }],
+  ['now', { type: 'custom_tool_call', input: 'now' }],
+])(
+  'what a call carries never stands in for a field the codec writes of it',
+  (input, written) => {
+    expect(
+      inputOf(
+        leaving('responses'),
+        [
+          {
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool_call',
+                id: 'call_1',
+                name: 'time',
+                input,
+                hints: { 'openai.responses': { input: 'evil', id: 'fc_1' } },
+                provider: { 'openai.responses': { arguments: 'evil' } },
+              },
+            ],
+          },
+        ],
+        new Set(),
+      ).input,
+    ).toEqual([{ id: 'fc_1', call_id: 'call_1', name: 'time', ...written }]);
+  },
+);

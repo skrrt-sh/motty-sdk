@@ -1,5 +1,6 @@
 import type { Json, Options } from '@mottyjs/core/host';
 import type { Taken } from '../codec.ts';
+import { type Effort, nearest } from './effort.ts';
 import type { Leaving } from './fieldless.ts';
 import { type Dict, given } from './json.ts';
 
@@ -14,17 +15,26 @@ export function reasons(
 }
 
 // An effort the model does not take is left out before it is translated, so
-// nothing an encoder would add for it is sent either.
+// nothing an encoder would add for it is sent either. A level the model has
+// no word for goes as the nearest it has. A level the API itself translates
+// is the encoder's to name, and is asked of no model.
 export function effortless(
   left: Leaving,
   taken: Taken | undefined,
   reasoning: Options['reasoning'],
+  translated: readonly Effort[] = [],
 ): Options['reasoning'] {
-  if (taken?.effort !== false || reasoning?.effort === undefined) {
-    return reasoning;
+  const { effort, ...rest } = reasoning ?? {};
+  const levels = taken?.effort ?? true;
+  if (effort === undefined || levels === true) return reasoning;
+  if (levels !== false && translated.includes(effort)) return reasoning;
+  const level = levels === false ? undefined : nearest(levels, effort);
+  if (level === effort) return reasoning;
+  if (level !== undefined) {
+    left.without('reasoning.level', effort);
+    return { ...rest, effort: level };
   }
-  left.without('reasoning.model', reasoning.effort);
-  const { effort: _, ...rest } = reasoning;
+  left.without('reasoning.model', effort);
   return Object.keys(rest).length === 0 ? undefined : rest;
 }
 

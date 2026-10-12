@@ -32,6 +32,15 @@ export default motty({ name: "coder" })
   });
 ```
 
+A call may state `headers` in its options for the request that answers it. They are sent only
+where the host's connection allows the name, and a header with no value is skipped:
+
+```ts
+const session = request.headers.get("x-session");
+prompt.options = { ...prompt.options, headers: { "x-session": session } };
+return sonnet.complete(prompt);
+```
+
 A plugin reaches the host through the import path `@mottyjs/core/host`.
 
 The SDK as a whole is described in the

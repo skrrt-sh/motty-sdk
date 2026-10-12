@@ -1,13 +1,21 @@
 import type { Json, Part } from '@mottyjs/core/host';
 import { address, inline } from '../wire/data-url.ts';
 import type { Leaving } from '../wire/fieldless.ts';
-import { type Dict, dict, given, isDict, list, text } from '../wire/json.ts';
+import {
+  type Dict,
+  dict,
+  given,
+  isDict,
+  list,
+  text,
+  without,
+} from '../wire/json.ts';
 import { breakpoint } from '../wire/openai-cache.ts';
 import { detailed } from '../wire/openai-detail.ts';
 import { filename } from '../wire/openai-file.ts';
 import { a, invalid, unsupported } from '../wire/refusals.ts';
 import { carried, family, hinted, noted, own } from './family.ts';
-import { field, without } from './fields.ts';
+import { field } from './fields.ts';
 
 // What a known content part holds beside what is read may be left out by
 // another family, and is put back for this one. A cache marker is read, so

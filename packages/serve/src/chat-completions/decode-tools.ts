@@ -2,7 +2,8 @@ import type { Json, Tool, ToolChoice } from '@mottyjs/core/host';
 import { type Dict, dict, isDict, list } from '../wire/json.ts';
 import { parameterless } from '../wire/openai-tools.ts';
 import { invalid } from '../wire/refusals.ts';
-import { family } from './family.ts';
+import { family, noted } from './family.ts';
+import { toolFields, unreadOf } from './unread.ts';
 
 function described(description: Json | undefined): { description?: string } {
   return typeof description === 'string' ? { description } : {};
@@ -35,6 +36,7 @@ export function toolOf(raw: Json): Tool {
       ...described(description),
       input: isDict(parameters) ? parameters : parameterless(),
       ...(typeof strict === 'boolean' ? { strict } : {}),
+      ...noted(unreadOf(raw, 'function', toolFields) ?? {}),
     };
   }
   if (type === 'custom') {
@@ -48,6 +50,7 @@ export function toolOf(raw: Json): Tool {
       name,
       ...described(description),
       ...(grammar === undefined ? {} : { grammar }),
+      ...noted(unreadOf(raw, 'custom', toolFields) ?? {}),
     };
   }
   return { type: 'provider', provider: { [family]: raw } };

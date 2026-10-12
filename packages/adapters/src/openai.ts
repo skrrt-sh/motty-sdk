@@ -2,7 +2,7 @@ import type { ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn, responsesIn } from '@mottyjs/serve';
 import { type Connection, chat } from './chat.ts';
 import { openaiCuts } from './cuts.ts';
-import { openaiTakes } from './takes.ts';
+import { openaiChatTakes, openaiTakes } from './takes.ts';
 
 export function openai(
   options: {
@@ -47,7 +47,9 @@ export function openai(
     key,
     // Another address is another provider's models, which this rule does
     // not know.
-    ...(address === undefined ? { takes: openaiTakes } : {}),
+    ...(address === undefined
+      ? { takes: api === 'responses' ? openaiTakes : openaiChatTakes }
+      : {}),
     ...connection,
   });
 }

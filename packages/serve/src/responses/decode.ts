@@ -8,13 +8,14 @@ import {
   dict,
   isDict,
   text,
+  without,
 } from '../wire/json.ts';
 import { numberOf } from '../wire/number.ts';
 import { customNames } from '../wire/openai-tools.ts';
 import { meant } from '../wire/provider-data.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { family, marked, noted } from './family.ts';
-import { field, without } from './fields.ts';
+import { field } from './fields.ts';
 import { formless } from './formless.ts';
 import { messagesOf } from './messages.ts';
 import { collected, streamed } from './response.ts';

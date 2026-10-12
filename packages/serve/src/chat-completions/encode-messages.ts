@@ -6,7 +6,8 @@ import { a, unsupported } from '../wire/refusals.ts';
 import { thinking } from './content-chunks.ts';
 import { type Dialect, inlined, plain, returned } from './dialect.ts';
 import { audio, file, image } from './encode-media.ts';
-import { hinted, own } from './family.ts';
+import { hinted, mine, own } from './family.ts';
+import { wireCall } from './unread.ts';
 
 type Known = Exclude<Part, { type: 'provider' }>;
 
@@ -75,11 +76,13 @@ function call(
   left.without('tool.cache', part.cache);
   left.without('hosted', part.hosted);
   const { id, name, input } = part;
-  if (typeof input === 'string') {
-    return { id, type: 'custom', custom: { name, input } };
-  }
-  const written = part.raw ?? JSON.stringify(input);
-  return { id, type: 'function', function: { name, arguments: written } };
+  const carried = { ...hinted(part.hints), ...mine(part.provider) };
+  return typeof input === 'string'
+    ? wireCall('custom', input, carried, { id, name })
+    : wireCall('function', part.raw ?? JSON.stringify(input), carried, {
+        id,
+        name,
+      });
 }
 
 function result(

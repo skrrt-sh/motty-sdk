@@ -1,17 +1,20 @@
 import {
   type Chunk,
+  disclosed,
   type ErrorFacts,
   type Finish,
-  type FinishReason,
   isTerminal,
   type Json,
   type Progress,
   type RunStream,
+  toFacts,
   type Usage,
 } from '@mottyjs/core/host';
 import type { ServerSentEvent } from '../sse.ts';
-import type { Dict } from '../wire/json.ts';
+import { type Dict, given, text } from '../wire/json.ts';
 import { wireCode } from '../wire/openai-error.ts';
+import { held } from './family.ts';
+import { field } from './fields.ts';
 import type { Sent } from './output.ts';
 import { type Asked, reply } from './reply.ts';
 
@@ -78,27 +81,29 @@ function started({ body }: Asked, id: string): Dict {
   };
 }
 
-function cutBy(reason: FinishReason): string | undefined {
+// An upstream of this API has more reasons than the neutral ones name, so
+// its own word is written where the neutral reason names none.
+function cutBy({ reason, provider }: Finish): string | undefined {
   if (reason === 'length') return 'max_output_tokens';
-  return reason === 'content_filter' ? 'content_filter' : undefined;
+  if (reason === 'content_filter') return 'content_filter';
+  if (reason !== 'other') return undefined;
+  return text(field(field(held(provider), 'incomplete_details'), 'reason'));
 }
 
 // A response cut short is incomplete and says why; any other end, a pause or
 // a call to a tool among them, is a completed response.
-function finished(
-  response: Dict,
-  output: Dict[],
-  { reason, usage }: Finish,
-): Dict {
-  const cut = cutBy(reason);
+function finished(response: Dict, output: Dict[], finish: Finish): Dict {
+  const cut = cutBy(finish);
+  const { end_turn } = held(finish.provider) ?? {};
   return {
+    ...given({ end_turn }),
     ...response,
     status: cut === undefined ? 'completed' : 'incomplete',
     ...(cut === undefined
       ? { completed_at: Math.floor(Date.now() / 1000) }
       : { incomplete_details: { reason: cut } }),
     output,
-    usage: usageBody(usage),
+    usage: usageBody(finish.usage),
   };
 }
 
@@ -134,17 +139,29 @@ export async function* streamed(
   });
   yield written({ type: 'response.created', response });
   yield written({ type: 'response.in_progress', response });
+  function* broken(facts: ErrorFacts, usage?: Usage) {
+    for (const sent of closed('failed')) yield written(sent);
+    yield written({
+      type: 'response.failed',
+      response: failed(response, output, facts, usage),
+    });
+  }
   for await (const event of events) {
     if (!isTerminal(event)) {
-      for (const sent of push(event)) yield written(sent);
+      let sent: Sent[];
+      try {
+        sent = push(event);
+      } catch (thrown) {
+        // A chunk that cannot be written ends the stream the way an error
+        // does, since a stream that only stops reads as a lost connection.
+        yield* broken(disclosed(toFacts(thrown)));
+        return;
+      }
+      for (const one of sent) yield written(one);
       continue;
     }
     if (event.type === 'error') {
-      for (const sent of closed('failed')) yield written(sent);
-      yield written({
-        type: 'response.failed',
-        response: failed(response, output, event.error, event.usage),
-      });
+      yield* broken(event.error, event.usage);
       return;
     }
     const end = ending(event);
@@ -157,8 +174,8 @@ export async function* streamed(
   }
 }
 
-function ending({ reason }: Finish): 'whole' | 'cut' {
-  return cutBy(reason) === undefined ? 'whole' : 'cut';
+function ending(finish: Finish): 'whole' | 'cut' {
+  return cutBy(finish) === undefined ? 'whole' : 'cut';
 }
 
 export function collected(

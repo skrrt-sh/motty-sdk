@@ -12,8 +12,8 @@ export type ReadonlyJson =
 export type JsonSchema = { [keyword: string]: ReadonlyJson };
 
 // Keyed by whoever can read the value back: a wire family, or something narrower
-// when a value is not portable inside one. A key of another family fails the
-// call when it sits in `provider` and is dropped when it sits in `hints`.
+// when a value is not portable inside one. A key of another family is
+// dropped when it sits in `hints`.
 export type ProviderData = { [key: string]: ReadonlyJson };
 
 export type Cache = { ttl?: '5m' | '1h' };
@@ -120,6 +120,12 @@ export type Options = {
   presencePenalty?: number;
   frequencyPenalty?: number;
   user?: string;
+  /**
+   * Sent upstream only where the host's connection allows the name. The
+   * connection's and the API's own headers win, a null or undefined value is skipped,
+   * and credentials, cookies and connection headers are never sent.
+   */
+  headers?: { readonly [name: string]: string | null | undefined };
   provider?: ProviderData;
   hints?: ProviderData;
 };

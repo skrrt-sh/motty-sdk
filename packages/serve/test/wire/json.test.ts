@@ -8,6 +8,7 @@ import {
   number,
   parsed,
   text,
+  without,
 } from '../../src/wire/json.ts';
 
 test('only a JSON object is a dict', () => {
@@ -119,4 +120,17 @@ test('a given field named as the prototype is a field, and nothing is read throu
   expect(Object.keys(kept)).toEqual(['__proto__', 'a']);
   expect(Object.getPrototypeOf(kept)).toBe(Object.prototype);
   expect(planted).toBeUndefined();
+});
+
+test('the named fields are left out, and one named as the prototype is a field', () => {
+  const rest = without(
+    dict(parsed('{"__proto__":{"planted":true},"a":1,"b":2}')),
+    ['a'],
+  );
+  const { planted } = rest;
+
+  expect(Object.keys(rest)).toEqual(['__proto__', 'b']);
+  expect(Object.getPrototypeOf(rest)).toBe(Object.prototype);
+  expect(planted).toBeUndefined();
+  expect(without({ a: 1 }, [])).toEqual({ a: 1 });
 });

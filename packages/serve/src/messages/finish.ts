@@ -1,5 +1,5 @@
 import type { Finish, FinishReason, Json, Usage } from '@mottyjs/core/host';
-import { type Dict, dict, given, number } from '../wire/json.ts';
+import { type Dict, dict, given, number, without } from '../wire/json.ts';
 
 export function reasonOf(stop: Json | undefined): FinishReason {
   switch (stop) {
@@ -52,8 +52,9 @@ export function merged(held: Dict, more: Dict): Dict {
 }
 
 // This wire counts cached and cache-writing tokens beside the input, the
-// neutral usage inside it.
-export function countsOf(wire: Dict): Usage {
+// neutral usage inside it. One reading names each count, so what is kept
+// apart to be written back as it came is never also counted.
+export function counted(wire: Dict): { usage: Usage; rest: Dict } {
   const {
     input_tokens: fresh,
     output_tokens: output,
@@ -61,10 +62,11 @@ export function countsOf(wire: Dict): Usage {
     cache_creation_input_tokens: written,
     output_tokens_details: details,
     cost,
+    ...rest
   } = wire;
   const cached = number(read);
   const cacheWrite = number(written);
-  const { thinking_tokens: thought } = dict(details);
+  const { thinking_tokens: thought, ...more } = dict(details);
   const reasoning = number(thought);
   const usage: Usage = {};
   if (typeof fresh === 'number') {
@@ -76,19 +78,46 @@ export function countsOf(wire: Dict): Usage {
   if (reasoning !== undefined) usage.reasoning = reasoning;
   // No field of this API: a router adds it, and a caller is sent it as named.
   if (typeof cost === 'number') usage.cost = cost;
-  return usage;
+  return {
+    usage,
+    rest:
+      Object.keys(more).length === 0
+        ? rest
+        : { ...rest, output_tokens_details: more },
+  };
 }
 
-export function countsTo(usage: Usage | undefined): Dict {
+export function countsOf(wire: Dict): Usage {
+  return counted(wire).usage;
+}
+
+// A motty may have changed the counts, so they are written from the neutral
+// usage, and a usage carried from the upstream gives only what is no count.
+export function countsTo(usage: Usage | undefined, carried: Dict = {}): Dict {
   const { input = 0, output = 0, cached, cacheWrite, reasoning } = usage ?? {};
   const { cost } = usage ?? {};
-  return given({
-    input_tokens: Math.max(0, input - (cached ?? 0) - (cacheWrite ?? 0)),
-    cache_creation_input_tokens: cacheWrite,
-    cache_read_input_tokens: cached,
-    output_tokens: output,
-    output_tokens_details:
-      reasoning === undefined ? undefined : { thinking_tokens: reasoning },
-    cost,
-  });
+  const { output_tokens_details: more, ...rest } = counted(carried).rest;
+  const details = given({ ...dict(more), thinking_tokens: reasoning });
+  return {
+    ...rest,
+    ...given({
+      input_tokens: Math.max(0, input - (cached ?? 0) - (cacheWrite ?? 0)),
+      cache_creation_input_tokens: cacheWrite,
+      cache_read_input_tokens: cached,
+      output_tokens: output,
+      output_tokens_details:
+        Object.keys(details).length === 0 ? undefined : details,
+      cost,
+    }),
+  };
+}
+
+export function besides(event: Dict): Dict {
+  return without(event, ['type', 'delta', 'usage']);
+}
+
+// An ending says more of its message and never the message's own fields, so
+// one named among what it carries is not written.
+export function unowned(fields: Dict): Dict {
+  return without(fields, ['id', 'type', 'role', 'model', 'content']);
 }

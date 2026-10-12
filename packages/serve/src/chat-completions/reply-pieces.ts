@@ -1,6 +1,7 @@
 import type { Chunk, Json, Progress } from '@mottyjs/core/host';
 import { type Dict, isDict, list, number } from '../wire/json.ts';
 import { hinted } from './family.ts';
+import { callFields, type Kind, unreadOf } from './unread.ts';
 
 // One shape for both replies, so a stream and a collected message cannot
 // come to differ in what they hold.
@@ -10,10 +11,11 @@ export type Piece =
   | {
       kind: 'call';
       index: number;
-      custom: boolean;
+      type: Kind;
       // Present on a call's first fragment only, as on the wire.
       opened?: { id: string; name: string };
       input: string;
+      carried?: Dict;
     }
   | { kind: 'annotation'; annotation: Dict }
   | { kind: 'audio'; audio: Dict }
@@ -39,7 +41,7 @@ export function pictured(
 
 // One per reply: tool calls are numbered in the order their ids appear.
 export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
-  const calls = new Map<string, { index: number; custom: boolean }>();
+  const calls = new Map<string, { index: number; type: Kind }>();
   let progress: number | undefined;
   let thinking = false;
   let length = 0;
@@ -71,8 +73,11 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
   function said(
     kind: 'content' | 'refusal',
     event: Extract<Chunk, { type: 'text' | 'refusal' }>,
-  ): Piece {
+  ): Piece | undefined {
     const { logprobs } = hinted(event.provider);
+    // Likelihoods may come on an empty text. Any other empty text says
+    // nothing a client can use.
+    if (event.text === '' && !Array.isArray(logprobs)) return undefined;
     if (kind === 'content') length += event.text.length;
     return {
       kind,
@@ -95,14 +100,27 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
         // A tool the upstream ran itself is nothing this caller may answer.
         if (event.hosted === true) return undefined;
         const known = calls.get(event.id);
-        const { type } = hinted(event.provider);
+        const own = hinted(event.provider);
+        const { type: mark } = own;
         // An upstream of another API marks no call: the caller's tools say.
         const call = known ?? {
           index: calls.size,
-          custom: type === 'custom' || customs?.has(event.name ?? '') === true,
+          type:
+            mark === 'custom' || customs?.has(event.name ?? '') === true
+              ? 'custom'
+              : 'function',
         };
         calls.set(event.id, call);
-        return {
+        // A late fragment of provider data alone may hold none this wire
+        // writes, and a client need not be sent a fragment that says nothing.
+        if (
+          known !== undefined &&
+          event.arguments === '' &&
+          unreadOf(own, call.type, callFields) === undefined
+        ) {
+          return undefined;
+        }
+        const piece: Piece = {
           kind: 'call',
           ...call,
           ...(known === undefined
@@ -110,6 +128,10 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
             : {}),
           input: event.arguments,
         };
+        // Set, not spread: few fragments carry anything, and a spread for
+        // those that do not cost a sixth of what collecting a reply does.
+        if (event.provider !== undefined) piece.carried = own;
+        return piece;
       }
       case 'citation': {
         if (event.url === undefined) return undefined;

@@ -1,6 +1,7 @@
 import type { Chunk, Json } from '@mottyjs/core/host';
 import { given } from '../wire/json.ts';
 import { held } from './family.ts';
+import { put } from './fields.ts';
 import {
   contentPart,
   ended,
@@ -11,30 +12,28 @@ import {
   type Writing,
 } from './output.ts';
 
-function spoken(
-  writing: Writing,
-  refusal: boolean,
-  from: Chunk,
-  sent: Sent[],
-): [Message, Spoken] {
-  let now = writing.open;
-  if (now?.kind !== 'message' || now.block !== from.block) {
-    sent.push(...writing.settled());
-    const index = writing.output.length;
-    const { phase } = held(from.provider) ?? {};
-    now = {
-      kind: 'message',
-      index,
-      id: `msg_${writing.id}_${index}`,
-      block: from.block,
-      content: [],
-      item: given({ phase }),
-    };
-    writing.open = now;
-    sent.push(writing.added(messageItem(now, 'in_progress')));
-  }
+function opened(writing: Writing, from: Chunk, sent: Sent[]): Message {
+  const now = writing.open;
+  if (now?.kind === 'message' && now.block === from.block) return now;
+  sent.push(...writing.settled());
+  const index = writing.output.length;
+  const { phase } = held(from.provider) ?? {};
+  const next: Message = {
+    kind: 'message',
+    index,
+    id: `msg_${writing.id}_${index}`,
+    block: from.block,
+    content: [],
+    item: given({ phase }),
+  };
+  writing.open = next;
+  sent.push(writing.added(messageItem(next, 'in_progress')));
+  return next;
+}
+
+function spoken(now: Message, refusal: boolean, sent: Sent[]): Spoken {
   const last = now.content.at(-1);
-  if (last !== undefined && last.refusal === refusal) return [now, last];
+  if (last !== undefined && last.refusal === refusal) return last;
   sent.push(...ended(now));
   const part = { refusal, text: '', annotations: [] };
   now.content.push(part);
@@ -45,7 +44,7 @@ function spoken(
     content_index: now.content.length - 1,
     part: contentPart(part),
   });
-  return [now, part];
+  return part;
 }
 
 export function said(
@@ -54,7 +53,15 @@ export function said(
 ): Sent[] {
   const sent: Sent[] = [];
   const refusal = event.type === 'refusal';
-  const [message, part] = spoken(writing, refusal, event, sent);
+  if (event.text === '') {
+    // A phase may be told with no text to ride on, so text that is empty
+    // says of its item alone, and with no phase it opens no item.
+    const { phase } = held(event.provider) ?? {};
+    if (phase !== undefined) put(opened(writing, event, sent).item, { phase });
+    return sent;
+  }
+  const message = opened(writing, event, sent);
+  const part = spoken(message, refusal, sent);
   part.text += event.text;
   sent.push({
     type: refusal ? 'response.refusal.delta' : 'response.output_text.delta',
@@ -72,7 +79,8 @@ export function cited(
   event: Chunk & { type: 'citation' },
 ): Sent[] {
   const sent: Sent[] = [];
-  const [message, part] = spoken(writing, false, event, sent);
+  const message = opened(writing, event, sent);
+  const part = spoken(message, false, sent);
   // Which words a source backs is not known, so it is cited where the
   // text now ends. A source with no address has no form on this wire.
   const annotation: Json | undefined =

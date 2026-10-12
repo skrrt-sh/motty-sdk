@@ -4,7 +4,7 @@ import { providerData } from '../wire/provider-data.ts';
 
 export const family = 'anthropic';
 
-export const { hinted, own, marked, noted } = providerData(
+export const { hinted, own, mine, marked, noted } = providerData(
   family,
   apis.messages,
 );

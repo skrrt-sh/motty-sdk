@@ -20,39 +20,43 @@ import {
 } from './dialect.ts';
 import { wireMessages } from './encode-messages.ts';
 import { addressed, hinted, own } from './family.ts';
+import { toolFields, withUnread } from './unread.ts';
 
 function tool(left: Leaving, wanted: Tool): Dict {
   if (wanted.type !== 'custom') left.without('tool.cache', wanted.cache);
   switch (wanted.type) {
     case 'function': {
       const { name, description, input, strict } = wanted;
-      return {
+      const carried = {
         ...hinted(wanted.hints),
         ...own(wanted.provider, 'a tool option'),
-        type: 'function',
-        function: given({
-          name,
-          description,
-          parameters: copied(input),
-          strict,
-        }),
       };
+      const inside = { name, description, parameters: copied(input), strict };
+      return withUnread(
+        carried,
+        'function',
+        toolFields,
+        { type: 'function' },
+        given(inside),
+      );
     }
     case 'custom': {
       const { name, description, grammar } = wanted;
-      return {
+      const carried = {
         ...hinted(wanted.hints),
         ...own(wanted.provider, 'a tool option'),
-        type: 'custom',
-        custom: given({
-          name,
-          description,
-          format:
-            grammar === undefined
-              ? undefined
-              : { type: 'grammar', grammar: { ...grammar } },
-        }),
       };
+      const format =
+        grammar === undefined
+          ? undefined
+          : { type: 'grammar', grammar: { ...grammar } };
+      return withUnread(
+        carried,
+        'custom',
+        toolFields,
+        { type: 'custom' },
+        given({ name, description, format }),
+      );
     }
     case 'provider':
       return own(wanted.provider, 'a provider tool');

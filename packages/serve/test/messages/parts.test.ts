@@ -143,7 +143,7 @@ test('a tool call and a hosted tool call are read with their input', () => {
       id: 'toolu_01A09q90qw90lq917835lq9',
       name: 'get_weather',
       input: { location: 'Paris' },
-      provider: { anthropic: { caller: { type: 'direct' } } },
+      hints: { anthropic: { caller: { type: 'direct' } } },
     },
   ]);
   expect(

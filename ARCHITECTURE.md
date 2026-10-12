@@ -966,7 +966,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   against the table; a field the upstream refuses is the upstream's own error.
 - **An adapter says what each of its models takes of the neutral options that differ by model:**
   the sampling settings, each with its range or the one value the model allows, and a reasoning
-  effort. It is a rule over the model's name and whether the request reasons, written once per
+  effort, as every level, none, or the levels the model has a word for. It is a rule over the model's name and whether the request reasons, written once per
   provider, and a connection may state its own in its place. A provider reached through `openai`
   at another address has no rule unless the connection states one, and is sent everything.
 - **The host states prices, and a call's cost is then the host's figure.** `price` in host
@@ -1223,9 +1223,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   is an upstream's own wording, so nothing was kept by the difference.
 - **Caller headers are not forwarded upstream, but for the ones that say what the body may
   hold.** Such a header is the request's own as a body field is: it is read among its family's
-  hints under its own name, and written back as a header to an upstream of the same API. An
-  upstream of another API is sent none, and an author names one on a call the same way. A
-  request's header replaces a connection's of that name whole, as a body field does.
+  hints under its own name, and written back as a header to an upstream of the same API. As a
+  hint it reaches no upstream of another API, and an author names one among a call's hints the
+  same way. A request's header replaces a connection's of that name whole, as a body field does.
   - Anthropic Messages: every `anthropic-*` header but the version, which the codec speaks one
     of. The rule is the API's own names and no list of them, as Claude Code's gateway guide
     asks: the betas change with each release, and a list would leave out the next.
@@ -1236,6 +1236,31 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   every header but a denied list. A token for a service the motty calls is sent in a header no
   API names a credential, and a list cannot know it, so it would reach the model provider; a
   header left out fails aloud, and a secret sent on is never seen.
+- **A call may state headers, and a connection forwards none of them unless the host names
+  them.** `forwardHeaders` lists the names, or is `true` for a host that trusts its motty with
+  every header outside a fixed set. Cause: a drop-in endpoint was wanted for harnesses whose headers the SDK
+  cannot know. No denied list is complete, and letting the connection win protects only the
+  names the host stated, so a gateway that acts on a header the host never set, one that
+  names where a request goes on or which account pays, would send the host's credential where
+  an untrusted motty chose. Rejected: a denied list alone as the default.
+- **The connection's own headers, credentials, cookies and the headers that describe the
+  caller's body are never sent under either form, and the connection's and the API's own
+  headers win over a call's.** Whatever the call's `Connection` header names is never sent
+  either. The common headers that say where a request came from are left out unless the host
+  names them, since a host may front its own gateway. What is left out is a warning on the
+  call, by name and never by value. The test kit applies the same rules for what a call may
+  state and holds no headers of its own. Cause: live, a forwarded host was refused by both
+  providers, and one harness header turned a working request into a refusal when it travelled
+  with a body it did not match.
+- **A header no request can carry fails the call as the motty's own mistake, and a stated value
+  is not cut from an upstream's failure.** A caller's relayed header already crossed HTTP, so
+  a malformed one is the motty's. A header that would be sent and is stated in two letter cases
+  fails the same way, since a request carries a name once and the order the two were written in
+  would choose the value; one that is left out anyway stays a single warning. The cut keeps
+  the host's credentials out of an error, and a call's headers are already held by the motty
+  and its caller; cut, a provider's sentence naming the beta value it refused came back
+  without it. Rejected: answering the caller with a 400; cutting a stated value as a
+  connection's is.
 
 ### Wire fidelity
 
@@ -1253,7 +1278,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   deep was answered with a bare server error.
 - **What only one family reads is carried in two maps.** `provider` holds what changes the meaning:
   an upstream whose family the map has no entry for fails the call with `Unsupported`. `hints`
-  holds what may be dropped.
+  holds what may be dropped. A refusal names the fields it could not carry, never their
+  values. Cause: an author could not tell what to strip.
+- **What a call to one of the caller's own tools holds for another family alone never refuses
+  the call.** It is encoded as if it held none, and a hosted call, a result and every other
+  part keep the refusal. Cause: an author who built history from an answer's chunks copied
+  `provider` onto the part, and the next call to a model of another family, as in a
+  `fallback` across families, failed with `Unsupported`. Rejected: leaving it to each
+  encoder, under which Chat Completions encoded such a call and the other two refused it.
 - **A `provider` map with an entry for each family it may reach is sent to each its own.** An
   entry for another family was never this API's to carry, and an empty entry says the author
   has nothing to add for this one. Cause: a map with entries for two families failed on both,
@@ -1304,6 +1336,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   effort.** The codec fails only what the API itself has no form for. What one model takes and
   another refuses is sent, and the upstream's own error is passed on as such: a reasoning
   budget, a forced tool choice.
+- **A user identifier longer than 64 characters is left out of a request to the Responses API
+  and reported, never a failed call.** One within the limit is sent as said, and Chat
+  Completions is sent one of any length. Cause: Claude Code names its caller in 150 characters
+  on every request and the Responses API refuses more than 64, so no session of it ran on an
+  OpenAI model; Chat Completions took the same 150 from OpenAI and from a router. The limit
+  applies to whichever identifier would be sent, the caller's or the host's. Rejected: cutting
+  the identifier short, or sending one said with less weight in its place, either of which
+  would name a different caller.
 - **A sampling setting or a reasoning effort the model does not take is left out and reported,
   never a failed call.** A value outside the model's range is sent as the nearest one inside it,
   and reported; it is never rescaled, since one means the model's own distribution on every API.
@@ -1312,6 +1352,22 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   thirteen current Claude models refuse any temperature but one and most OpenAI reasoning models
   refuse it unless told not to reason, while nearly every OpenAI-style client sends one; and a
   panel that asked every seat for an effort failed on the seat that cannot reason.
+- **A reasoning effort is a ladder, and a rule says which levels a model has a word for.** A
+  level the model lacks goes as the nearest it has, the higher of two equally near, and is
+  reported. An order not to reason goes to a model with no word for it as its lowest level.
+  The levels are asked of the model before the API translates anything, so what is sampled
+  follows the level that is sent. Cause: live, of 13 Claude and 37 OpenAI models no two
+  generations took the same levels, OpenAI's two APIs differed for one model, and a rule that
+  said only whether a model takes an effort sent the rest to a 400. Each model names its levels
+  in its own refusal, and the lists are those. Rejected: reading the levels from a refusal and
+  sending again, a second request for every first call to a model.
+- **A rule says whether a Claude model may be left to set its own thinking.** An effort alone
+  turns that on only where the model takes it. A model that thinks only on a budget is sent
+  the effort with no thinking, and thinking a caller hinted that way is left out, each
+  reported. Thinking said in Anthropic's own words is sent as said. Cause: Opus 4.5 takes an
+  effort and refuses adaptive thinking, so every effort from an OpenAI-style caller failed, and
+  a Messages caller a motty sent to an older Haiku failed the same way. Rejected: a budget made
+  up from the effort, a number no caller said.
 - **The rule names the closed set of older models and holds the rest to the newest behaviour.**
   A model released after the SDK is then treated as the latest known one, and a rule is wrong
   only for a provider that goes back on a change. Rejected: a table of every model, out of date
@@ -1323,7 +1379,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   listed. A model that never samples is not named: each one refuses the order not to reason as
   well, so the newest behaviour leaves its sampling out of every request it accepts. A search
   model neither samples nor takes an effort. A model that can reason is sent no top-p of zero,
-  which Chat Completions refuses: the nearest value is sent and reported.
+  which Chat Completions refuses: the nearest value is sent and reported. The effort levels are
+  closed lists of exact names too, and a name not listed is held to the newest, which has every
+  level and no order not to reason. Chat Completions has a rule of its own: it has no word for
+  the highest level, and takes one level more from the o-series.
 - **A router that drops what a model does not take is given the rule of the model's own
   provider,** by the prefix of its name, so what would be dropped silently is left out here and
   reported.
@@ -1403,6 +1462,52 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   declared,** so it is written as custom whichever API answered. Cause: one a Responses
   upstream answered was written to a Chat Completions caller as a function call whose
   arguments were not JSON.
+- **Free-form input is a custom tool's, whoever declared the tool.** A call an upstream marked
+  custom is written as custom, and one echoed in a caller's history with text for input goes
+  back as custom, with no tool list consulted. Cause: Codex declares its tools inside an input
+  item for some models, so the request named no custom tool, and its shell call came back as a
+  function call and went up again with its input quoted as JSON. Towards Anthropic Messages,
+  which takes only an object, such a call is refused. Cause: it was written there as a string,
+  which that API rejects.
+- **What an upstream says of a tool call beyond what a codec reads reaches the caller, and what
+  the caller echoes of it goes back.** On the way down it rides on the call's chunk as its
+  family's own; in a caller's history it is a hint, so an upstream of the same family is sent
+  it and another is not. A codec carries every such field and names none, so the next one a
+  provider adds is kept. What a codec writes of a call itself is never taken from what is
+  carried. Cause: a call to a tool in a namespace reached Codex without its namespace, which
+  Codex then could not route, so no subagent started through a motty; a signature a provider
+  put on a call was lost the same way on Chat Completions, and the next turn refused.
+  Rejected: an echoed call's fields as what changes the meaning, with which a conversation
+  begun on one family failed on its first turn with another.
+- **A `tool_call` chunk may say that its call has ended, and a Responses caller is written the
+  call done then, otherwise when the reply ends.** A reader says so only where the upstream
+  showed the call whole, so an item marked incomplete, or the last block of an Anthropic
+  reply, which a length limit may have cut, ends with the reply. Cause: Codex records calls
+  only from done events, in the order they come, and every call was written done at the end
+  of the reply, after items the upstream sent later. No chunk said a call was whole, since
+  pieces of calls made together may interleave and a motty may reorder them. Rejected: ending
+  a call when an item of another kind opened, which could write a cut free-text call as whole.
+- **What a Chat Completions tool definition holds beyond what is read is a hint of that API,**
+  where the Responses and Messages codecs keep a definition's unread fields as provider data.
+  Cause: provider data of one family is refused by an upstream of another, so a chat caller's
+  extra field on a tool would fail the whole call on every other family, and Chat Completions
+  is the API every router and many providers speak with extras of their own. Rejected:
+  provider data, for that reason. The cost is that a hint is left out towards another family
+  with no refusal, so a router's `cache_control` on a tool definition reaches no Anthropic
+  upstream.
+- **What a Responses or an Anthropic upstream says of its reply as a whole beyond what is read goes
+  back to a caller of the same API, and never in place of what the writer states.** Nor are the
+  counts taken from it, which are the SDK's and which a motty may have changed. Of a Responses
+  response only what tells the outcome goes back, `end_turn` and the reason an ending was
+  incomplete, because the rest of that object echoes the request the upstream was sent and not
+  the one the caller made. Cause: Codex reads `end_turn` to decide whether to ask again.
+  Rejected: carrying every field but a listed few, with which a motty relayed its upstream's
+  cache key and safety identifier to its caller.
+- **A block passed whole is told when it ends, when the next block starts, or when the stream
+  fails.** So blocks are told in the order they came, and one whose input was cut is told as
+  failed input, never as a complete block with empty input. Cause: the input of a tool the
+  upstream ran for an MCP server comes in pieces after the block opens, so a block told at
+  its opening reached the caller with empty input.
 - **A function tool with no parameters decodes to an empty object schema, on both OpenAI APIs.**
 - **A citation's title is its own `title` when that is text, otherwise the document's,** whole
   and streamed alike.

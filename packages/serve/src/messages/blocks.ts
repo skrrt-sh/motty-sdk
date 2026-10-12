@@ -2,9 +2,9 @@ import type { Cache, Media, Part } from '@mottyjs/core/host';
 import { cacheTo } from '../wire/cache-control.ts';
 import { inline } from '../wire/data-url.ts';
 import type { Leaving } from '../wire/fieldless.ts';
-import { copied, type Dict, given } from '../wire/json.ts';
+import { copied, type Dict, given, isDict } from '../wire/json.ts';
 import { a, unsupported } from '../wire/refusals.ts';
-import { hinted, own } from './family.ts';
+import { hinted, mine, own } from './family.ts';
 
 // A plain-text document is sent as the text it is, so bytes that are not
 // UTF-8 have no form here.
@@ -67,12 +67,15 @@ function blockOf(
     // left out: another family's, and progress a caller sent back.
     const { signature, ...rest } = hinted(part.provider);
     if (typeof signature === 'string') {
-      return { type: 'thinking', thinking: part.text, signature, ...rest };
+      return { ...rest, type: 'thinking', thinking: part.text, signature };
     }
     left.without('reasoning', part);
     return undefined;
   }
-  const meant = own(part.provider, `${a(part.type)} part`);
+  const meant =
+    part.type === 'tool_call' && part.hosted !== true
+      ? mine(part.provider)
+      : own(part.provider, `${a(part.type)} part`);
   const extra = { ...hinted(part.hints), ...meant };
   const cache = cacheTo(part.cache);
   // What the upstream of another API ran has no block here; this API's own
@@ -86,12 +89,13 @@ function blockOf(
       // The API takes no text block without text.
       return part.text === ''
         ? undefined
-        : { type: 'text', text: part.text, ...extra, ...cache };
+        : { ...extra, type: 'text', text: part.text, ...cache };
     case 'image':
       if (part.data !== undefined && part.mediaType === undefined) {
         left.without('image.untyped', part);
       }
       return {
+        ...extra,
         type: 'image',
         source: sourceOf(part, 'image', [
           'image/jpeg',
@@ -99,38 +103,49 @@ function blockOf(
           'image/gif',
           'image/webp',
         ]),
-        ...extra,
         ...cache,
       };
     case 'file':
       return {
+        ...extra,
         type: 'document',
         source: sourceOf(part, 'file', ['application/pdf', 'text/plain']),
         ...given({ title: part.name }),
-        ...extra,
         ...cache,
       };
     case 'audio':
       left.without('audio', part);
       return undefined;
-    case 'tool_call':
+    case 'tool_call': {
       // The two OpenAI APIs may say a call with no arguments as no text.
       if (part.input === undefined && part.raw !== '') {
         unsupported(
           'Anthropic Messages cannot carry tool input that is not JSON',
         );
       }
+      const input = part.input === undefined ? {} : copied(part.input);
+      if (!isDict(input)) {
+        unsupported(
+          `Anthropic Messages cannot carry a tool call whose input is ${
+            typeof input === 'string' ? 'free text' : 'not an object'
+          }`,
+        );
+      }
       return {
+        ...extra,
         type: part.hosted === true ? 'server_tool_use' : 'tool_use',
         id: part.id,
         name: part.name,
-        input: part.input === undefined ? {} : copied(part.input),
-        ...extra,
+        input,
         ...cache,
       };
-    case 'tool_result':
+    }
+    case 'tool_result': {
+      // A result of a tool this API's upstream ran says its own kind.
+      const { type = 'tool_result' } = meant;
       return {
-        type: 'tool_result',
+        ...extra,
+        type,
         tool_use_id: part.id,
         ...given({
           content: unless(
@@ -138,9 +153,9 @@ function blockOf(
           ),
         }),
         ...(part.failed === true ? { is_error: true } : {}),
-        ...extra,
         ...cache,
       };
+    }
   }
 }
 

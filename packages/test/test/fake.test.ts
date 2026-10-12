@@ -305,6 +305,90 @@ test('a chat call to a name scripted as a decision model is not scripted', async
   );
 });
 
+test.each([
+  [
+    'none by default',
+    {},
+    {},
+    ['headers.x-session', 'headers.x-title', 'headers.cookie'],
+  ],
+  [
+    'the ones its connection lists',
+    { forwardHeaders: ['X-Session', 'cookie'] },
+    { 'x-session': 's-1' },
+    ['headers.x-title', 'headers.cookie'],
+  ],
+  [
+    'all but the ones never sent when its connection forwards any',
+    { forwardHeaders: true },
+    { 'x-session': 's-1', 'x-title': 'Coder' },
+    ['headers.cookie'],
+  ],
+] as const)(
+  'a fake is sent %s of the headers a call states, and the call is warned of the rest',
+  async (_, connection, headers, warned) => {
+    const models = fake(connection, on(small, 'ok'));
+
+    const { answer: reply, calls } = await run(
+      motty({ name: 'stating' }).handle(({ prompt }) => {
+        prompt.options = {
+          headers: {
+            'x-session': 's-1',
+            'x-title': 'Coder',
+            'x-absent': null,
+            cookie: 'a=b',
+          },
+        };
+        return small.complete(prompt);
+      }),
+      { text: 'hi' },
+      { models: [models] },
+    );
+
+    expect(await reply.text()).toBe('ok');
+    expect(models.sent(small)[0]?.options).toEqual({ headers });
+    expect(calls[0]?.warnings?.map(({ setting }) => setting) ?? []).toEqual([
+      ...warned,
+    ]);
+  },
+);
+
+test('a header no request can carry fails a call to a fake before it is sent, as it does a real connection', async () => {
+  const models = fake(on(small, 'ok'));
+
+  const asked = run(
+    motty({ name: 'stating' }).handle(({ prompt }) => {
+      prompt.options = { headers: { 'x note': 'bad' } };
+      return small.complete(prompt);
+    }),
+    { text: 'hi' },
+    { models: [models] },
+  );
+
+  await expect(asked).rejects.toThrow(
+    'A call stated the header "x note" with a name no request can carry',
+  );
+  expect(models.sent(small)).toEqual([]);
+});
+
+test('a header stated in two letter cases fails a call to a fake that forwards it, as it does a real connection', async () => {
+  const models = fake({ forwardHeaders: ['x-session'] }, on(small, 'ok'));
+
+  const asked = run(
+    motty({ name: 'stating' }).handle(({ prompt }) => {
+      prompt.options = { headers: { 'X-Session': 's-1', 'x-session': 's-2' } };
+      return small.complete(prompt);
+    }),
+    { text: 'hi' },
+    { models: [models] },
+  );
+
+  await expect(asked).rejects.toThrow(
+    'A call stated the header "x-session" twice, in two letter cases',
+  );
+  expect(models.sent(small)).toEqual([]);
+});
+
 test('sent is typed by the kind of model it is asked about', () => {
   const models = fake(on(small, 'reply'));
 

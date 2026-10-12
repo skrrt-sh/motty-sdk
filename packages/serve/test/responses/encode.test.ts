@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
+import { messages } from '../../src/index.ts';
 import { decode } from '../../src/responses/decode.ts';
 import { encode } from '../../src/responses/encode.ts';
 import { dict } from '../../src/wire/json.ts';
@@ -845,3 +846,83 @@ test.each([
     ).toThrow(`The Responses API cannot carry ${what} of `);
   },
 );
+
+test.each([
+  ['of 64 characters', { user: 'u'.repeat(64) }, {}, 'u'.repeat(64), false],
+  [
+    'of 64 characters said in this API`s own words',
+    { provider: { 'openai.responses': { user: 'p'.repeat(64) } } },
+    {},
+    'p'.repeat(64),
+    false,
+  ],
+  ['of 65 characters', { user: 'u'.repeat(65) }, {}, undefined, true],
+  [
+    'of 65 characters said in this API`s own words',
+    { provider: { 'openai.responses': { user: 'p'.repeat(65) } } },
+    {},
+    undefined,
+    true,
+  ],
+  [
+    'too long, which gives way to none said as a hint or in this API`s own words, long or short',
+    {
+      user: 'u'.repeat(65),
+      hints: { 'openai.responses': { user: 'h'.repeat(65) } },
+      provider: { 'openai.responses': { user: 'short' } },
+    },
+    {},
+    undefined,
+    true,
+  ],
+  [
+    'too long, which gives way to none of the connection, which would name another caller',
+    { user: 'u'.repeat(65) },
+    { user: 'connection' },
+    undefined,
+    true,
+  ],
+  ['that was not said', { maxTokens: 256 }, {}, undefined, false],
+] as const)(
+  'a user %s is sent whole or left out and reported, never cut short',
+  (_, options, defaults, sent, reported) => {
+    const { body, leftOut } = encode(
+      'gpt-5',
+      { messages: [{ role: 'user', text: 'Hi' }], options },
+      defaults,
+    );
+    const { user } = dict(body);
+    expect(user).toBe(sent);
+    expect(leftOut).toEqual(
+      reported
+        ? [
+            {
+              setting: 'user.long',
+              detail:
+                'The Responses API has no field for a user longer than 64 characters',
+            },
+          ]
+        : [],
+    );
+  },
+);
+
+test('the long user id of an Anthropic Messages caller is left out of the request and reported', () => {
+  const { request } = messages.decode(
+    {
+      model: 'coder',
+      max_tokens: 64,
+      metadata: { user_id: 'u'.repeat(150) },
+      messages: [{ role: 'user', content: 'Hi' }],
+    },
+    new Headers(),
+  );
+  expect(request.options?.user).toBe('u'.repeat(150));
+  const { body, leftOut } = encode('gpt-5', request);
+  expect(body).not.toHaveProperty('user');
+  expect(leftOut).toContainEqual({
+    setting: 'user.long',
+    detail:
+      'The Responses API has no field for a user longer than 64 characters',
+  });
+});

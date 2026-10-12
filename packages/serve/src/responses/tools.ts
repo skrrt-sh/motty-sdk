@@ -8,11 +8,12 @@ import {
   isDict,
   list,
   text,
+  without,
 } from '../wire/json.ts';
 import { parameterless } from '../wire/openai-tools.ts';
 import { invalid } from '../wire/refusals.ts';
 import { carried, family, marked, own } from './family.ts';
-import { field, without } from './fields.ts';
+import { field } from './fields.ts';
 
 type Tools = NonNullable<Prompt['tools']>;
 

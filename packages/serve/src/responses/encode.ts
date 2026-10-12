@@ -1,11 +1,11 @@
 import type { JsonOutput, Prompt } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
-import { copied, type Dict, dict, given } from '../wire/json.ts';
+import { copied, type Dict, dict, given, without } from '../wire/json.ts';
 import { customNames } from '../wire/openai-tools.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
 import { addressed } from './family.ts';
-import { field, without } from './fields.ts';
+import { field } from './fields.ts';
 import { inputOf } from './items.ts';
 import { choiceBody, toolBody } from './tools.ts';
 
@@ -69,6 +69,16 @@ function kept(name: string, fields: Dict): Dict {
   return Object.keys(fields).length === 0 ? {} : { [name]: fields };
 }
 
+// This API answers 400 to a longer one, whoever said it. It is left out
+// whole: cut short, or given way to one said with less weight, it would name
+// another caller.
+function userless(left: Leaving, body: Dict): Dict {
+  const { user } = body;
+  if (typeof user !== 'string' || user.length <= 64) return body;
+  left.without('user.long', user);
+  return without(body, ['user']);
+}
+
 export function encode(
   model: string,
   prompt: Prompt<JsonOutput>,
@@ -111,6 +121,33 @@ export function encode(
     },
     provider,
   );
+  const body = userless(left, {
+    ...preset,
+    ...without(hints, ['reasoning', 'text']),
+    ...without(provider, ['reasoning', 'text']),
+    model,
+    ...input,
+    // The whole conversation is sent each time, so nothing is kept there.
+    store: false,
+    stream: true,
+    ...(tools.length === 0 ? {} : { tools }),
+    ...given({
+      tool_choice:
+        toolChoice === undefined ? undefined : choiceBody(toolChoice, custom),
+      parallel_tool_calls: options.parallelToolCalls,
+      max_output_tokens: options.maxTokens,
+      user: options.user,
+    }),
+    ...sampled,
+    ...kept('reasoning', reasoning),
+    ...kept('text', {
+      ...dict(field(hints, 'text')),
+      ...dict(field(provider, 'text')),
+      ...(prompt.output === undefined
+        ? {}
+        : { format: formatOf(prompt.output) }),
+    }),
+  });
   return {
     path: '/responses',
     leftOut: [...left.leftOut(), ...leftOut],
@@ -118,32 +155,6 @@ export function encode(
       'content-type': 'application/json',
       accept: 'text/event-stream',
     },
-    body: {
-      ...preset,
-      ...without(hints, ['reasoning', 'text']),
-      ...without(provider, ['reasoning', 'text']),
-      model,
-      ...input,
-      // The whole conversation is sent each time, so nothing is kept there.
-      store: false,
-      stream: true,
-      ...(tools.length === 0 ? {} : { tools }),
-      ...given({
-        tool_choice:
-          toolChoice === undefined ? undefined : choiceBody(toolChoice, custom),
-        parallel_tool_calls: options.parallelToolCalls,
-        max_output_tokens: options.maxTokens,
-        user: options.user,
-      }),
-      ...sampled,
-      ...kept('reasoning', reasoning),
-      ...kept('text', {
-        ...dict(field(hints, 'text')),
-        ...dict(field(provider, 'text')),
-        ...(prompt.output === undefined
-          ? {}
-          : { format: formatOf(prompt.output) }),
-      }),
-    },
+    body,
   };
 }

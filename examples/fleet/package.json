@@ -1,0 +1,23 @@
+{
+  "name": "@acme/fleet",
+  "version": "1.0.0",
+  "description": "Shows what a coding agent's subagents run on, sends the scouts to a small model and holds one budget for all of them.",
+  "private": true,
+  "type": "module",
+  "main": "src/motty.ts",
+  "scripts": {
+    "build": "bun build src/motty.ts --target=node --outfile=dist/motty.js",
+    "dev": "bun --watch src/serve.ts",
+    "test": "bun test ./test",
+    "eval": "bun test --timeout 60000 ./evals/brake.eval.ts"
+  },
+  "dependencies": {
+    "@mottyjs/adapters": "workspace:*",
+    "@mottyjs/core": "workspace:*",
+    "@mottyjs/serve": "workspace:*",
+    "@mottyjs/settings": "workspace:*",
+    "@mottyjs/store": "workspace:*",
+    "@mottyjs/test": "workspace:*",
+    "zod": "^4.0.0"
+  }
+}

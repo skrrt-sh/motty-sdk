@@ -1165,6 +1165,72 @@ describe.skipIf(key === undefined || key === '')('against Anthropic', () => {
     ).toEqual(['reasoning.model']);
   });
 
+  test('an effort asked of Opus 4.5, which thinks only on a budget, is sent with no thinking, and the record says so', async () => {
+    const reports: Report[] = [];
+    const served = mount(
+      motty({ name: 'relay' }).handle(({ prompt }) =>
+        model('anthropic/claude-opus-4-5').complete(prompt),
+      ),
+      () => ({
+        models: [anthropic({ key })],
+        report: (report) => reports.push(report),
+      }),
+    );
+
+    const reply = await served.fetch(
+      new Request('http://localhost/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'relay',
+          max_completion_tokens: 40,
+          reasoning_effort: 'high',
+          messages: [{ role: 'user', content: 'Say ok.' }],
+        }),
+      }),
+    );
+    await reply.text();
+    await served.close();
+
+    expect(reply.status).toBe(200);
+    expect(
+      reports[0]?.calls[0]?.warnings?.map(({ setting }) => setting),
+    ).toEqual(['reasoning.adaptive']);
+  });
+
+  test('adaptive thinking a Messages caller asked is left out for an older Haiku a motty sent it to, and the record says so', async () => {
+    const reports: Report[] = [];
+    const served = mount(
+      motty({ name: 'relay' }).handle(({ prompt }) =>
+        model('anthropic/claude-haiku-4-5-20251001').complete(prompt),
+      ),
+      () => ({
+        models: [anthropic({ key })],
+        report: (report) => reports.push(report),
+      }),
+    );
+
+    const reply = await served.fetch(
+      new Request('http://localhost/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'relay',
+          max_tokens: 40,
+          thinking: { type: 'adaptive' },
+          messages: [{ role: 'user', content: 'Say ok.' }],
+        }),
+      }),
+    );
+    await reply.text();
+    await served.close();
+
+    expect(reply.status).toBe(200);
+    expect(
+      reports[0]?.calls[0]?.warnings?.map(({ setting }) => setting),
+    ).toEqual(['reasoning.adaptive']);
+  });
+
   test('a model Anthropic does not know is a 404 that says not to retry, to a Chat Completions caller and to a Messages caller', async () => {
     const reports: Report[] = [];
     const served = mount(

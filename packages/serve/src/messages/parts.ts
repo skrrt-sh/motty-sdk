@@ -2,7 +2,7 @@ import type { Cache, Content, Json, Media, Part } from '@mottyjs/core/host';
 import { cacheOf } from '../wire/cache-control.ts';
 import { type Dict, isDict } from '../wire/json.ts';
 import { invalid } from '../wire/refusals.ts';
-import { family, marked } from './family.ts';
+import { family, marked, noted } from './family.ts';
 
 type Marker = { cache?: Cache };
 
@@ -63,8 +63,10 @@ function callOf(fields: Dict, cache: Marker, hosted: boolean): Part {
     input,
     ...(hosted ? { hosted } : {}),
     ...cache,
-    // Its own type marks a call this API's upstream ran as this API's.
-    ...marked(hosted ? { ...rest, type: 'server_tool_use' } : rest),
+    // Its own type marks a call this API's upstream ran as this API's. What
+    // a caller's own call says beside its input came with the reply it
+    // echoes, and another family answers the turn as well without it.
+    ...(hosted ? marked({ ...rest, type: 'server_tool_use' }) : noted(rest)),
   };
 }
 

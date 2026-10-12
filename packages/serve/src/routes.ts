@@ -33,15 +33,9 @@ const unserved: readonly (readonly [path: string, said: string])[] = [
   ['/v1/realtime', 'Realtime is not served'],
 ];
 
-// Every header one of the APIs takes a credential in: a token sent in one
-// reaches no motty, whichever API the request came by.
-export const credentials: readonly string[] = [
-  ...new Set(
-    [chatCompletions, responses, messages].flatMap(
-      (codec) => codec.credentials,
-    ),
-  ),
-];
+// A token sent in any of them reaches no motty, whichever API the request
+// came by.
+export { credentials } from '@mottyjs/core/host';
 
 function under(pathname: string, path: string): boolean {
   return pathname === path || pathname.startsWith(`${path}/`);

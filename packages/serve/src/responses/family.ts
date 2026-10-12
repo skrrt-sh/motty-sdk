@@ -29,7 +29,7 @@ export const elsewhere: ReadonlySet<string> = new Set([
   'web_search_options',
 ]);
 
-export const { hinted, own, addressed, marked, noted } = providerData(
+export const { hinted, own, mine, addressed, marked, noted } = providerData(
   family,
   api,
   'openai',

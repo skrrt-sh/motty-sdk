@@ -519,6 +519,53 @@ test('a failure inside the upstream stream reaches the caller as an error event'
   });
 });
 
+test('a block the codec passes whole that a failing upstream never ended reaches the caller, and then the failure', async () => {
+  const sent = await reply(
+    [
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+          name: 'echo',
+          server_name: 'example-mcp',
+          input: {},
+        },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '{"param1":' },
+      },
+      {
+        type: 'error',
+        error: { type: 'overloaded_error', message: 'Overloaded' },
+      },
+    ],
+    true,
+    null,
+  );
+  expect(sent.slice(1)).toEqual([
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'mcp_tool_use',
+        id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+        name: 'echo',
+        server_name: 'example-mcp',
+        input: { INVALID_JSON: '{"param1":' },
+      },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'error',
+      error: { type: 'overloaded_error', message: 'Overloaded' },
+    },
+  ]);
+});
+
 test("a first-event failure is answered as this API's error body", () => {
   const facts = messages.failure(
     529,
@@ -757,3 +804,296 @@ test.each([
     ]);
   },
 );
+
+test('what an upstream of this family says that the codec does not read reaches the caller', async () => {
+  const container = { id: 'container_011', expires_at: '2026-10-12T10:00:00Z' };
+  const block = {
+    type: 'tool_use',
+    id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+    name: 'get_weather',
+    caller: { type: 'direct' },
+    future_block_field: { kept: true },
+  };
+  const wire: Json[] = [
+    {
+      type: 'message_start',
+      message: {
+        id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-5-5-20260901',
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        container: null,
+        future_message_field: 'kept',
+        usage: {
+          input_tokens: 25,
+          cache_creation_input_tokens: 100,
+          cache_read_input_tokens: 2000,
+          cache_creation: {
+            ephemeral_5m_input_tokens: 0,
+            ephemeral_1h_input_tokens: 100,
+          },
+          output_tokens: 1,
+          service_tier: 'standard',
+          inference_geo: 'us',
+        },
+      },
+    },
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { ...block, input: {} },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: {
+        type: 'input_json_delta',
+        partial_json: '{"location": "Paris"}',
+      },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'tool_use',
+        stop_sequence: null,
+        container,
+        future_delta_field: 'kept',
+      },
+      usage: {
+        output_tokens: 89,
+        server_tool_use: { web_search_requests: 1 },
+        future_count: 3,
+      },
+      context_management: { applied_edits: [] },
+      future_event_field: 'kept',
+    },
+    { type: 'message_stop' },
+  ];
+  const usage = {
+    input_tokens: 25,
+    cache_creation_input_tokens: 100,
+    cache_read_input_tokens: 2000,
+    cache_creation: {
+      ephemeral_5m_input_tokens: 0,
+      ephemeral_1h_input_tokens: 100,
+    },
+    output_tokens: 89,
+    service_tier: 'standard',
+    inference_geo: 'us',
+    server_tool_use: { web_search_requests: 1 },
+    future_count: 3,
+  };
+  expect(await reply(wire, true, { type: 'adaptive' })).toEqual([
+    {
+      type: 'message_start',
+      message: {
+        id: 'msg_req_1',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-5-5',
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+    },
+    ...wire.slice(1, 4),
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'tool_use',
+        stop_sequence: null,
+        container,
+        future_delta_field: 'kept',
+        future_message_field: 'kept',
+      },
+      usage,
+      context_management: { applied_edits: [] },
+      future_event_field: 'kept',
+    },
+    { type: 'message_stop' },
+  ]);
+  expect(await reply(wire, false, { type: 'adaptive' })).toEqual([
+    {
+      id: 'msg_req_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-opus-5-5',
+      content: [{ ...block, input: { location: 'Paris' } }],
+      stop_reason: 'tool_use',
+      stop_sequence: null,
+      container,
+      future_delta_field: 'kept',
+      future_message_field: 'kept',
+      context_management: { applied_edits: [] },
+      future_event_field: 'kept',
+      usage,
+    },
+  ]);
+});
+
+test('a refusal of this family reaches the caller with its details', async () => {
+  const details = { type: 'refusal', category: 'cyber', explanation: null };
+  const wire: Json[] = [
+    {
+      type: 'message_start',
+      message: {
+        id: 'msg_req_1',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-5-5',
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+    },
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'refusal',
+        stop_sequence: null,
+        stop_details: details,
+      },
+      usage: { input_tokens: 25, output_tokens: 0 },
+    },
+    { type: 'message_stop' },
+  ];
+  expect(await reply(wire, true, { type: 'adaptive' })).toEqual(wire);
+  expect(await reply(wire, false, { type: 'adaptive' })).toEqual([
+    {
+      id: 'msg_req_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-opus-5-5',
+      content: [],
+      stop_reason: 'refusal',
+      stop_sequence: null,
+      stop_details: details,
+      usage: { input_tokens: 25, output_tokens: 0 },
+    },
+  ]);
+});
+
+test('a block the codec passes whole reaches the caller with what its deltas said', async () => {
+  const call = {
+    type: 'mcp_tool_use',
+    id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+    name: 'echo',
+    server_name: 'example-mcp',
+  };
+  const wire: Json[] = [
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { ...call, input: {} },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: '{"param1": "value1"}' },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'content_block_start',
+      index: 1,
+      content_block: { type: 'compaction', content: null },
+    },
+    {
+      type: 'content_block_delta',
+      index: 1,
+      delta: { type: 'compaction_delta', content: 'Summary so far' },
+    },
+    { type: 'content_block_stop', index: 1 },
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      usage: { input_tokens: 25, output_tokens: 9 },
+    },
+    { type: 'message_stop' },
+  ];
+  const called = { ...call, input: { param1: 'value1' } };
+  const compacted = { type: 'compaction', content: 'Summary so far' };
+  expect((await reply(wire, true, { type: 'adaptive' })).slice(1, -2)).toEqual([
+    { type: 'content_block_start', index: 0, content_block: called },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'content_block_start', index: 1, content_block: compacted },
+    { type: 'content_block_stop', index: 1 },
+  ]);
+  expect(await reply(wire, false, { type: 'adaptive' })).toMatchObject([
+    { content: [called, compacted] },
+  ]);
+});
+
+test('a body field the codec does not read reaches an upstream of this family as it was sent', () => {
+  const body = {
+    model: 'claude-opus-5-5',
+    max_tokens: 1024,
+    messages: [
+      { role: 'user', content: 'Weather?' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+            name: 'get_weather',
+            input: { location: 'Paris' },
+            caller: { type: 'direct' },
+            future_block_field: { kept: true },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+            content: 'Sunny',
+            future_block_field: 'kept',
+          },
+        ],
+      },
+    ],
+    context_management: { edits: [{ type: 'clear_thinking_20251015' }] },
+    cache_control: { type: 'ephemeral', ttl: '1h' },
+    service_tier: 'standard_only',
+    metadata: { user_id: 'user-13803d75' },
+    future_body_field: { kept: [1, null, {}] },
+    stream: true,
+  };
+  const { request } = messages.decode(body, new Headers());
+  expect(messages.encode('claude-opus-5-5', request).body).toEqual(body);
+});
+
+test('every header of this API`s own but its version reaches the upstream, and no other', () => {
+  const { request } = messages.decode(
+    {
+      model: 'claude-opus-5-5',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: 'Hi' }],
+    },
+    new Headers({
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'context-management-2025-06-27,compact-2026-01-12',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'anthropic-not-known-yet': 'on',
+      'x-api-key': 'sk-ant-callers-own',
+      authorization: 'Bearer sk-ant-callers-own',
+      'x-stainless-lang': 'js',
+    }),
+  );
+  expect(messages.encode('claude-opus-5-5', request).headers).toEqual({
+    'content-type': 'application/json',
+    accept: 'text/event-stream',
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'context-management-2025-06-27,compact-2026-01-12',
+    'anthropic-dangerous-direct-browser-access': 'true',
+    'anthropic-not-known-yet': 'on',
+  });
+});

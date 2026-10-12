@@ -192,3 +192,116 @@ test('calls whose fragments take turns are one block each', () => {
     { type: 'tool_use', id: 'b', name: 'g', input: { y: 2 } },
   ]);
 });
+
+test('a collected message holds what the ending said of it, in the delta and beside it', () => {
+  expect(
+    collected(
+      [
+        {
+          type: 'tool_call',
+          id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+          name: 'get_weather',
+          arguments: '{"location": "Paris"}',
+          provider: { anthropic: { caller: { type: 'direct' } } },
+        },
+      ],
+      {
+        type: 'finish',
+        reason: 'tool_calls',
+        rawReason: 'tool_use',
+        usage: { input: 25, output: 40 },
+        provider: {
+          anthropic: {
+            container: { id: 'container_011' },
+            usage: { service_tier: 'standard' },
+            message_delta: { context_management: { applied_edits: [] } },
+          },
+        },
+      },
+      'req_1',
+      'coder',
+      false,
+    ),
+  ).toEqual({
+    id: 'msg_req_1',
+    type: 'message',
+    role: 'assistant',
+    model: 'coder',
+    content: [
+      {
+        type: 'tool_use',
+        id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+        name: 'get_weather',
+        input: { location: 'Paris' },
+        caller: { type: 'direct' },
+      },
+    ],
+    stop_reason: 'tool_use',
+    stop_sequence: null,
+    container: { id: 'container_011' },
+    context_management: { applied_edits: [] },
+    usage: { input_tokens: 25, output_tokens: 40, service_tier: 'standard' },
+  });
+});
+
+test("the message's own fields are never replaced by what rides on the finish, streamed or collected", () => {
+  const finish = {
+    type: 'finish',
+    reason: 'stop',
+    rawReason: 'end_turn',
+    usage: { input: 25, output: 40 },
+    provider: {
+      anthropic: {
+        id: 'msg_other',
+        type: 'x',
+        role: 'user',
+        model: 'other',
+        content: 'gone',
+        container: { id: 'container_011' },
+        message_delta: {
+          id: 'msg_other',
+          type: 'x',
+          role: 'user',
+          model: 'other',
+          content: 'gone',
+          delta: 'gone',
+          usage: 'gone',
+          context_management: { applied_edits: [] },
+        },
+      },
+    },
+  } as const;
+  expect(writer(false)(finish)).toEqual([
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        container: { id: 'container_011' },
+      },
+      usage: { input_tokens: 25, output_tokens: 40 },
+      context_management: { applied_edits: [] },
+    },
+    { type: 'message_stop' },
+  ]);
+  expect(
+    collected(
+      [{ type: 'text', text: 'Hello', block: 0 }],
+      finish,
+      'req_1',
+      'coder',
+      false,
+    ),
+  ).toEqual({
+    id: 'msg_req_1',
+    type: 'message',
+    role: 'assistant',
+    model: 'coder',
+    content: [{ type: 'text', text: 'Hello' }],
+    stop_reason: 'end_turn',
+    stop_sequence: null,
+    container: { id: 'container_011' },
+    context_management: { applied_edits: [] },
+    usage: { input_tokens: 25, output_tokens: 40 },
+  });
+});

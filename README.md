@@ -166,13 +166,15 @@ test("a short question without tools goes to the quick tier", async () => {
 
 ## Examples
 
-Three motties, each with a README that follows one request through it:
+Four motties, each with a README that follows one request through it:
 
 - [`examples/coder`](examples/coder) sends coding-agent requests to the cheapest model that can
   handle them.
 - [`examples/council`](examples/council) puts a hard question to models of three providers and
   has a stronger model merge what they said, within a spending limit.
 - [`examples/desk`](examples/desk) is a customer-support desk served as one model.
+- [`examples/fleet`](examples/fleet) runs a coding agent's subagents through one motty, shows what
+  each one spends, sends them to a small model and stops them at a budget.
 
 The reasons behind the design, and what was rejected, are in [ARCHITECTURE.md](ARCHITECTURE.md).
 The core's own plan is in [CORE.md](CORE.md).
@@ -218,19 +220,20 @@ one, Motty is ahead.
 
 | | Motty | AI SDK | Mastra | LangChain | TanStack AI |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Text, 20 chunks | 37.1 µs | 1.40× | 6.30× | 0.53× | 2.96× |
-| Stream, 20 chunks | 37.5 µs | 8.10× | 9.94× | 2.95× | 3.02× |
-| Stream, 200 chunks | 224 µs | 8.41× | 6.43× | 3.51× | 3.45× |
-| Structured output stream, 20 chunks | 48.1 µs | 9.02× | 11.07× | 3.29× | 2.74× |
-| Served over HTTP, 200 chunks | 457 µs | 4.49× | 3.54× | 2.92× | 2.27× |
-| Cold start, import to first streamed answer | 21.9 ms | 1.78× | 8.01× | 2.98× | 2.21× |
-| Minified program size | 240 KB | 2.58× | 23.60× | 4.81× | 2.98× |
+| Text, 20 chunks | 39.6 µs | 1.34× | 6.00× | 0.50× | 2.83× |
+| Stream, 20 chunks | 40.6 µs | 7.57× | 9.39× | 2.70× | 2.86× |
+| Stream, 200 chunks | 234 µs | 8.30× | 6.40× | 3.43× | 3.38× |
+| Structured output stream, 20 chunks | 51.0 µs | 8.81× | 11.15× | 3.16× | 2.65× |
+| Served over HTTP, 200 chunks | 484 µs | 4.24× | 3.33× | 2.78× | 2.17× |
+| Cold start, import to first streamed answer | 22.5 ms | 1.93× | 7.98× | 3.02× | 2.14× |
+| Minified program size | 249 KB | 2.49× | 22.81× | 4.65× | 2.88× |
 
 Motty is behind in one place, a non-streamed text call against LangChain. Motty always reads a
 stream upstream, and that is the entry the gate lists as a known loss.
 
-The figures are those of Motty 0.1.0, measured on 2026-10-11 on an Apple M4 Max with Bun 1.4.2,
-against `ai` 7.0.137, `@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0.
+The figures are those of this repository as it stood on 2026-10-12, measured that day on an Apple
+M4 Max with Bun 1.4.2, against `ai` 7.0.137, `@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and
+`@tanstack/ai` 0.68.0.
 They come from 15 rounds of 20,000 chunks after one discarded, with the SDKs taking turns in one
 process. To measure it yourself, run `bun gates/bench/rivals/compare.ts`, which prints the same
 figures with each call's 99th percentile.

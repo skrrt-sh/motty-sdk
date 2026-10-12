@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import {
+  counted,
   countsOf,
   countsTo,
   merged,
@@ -130,4 +131,74 @@ test('a count named as the prototype is a field, and no count is read through it
 
   expect(Object.keys(counts)).toEqual(['input_tokens', '__proto__']);
   expect(countsOf(counts)).toEqual({ input: 25 });
+});
+
+test('what usage holds beside the counts read here is kept apart, and no count is read twice', () => {
+  const wire = {
+    input_tokens: 25,
+    output_tokens: 40,
+    cache_read_input_tokens: 2000,
+    cache_creation_input_tokens: 100,
+    output_tokens_details: { thinking_tokens: 12 },
+    cost: 0.0042,
+    cache_creation: {
+      ephemeral_5m_input_tokens: 0,
+      ephemeral_1h_input_tokens: 100,
+    },
+    server_tool_use: { web_search_requests: 1 },
+    service_tier: 'standard',
+    inference_geo: 'us',
+    future_count: 3,
+  };
+  expect(counted(wire).rest).toEqual({
+    cache_creation: {
+      ephemeral_5m_input_tokens: 0,
+      ephemeral_1h_input_tokens: 100,
+    },
+    server_tool_use: { web_search_requests: 1 },
+    service_tier: 'standard',
+    inference_geo: 'us',
+    future_count: 3,
+  });
+  expect(countsOf(wire)).toEqual({
+    input: 2125,
+    output: 40,
+    cached: 2000,
+    cacheWrite: 100,
+    reasoning: 12,
+    cost: 0.0042,
+  });
+  expect(counted({ input_tokens: 25, output_tokens: 40 }).rest).toEqual({});
+});
+
+test('what the thinking details hold beside the count read here goes back beside it', () => {
+  const wire = {
+    input_tokens: 25,
+    output_tokens: 40,
+    output_tokens_details: { thinking_tokens: 2, future_tokens: 9 },
+  };
+
+  expect(counted(wire).rest).toEqual({
+    output_tokens_details: { future_tokens: 9 },
+  });
+  expect(countsTo(countsOf(wire), counted(wire).rest)).toEqual(wire);
+  expect(countsTo({ input: 25, output: 40 }, counted(wire).rest)).toEqual({
+    input_tokens: 25,
+    output_tokens: 40,
+    output_tokens_details: { future_tokens: 9 },
+  });
+});
+
+test('a count in a carried usage is never written in place of the neutral one', () => {
+  expect(
+    countsTo(
+      { input: 25, output: 40 },
+      {
+        cache_read_input_tokens: 999,
+        output_tokens_details: { thinking_tokens: 7 },
+        cost: 5,
+        service_tier: 'standard',
+      },
+    ),
+  ).toEqual({ input_tokens: 25, output_tokens: 40, service_tier: 'standard' });
 });

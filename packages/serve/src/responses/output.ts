@@ -47,7 +47,7 @@ export type Writing = {
   output: Dict[];
   open: Thought | Message | undefined;
   added: (item: Dict) => Sent;
-  settled: (status?: Ended) => Sent[];
+  settled: () => Sent[];
 };
 
 // A reasoning item says its status only when it did not finish. The content
