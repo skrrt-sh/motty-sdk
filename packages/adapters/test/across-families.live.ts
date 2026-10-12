@@ -174,7 +174,8 @@ describe.skipIf(
       code: 'unsupported',
       status: 400,
       retryable: false,
-      message: 'The Responses API cannot carry an option of anthropic',
+      message:
+        'The Responses API cannot carry an option of anthropic: metadata',
     });
     await expect(ran).rejects.not.toHaveProperty('upstream');
   });
@@ -198,7 +199,7 @@ describe.skipIf(
       code: 'unsupported',
       status: 400,
       retryable: false,
-      message: 'Chat Completions cannot carry an option of anthropic',
+      message: 'Chat Completions cannot carry an option of anthropic: metadata',
     });
     await expect(ran).rejects.not.toHaveProperty('upstream');
   });

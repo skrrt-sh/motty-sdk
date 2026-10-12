@@ -6,11 +6,12 @@ import { model, motty } from '@mottyjs/core';
 import type { Report } from '@mottyjs/core/host';
 import { mount } from '@mottyjs/serve';
 import { openai } from '../src/openai.ts';
+import { harnessed } from './harness.ts';
 
 // Real calls that cost money: the file is not a `.test.ts`, so only
 // `bun run test:live` runs it, and without a key or the harness on the path
 // nothing in it runs.
-const { OPENAI_KEY: key, PATH, HOME } = Bun.env;
+const { OPENAI_KEY: key } = Bun.env;
 const codex = Bun.which('codex');
 
 describe.skipIf(key === undefined || key === '' || codex === null)(
@@ -42,61 +43,49 @@ describe.skipIf(key === undefined || key === '' || codex === null)(
             report: (report) => reports.push(report),
           }),
         );
-        // A lead waiting on its subagents holds one connection open for longer
-        // than the server lets an idle one live by default.
-        using server = Bun.serve({
-          port: 0,
-          fetch: served.fetch,
-          idleTimeout: 240,
-        });
         const dir = await mkdtemp(join(tmpdir(), 'motty-codex-'));
-        for (const file of ['orders', 'payments', 'users']) {
-          await Bun.write(
-            join(dir, `${file}.ts`),
-            `export const ${file} = () => "${file} are listed here";\n`,
+        try {
+          // A lead waiting on its subagents holds one connection open for
+          // longer than the server lets an idle one live by default.
+          using server = Bun.serve({
+            port: 0,
+            fetch: served.fetch,
+            idleTimeout: 240,
+          });
+          for (const file of ['orders', 'payments', 'users']) {
+            await Bun.write(
+              join(dir, `${file}.ts`),
+              `export const ${file} = () => "${file} are listed here";\n`,
+            );
+          }
+          await mkdir(join(dir, '.codex'));
+
+          // The harness is given no key of the provider's: the one it sends
+          // is made up, and the real one stays with the host.
+          const told = await harnessed(
+            [
+              codex ?? 'codex',
+              'exec',
+              '--skip-git-repo-check',
+              '-m',
+              name,
+              '-c',
+              'model_provider="relay"',
+              '-c',
+              `model_providers.relay={name="relay",base_url="http://localhost:${server.port}/v1",env_key="RELAY_KEY",wire_api="responses"}`,
+              'Spawn three subagents in parallel, one per file (orders.ts, payments.ts, users.ts). Each reads its file and says in one sentence what it does. Then list the three sentences.',
+            ],
+            dir,
+            { CODEX_HOME: join(dir, '.codex'), RELAY_KEY: 'not-a-key' },
           );
+
+          expect(told).toMatchObject({ exit: 0 });
+          expect(told.complained).not.toContain('unsupported call');
+        } finally {
+          await served.close();
+          await rm(dir, { recursive: true });
         }
-        await mkdir(join(dir, '.codex'));
 
-        // The harness is given no key of the provider's: the one it sends is
-        // made up, and the real one stays with the host. Its settings live in
-        // the temporary directory, so the user's own are left alone.
-        const harness = Bun.spawn(
-          [
-            codex ?? 'codex',
-            'exec',
-            '--skip-git-repo-check',
-            '-m',
-            name,
-            '-c',
-            'model_provider="relay"',
-            '-c',
-            `model_providers.relay={name="relay",base_url="http://localhost:${server.port}/v1",env_key="RELAY_KEY",wire_api="responses"}`,
-            'Spawn three subagents in parallel, one per file (orders.ts, payments.ts, users.ts). Each reads its file and says in one sentence what it does. Then list the three sentences.',
-          ],
-          {
-            cwd: dir,
-            env: {
-              PATH,
-              HOME,
-              CODEX_HOME: join(dir, '.codex'),
-              RELAY_KEY: 'not-a-key',
-            },
-            stdin: 'ignore',
-            stdout: 'pipe',
-            stderr: 'pipe',
-          },
-        );
-        const [exit, said, complained] = await Promise.all([
-          harness.exited,
-          harness.stdout.text(),
-          harness.stderr.text(),
-        ]);
-        await served.close();
-        await rm(dir, { recursive: true });
-
-        expect({ exit, said, complained }).toMatchObject({ exit: 0 });
-        expect(complained).not.toContain('unsupported call');
         // The harness hangs up on a subagent it closes mid-answer, which is its
         // own doing and no failure of the motty.
         for (const report of reports) {
