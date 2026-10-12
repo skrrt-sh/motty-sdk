@@ -73,7 +73,8 @@ are never sent. The common headers that say where a request came from are left o
 and a name the host lists is sent even when it says where a request came from. A header
 that was not sent is named in a warning on the call, which the host's report carries, so an author
 can see why it did not arrive. A header whose name or value no request can carry fails the call
-as a mistake in the motty.
+as a mistake in the motty, and so does a header that would be sent and is stated twice in two
+letter cases.
 
 On an Anthropic upstream, the `anthropic-*` headers a caller of the Messages API sent, all but the
 version, already travel with the request without being listed, and they win over a call's of the

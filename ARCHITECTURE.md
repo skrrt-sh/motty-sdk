@@ -1254,10 +1254,13 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   with a body it did not match.
 - **A header no request can carry fails the call as the motty's own mistake, and a stated value
   is not cut from an upstream's failure.** A caller's relayed header already crossed HTTP, so
-  a malformed one is the motty's. The cut keeps the host's credentials out of an error, and a
-  call's headers are already held by the motty and its caller; cut, a provider's sentence
-  naming the beta value it refused came back without it. Rejected: answering the caller with
-  a 400; cutting a stated value as a connection's is.
+  a malformed one is the motty's. A header that would be sent and is stated in two letter cases
+  fails the same way, since a request carries a name once and the order the two were written in
+  would choose the value; one that is left out anyway stays a single warning. The cut keeps
+  the host's credentials out of an error, and a call's headers are already held by the motty
+  and its caller; cut, a provider's sentence naming the beta value it refused came back
+  without it. Rejected: answering the caller with a 400; cutting a stated value as a
+  connection's is.
 
 ### Wire fidelity
 

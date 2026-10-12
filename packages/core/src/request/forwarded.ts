@@ -92,6 +92,7 @@ export function forwarded(
   const held = new Set(taken.map((name) => name.toLowerCase()));
   const hops = new Set(nominated(stated));
   const headers: [string, string][] = [];
+  const sent = new Set<string>();
   const leftOut = new Map<string, NonNullable<Finish['warnings']>[number]>();
   for (const [name, value] of Object.entries(stated)) {
     if (value === undefined || value === null) continue;
@@ -110,8 +111,19 @@ export function forwarded(
           : held.has(lower)
             ? 'The connection or the API states this header itself'
             : undefined;
-    if (detail === undefined) headers.push([name, value]);
-    else leftOut.set(lower, { setting: `headers.${lower}`, detail });
+    if (detail !== undefined) {
+      leftOut.set(lower, { setting: `headers.${lower}`, detail });
+      continue;
+    }
+    // A request carries a name once, and which of two values it would be
+    // is not the call's to leave to the order they were written in.
+    if (sent.has(lower)) {
+      throw new Error(
+        `A call stated the header ${JSON.stringify(lower)} twice, in two letter cases`,
+      );
+    }
+    sent.add(lower);
+    headers.push([name, value]);
   }
   // Made from entries, a header named as the prototype is one like any other.
   return {

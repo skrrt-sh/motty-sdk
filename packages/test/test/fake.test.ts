@@ -371,6 +371,24 @@ test('a header no request can carry fails a call to a fake before it is sent, as
   expect(models.sent(small)).toEqual([]);
 });
 
+test('a header stated in two letter cases fails a call to a fake that forwards it, as it does a real connection', async () => {
+  const models = fake({ forwardHeaders: ['x-session'] }, on(small, 'ok'));
+
+  const asked = run(
+    motty({ name: 'stating' }).handle(({ prompt }) => {
+      prompt.options = { headers: { 'X-Session': 's-1', 'x-session': 's-2' } };
+      return small.complete(prompt);
+    }),
+    { text: 'hi' },
+    { models: [models] },
+  );
+
+  await expect(asked).rejects.toThrow(
+    'A call stated the header "x-session" twice, in two letter cases',
+  );
+  expect(models.sent(small)).toEqual([]);
+});
+
 test('sent is typed by the kind of model it is asked about', () => {
   const models = fake(on(small, 'reply'));
 

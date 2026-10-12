@@ -597,6 +597,47 @@ test.each([
 );
 
 test.each([
+  ['lists it', ['x-session']],
+  ['forwards any', true],
+] as const)(
+  'a header stated on a call in two letter cases fails the call before anything is sent, where the connection %s',
+  async (_, forwardHeaders) => {
+    const { asked, events } = await sent(
+      (address) => openai({ key: 'sk-host', address, forwardHeaders }),
+      'openai/small',
+      {
+        messages: [{ role: 'user', text: 'hi' }],
+        options: {
+          headers: {
+            'X-Session': 'Zq7Lm2Xv9Rt4Kp8Wd3Nh',
+            'x-session': 's-2',
+            'X-SESSION': undefined,
+          },
+        },
+      },
+    );
+
+    expect(events).toEqual([
+      {
+        type: 'error',
+        error: {
+          code: 'internal',
+          status: 500,
+          message:
+            'A call stated the header "x-session" twice, in two letter cases',
+          retryable: false,
+          unexpected: true,
+          stack: expect.any(String),
+          upstream: false,
+        },
+      },
+    ]);
+    expect(JSON.stringify(events)).not.toContain('9Rt4Kp8Wd3Nh');
+    expect(asked).toBe(0);
+  },
+);
+
+test.each([
   ['openai', openai, '/v1/chat/completions', 'authorization', 'Bearer sk-host'],
   ['anthropic', anthropic, '/v1/messages', 'x-api-key', 'sk-host'],
 ])(
