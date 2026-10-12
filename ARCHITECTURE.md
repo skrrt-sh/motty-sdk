@@ -2,12 +2,18 @@
 
 ## What a motty is
 
-A motty is a layer-2 model. LLMs are layer 1, and a motty is a model made of code on top of them,
-between them and agents. To its caller it is just another model, a chat request in and an answer
-out. Inside, it decides which models answer, in what order, with what changes, and what is
-remembered. It has no weights, only routing and policy. The SDK is the open-source toolkit for
-building motties; the Hub is a service that hosts and sells them.
+A motty is a layer-2 model. LLMs are layer 1, and a motty is a model made of code on top of them
+and below agents. To its caller it is just another model, a chat request in and an answer out,
+and an agent does not know it is calling one. Inside, it is plain code that holds the whole
+request and may do anything before it answers. It has no weights. The SDK is the open-source
+toolkit for building motties; the Hub is a service that hosts and sells them.
 
+- **It is a toolkit, not a list of features.** A router, a gateway, a cache, a fallback or a
+  memory that agents share is each a motty's own code over the same few abilities: reading the
+  request, calling models, answering by hand, changing the prompt and the answer, `store` and
+  `fetch`.
+- **It fits the stack that is already there.** Above it, a caller changes the URL and the model
+  name. Below it, the same providers are called, through adapters.
 - **It takes what surrounds a model call, and the agent keeps its loop and its tools.** That is
   the choice of model, several models answering as one, what outlives a request, and what is
   changed on the way in and out. Rejected: running the caller's tools, which makes a motty a
