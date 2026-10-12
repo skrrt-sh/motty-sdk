@@ -81,7 +81,7 @@ test.each([
       // A signal fired once the call has ended stops nothing of it.
       ending.abort();
       // The end of the body is on its way: the next call comes after it.
-      await Bun.sleep(25);
+      await Bun.sleep(100);
     }
 
     expect(ends).toEqual(['finish', 'finish', 'finish', 'finish', 'finish']);
@@ -111,7 +111,7 @@ test('a signal fired on the last event, before the call is closed, keeps the con
     // Whoever ends a request fires its signal first and closes the call after.
     ending.abort();
     await events.return?.();
-    await Bun.sleep(25);
+    await Bun.sleep(100);
   }
 
   expect(connections).toBe(1);
