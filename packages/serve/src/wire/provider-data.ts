@@ -1,6 +1,6 @@
 import type { ProviderData } from '@mottyjs/core/host';
 import type { LeftOut } from '../codec.ts';
-import { copied, type Dict, dict, isDict } from './json.ts';
+import { copied, type Dict, dict, isDict, without } from './json.ts';
 import { unsupported } from './refusals.ts';
 
 // A null, an empty list and an empty object say what leaving the field out
@@ -71,11 +71,7 @@ export function providerData(
 
   function kept(fields: Dict, alien: Dict): Dict {
     const names = Object.keys(alien);
-    return names.length === 0
-      ? fields
-      : Object.fromEntries(
-          Object.entries(fields).filter(([name]) => !names.includes(name)),
-        );
+    return names.length === 0 ? fields : without(fields, names);
   }
 
   // A request's options are where an API's own fields are named, so there

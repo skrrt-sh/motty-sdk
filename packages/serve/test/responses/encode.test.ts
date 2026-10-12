@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
+import { messages } from '../../src/index.ts';
 import { decode } from '../../src/responses/decode.ts';
 import { encode } from '../../src/responses/encode.ts';
 import { dict } from '../../src/wire/json.ts';
@@ -845,3 +846,109 @@ test.each([
     ).toThrow(`The Responses API cannot carry ${what} of `);
   },
 );
+
+test('a user of 64 characters is sent as it is', () => {
+  const { body, leftOut } = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { user: 'u'.repeat(64) },
+  });
+  expect(body).toHaveProperty('user', 'u'.repeat(64));
+  expect(leftOut).toEqual([]);
+});
+
+test('a user of 65 characters is left out and reported, never cut short', () => {
+  const { body, leftOut } = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { user: 'u'.repeat(65) },
+  });
+  expect(body).not.toHaveProperty('user');
+  expect(leftOut).toEqual([
+    {
+      setting: 'user.long',
+      detail:
+        'The Responses API has no field for a user longer than 64 characters',
+    },
+  ]);
+});
+
+test('a user of 65 characters said in this API`s own words is left out and reported', () => {
+  const { body, leftOut } = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { provider: { 'openai.responses': { user: 'p'.repeat(65) } } },
+  });
+  expect(body).not.toHaveProperty('user');
+  expect(leftOut).toEqual([
+    {
+      setting: 'user.long',
+      detail:
+        'The Responses API has no field for a user longer than 64 characters',
+    },
+  ]);
+});
+
+test('a long user gives way to no user said as a hint or in this API`s own words, long or short', () => {
+  const { body, leftOut } = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: {
+      user: 'u'.repeat(65),
+      hints: { 'openai.responses': { user: 'h'.repeat(65) } },
+      provider: { 'openai.responses': { user: 'short' } },
+    },
+  });
+  expect(body).not.toHaveProperty('user');
+  expect(leftOut).toEqual([
+    {
+      setting: 'user.long',
+      detail:
+        'The Responses API has no field for a user longer than 64 characters',
+    },
+  ]);
+});
+
+test('a long user gives way to no user of the connection, which would name another caller', () => {
+  const { body, leftOut } = encode(
+    'gpt-5',
+    {
+      messages: [{ role: 'user', text: 'Hi' }],
+      options: { user: 'u'.repeat(65) },
+    },
+    { user: 'connection' },
+  );
+  expect(body).not.toHaveProperty('user');
+  expect(leftOut).toEqual([
+    {
+      setting: 'user.long',
+      detail:
+        'The Responses API has no field for a user longer than 64 characters',
+    },
+  ]);
+});
+
+test('a request with no user is sent none and reports nothing', () => {
+  const { body, leftOut } = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { maxTokens: 256 },
+  });
+  expect(body).not.toHaveProperty('user');
+  expect(leftOut).toEqual([]);
+});
+
+test('the long user id of an Anthropic Messages caller is left out of the request and reported', () => {
+  const { request } = messages.decode(
+    {
+      model: 'coder',
+      max_tokens: 64,
+      metadata: { user_id: 'u'.repeat(150) },
+      messages: [{ role: 'user', content: 'Hi' }],
+    },
+    new Headers(),
+  );
+  expect(request.options?.user).toBe('u'.repeat(150));
+  const { body, leftOut } = encode('gpt-5', request);
+  expect(body).not.toHaveProperty('user');
+  expect(leftOut).toContainEqual({
+    setting: 'user.long',
+    detail:
+      'The Responses API has no field for a user longer than 64 characters',
+  });
+});

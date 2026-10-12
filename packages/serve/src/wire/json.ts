@@ -73,6 +73,13 @@ export function given(fields: { [key: string]: Json | undefined }): Dict {
   return Object.fromEntries(said);
 }
 
+// Made from entries, a key named as the prototype is a key like any other.
+export function without(fields: Dict, names: readonly string[]): Dict {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([key]) => !names.includes(key)),
+  );
+}
+
 function isList(value: ReadonlyJson): value is readonly ReadonlyJson[] {
   return Array.isArray(value);
 }

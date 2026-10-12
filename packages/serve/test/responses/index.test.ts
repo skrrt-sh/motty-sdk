@@ -1324,3 +1324,179 @@ test('a picture whose type neither the upstream nor its bytes say fails a caller
       .collected([chunk], finish, 'r1'),
   ).toMatchObject({ output: [item] });
 });
+
+test('a call in a namespace sent back as input reaches the upstream in its namespace', async () => {
+  async function* upstream() {
+    const sent = [
+      {
+        type: 'response.output_item.added',
+        item: {
+          id: 'fc_up',
+          type: 'function_call',
+          status: 'in_progress',
+          arguments: '',
+          call_id: 'call_1',
+          name: 'spawn_agent',
+          namespace: 'multi_agent_v1',
+        },
+        output_index: 0,
+      },
+      {
+        type: 'response.function_call_arguments.done',
+        arguments: '{"message":"say hi"}',
+        item_id: 'fc_up',
+        output_index: 0,
+      },
+      {
+        type: 'response.output_item.done',
+        item: {
+          id: 'fc_up',
+          type: 'function_call',
+          status: 'completed',
+          arguments: '{"message":"say hi"}',
+          call_id: 'call_1',
+          name: 'spawn_agent',
+          namespace: 'multi_agent_v1',
+        },
+        output_index: 0,
+      },
+      { type: 'response.completed', response: { id: 'resp_up' } },
+    ];
+    for (const event of sent) yield { data: JSON.stringify(event) };
+  }
+  const all = await Array.fromAsync(responses.events(upstream()));
+  const finish = all.at(-1);
+  if (finish?.type !== 'finish') throw new Error('the reply did not finish');
+  const reply = responses
+    .decode({ model: 'coder', input: 'Say hi.' }, new Headers())
+    .collected(
+      all.filter((event): event is Chunk => event.type !== 'finish'),
+      finish,
+      'r1',
+    );
+  const output = field(reply, 'output');
+  if (!Array.isArray(output)) throw new Error('the reply has no output');
+  expect(output).toEqual([
+    {
+      id: 'fc_r1_0',
+      type: 'function_call',
+      status: 'completed',
+      call_id: 'call_1',
+      name: 'spawn_agent',
+      namespace: 'multi_agent_v1',
+      arguments: '{"message":"say hi"}',
+    },
+  ]);
+  const { model: _, ...prompt } = responses.decode(
+    {
+      model: 'coder',
+      input: [
+        { role: 'user', content: 'Say hi.' },
+        ...output,
+        { type: 'function_call_output', call_id: 'call_1', output: 'hi' },
+      ],
+    },
+    new Headers(),
+  ).request;
+  expect(field(responses.encode('gpt-5', prompt).body, 'input')).toEqual([
+    { type: 'message', role: 'user', content: 'Say hi.' },
+    {
+      id: 'fc_r1_0',
+      type: 'function_call',
+      status: 'completed',
+      call_id: 'call_1',
+      name: 'spawn_agent',
+      namespace: 'multi_agent_v1',
+      arguments: '{"message":"say hi"}',
+    },
+    { type: 'function_call_output', call_id: 'call_1', output: 'hi' },
+  ]);
+});
+
+test('a call to a custom tool no request declared stays one down to the caller and back up', async () => {
+  async function* upstream() {
+    const sent = [
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: {
+          id: 'ctc_up',
+          type: 'custom_tool_call',
+          status: 'in_progress',
+          call_id: 'call_1',
+          input: '',
+          name: 'exec',
+        },
+      },
+      {
+        type: 'response.custom_tool_call_input.delta',
+        output_index: 0,
+        delta: '1+1\n',
+      },
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          id: 'ctc_up',
+          type: 'custom_tool_call',
+          status: 'completed',
+          call_id: 'call_1',
+          input: '1+1\n',
+          name: 'exec',
+        },
+      },
+      { type: 'response.completed', response: { id: 'resp_up' } },
+    ];
+    for (const event of sent) yield { data: JSON.stringify(event) };
+  }
+  const sent = await Array.fromAsync(
+    responses
+      .decode({ model: 'coder', input: 'Add.', stream: true }, new Headers())
+      .streamed(responses.events(upstream()), 'r1'),
+  );
+  expect(sent.map(({ event }) => event)).toEqual([
+    'response.created',
+    'response.in_progress',
+    'response.output_item.added',
+    'response.custom_tool_call_input.delta',
+    'response.custom_tool_call_input.done',
+    'response.output_item.done',
+    'response.completed',
+  ]);
+  const output = field(
+    field(parsed(sent.at(-1)?.data ?? ''), 'response'),
+    'output',
+  );
+  if (!Array.isArray(output)) throw new Error('the reply has no output');
+  expect(output).toEqual([
+    {
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      input: '1+1\n',
+    },
+  ]);
+  const { model: _, ...prompt } = responses.decode(
+    {
+      model: 'coder',
+      input: [
+        { role: 'user', content: 'Add.' },
+        ...output,
+        { type: 'custom_tool_call_output', call_id: 'call_1', output: '2' },
+      ],
+    },
+    new Headers(),
+  ).request;
+  expect(field(responses.encode('gpt-5', prompt).body, 'input')).toEqual([
+    { type: 'message', role: 'user', content: 'Add.' },
+    {
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      input: '1+1\n',
+    },
+    { type: 'custom_tool_call_output', call_id: 'call_1', output: '2' },
+  ]);
+});

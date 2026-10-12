@@ -1004,3 +1004,208 @@ test('the writer writes nothing for what has no form: the reply is ended before'
   expect(closed('whole')).toEqual([]);
   expect(output).toEqual([]);
 });
+
+test('what else the item of a call held is written into the item the caller reads', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  expect(
+    push({
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '',
+      provider: {
+        'openai.responses': { namespace: 'multi_agent_v1', made_up: [1] },
+      },
+    }),
+  ).toEqual([
+    {
+      type: 'response.output_item.added',
+      output_index: 0,
+      item: {
+        id: 'fc_r1_0',
+        type: 'function_call',
+        status: 'in_progress',
+        call_id: 'call_1',
+        name: 'spawn_agent',
+        namespace: 'multi_agent_v1',
+        made_up: [1],
+        arguments: '',
+      },
+    },
+  ]);
+  push({ type: 'tool_call', id: 'call_1', arguments: '{"message":"hi"}' });
+  expect(closed('whole').at(-1)).toEqual({
+    type: 'response.output_item.done',
+    output_index: 0,
+    item: {
+      id: 'fc_r1_0',
+      type: 'function_call',
+      status: 'completed',
+      call_id: 'call_1',
+      name: 'spawn_agent',
+      namespace: 'multi_agent_v1',
+      made_up: [1],
+      arguments: '{"message":"hi"}',
+    },
+  });
+  expect(output).toHaveLength(1);
+});
+
+test('a call the upstream marked as custom is written as one where no tool was declared', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  expect(
+    [
+      ...push({
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'exec',
+        arguments: '',
+        provider: { 'openai.responses': { type: 'custom_tool_call' } },
+      }),
+      ...push({ type: 'tool_call', id: 'call_1', arguments: '1+1\n' }),
+      ...closed('whole'),
+    ].map(({ type }) => type),
+  ).toEqual([
+    'response.output_item.added',
+    'response.custom_tool_call_input.delta',
+    'response.custom_tool_call_input.done',
+    'response.output_item.done',
+  ]);
+  expect(output).toEqual([
+    {
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      input: '1+1\n',
+    },
+  ]);
+});
+
+test('a call with no provider data is a function call of the fields this API has', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  expect(
+    push({
+      type: 'tool_call',
+      id: 'toolu_1',
+      name: 'weather',
+      arguments: '{}',
+    }),
+  ).toEqual([
+    {
+      type: 'response.output_item.added',
+      output_index: 0,
+      item: {
+        id: 'fc_r1_0',
+        type: 'function_call',
+        status: 'in_progress',
+        call_id: 'toolu_1',
+        name: 'weather',
+        arguments: '',
+      },
+    },
+    {
+      type: 'response.function_call_arguments.delta',
+      item_id: 'fc_r1_0',
+      output_index: 0,
+      delta: '{}',
+    },
+  ]);
+  expect(closed('whole')).toEqual([
+    {
+      type: 'response.function_call_arguments.done',
+      item_id: 'fc_r1_0',
+      output_index: 0,
+      arguments: '{}',
+    },
+    {
+      type: 'response.output_item.done',
+      output_index: 0,
+      item: {
+        id: 'fc_r1_0',
+        type: 'function_call',
+        status: 'completed',
+        call_id: 'toolu_1',
+        name: 'weather',
+        arguments: '{}',
+      },
+    },
+  ]);
+  expect(output).toHaveLength(1);
+});
+
+test('a late chunk of a call opened as custom adds what it held, and the call stays custom', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  push({
+    type: 'tool_call',
+    id: 'call_1',
+    name: 'exec',
+    arguments: '1+',
+    provider: { 'openai.responses': { type: 'custom_tool_call' } },
+  });
+  expect(
+    push({
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '1',
+      provider: {
+        'openai.responses': { type: 'function_call', namespace: 'agents' },
+      },
+    }),
+  ).toEqual([
+    {
+      type: 'response.custom_tool_call_input.delta',
+      item_id: 'ctc_r1_0',
+      output_index: 0,
+      delta: '1',
+    },
+  ]);
+  closed('whole');
+  expect(output).toEqual([
+    {
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      namespace: 'agents',
+      input: '1+1',
+    },
+  ]);
+});
+
+test('a late chunk of a call adds nothing that was written for another family', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{' });
+  push({
+    type: 'tool_call',
+    id: 'call_1',
+    arguments: '}',
+    provider: { 'openai.chat': { namespace: 'agents' } },
+  });
+  closed('whole');
+  expect(output).toEqual([
+    {
+      id: 'fc_r1_0',
+      type: 'function_call',
+      status: 'completed',
+      call_id: 'call_1',
+      name: 'weather',
+      arguments: '{}',
+    },
+  ]);
+});

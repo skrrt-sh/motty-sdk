@@ -245,6 +245,10 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
     messages: [{ role: 'user', text: 'Hi' }],
     options: { reasoning: { effort: 'low', exclude: true } },
   },
+  'user.long': {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { user: 'u'.repeat(65) },
+  },
   hosted: {
     messages: [
       {

@@ -193,6 +193,10 @@ export const fieldless = {
     chat: 'hint',
     responses: 'hint',
   },
+  'user.long': {
+    said: 'a user longer than 64 characters',
+    responses: 'hint',
+  },
   audio: { said: 'audio', responses: 'meaning', messages: 'meaning' },
   // No API takes a picture as bare bytes, and none is given a type here.
   'image.untyped': {

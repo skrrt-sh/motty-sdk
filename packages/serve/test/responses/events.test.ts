@@ -497,7 +497,12 @@ test('an item sent whole, with no deltas before it, is still read in full', asyn
       ),
     ),
   ).toEqual([
-    { type: 'text', text: 'Hello', block: 0 },
+    {
+      type: 'text',
+      text: 'Hello',
+      block: 0,
+      provider: { 'openai.responses': { phase: 'final_answer' } },
+    },
     { type: 'refusal', text: 'No more.', block: 0 },
     {
       type: 'tool_call',
@@ -505,6 +510,7 @@ test('an item sent whole, with no deltas before it, is still read in full', asyn
       name: 'patch',
       arguments: '*** Begin',
       block: 1,
+      provider: { 'openai.responses': { type: 'custom_tool_call' } },
     },
     { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
   ]);
@@ -1013,5 +1019,515 @@ test('a message sent whole, with no deltas before it, keeps its annotations', as
       },
     },
     { type: 'finish', reason: 'stop', rawReason: 'completed' },
+  ]);
+});
+
+test('a call that comes in pieces says what else its item held once, with its name', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: '{"message":',
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: '"say hi"}',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{"message":"say hi"}',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { namespace: 'multi_agent_v1' } },
+    },
+    { type: 'tool_call', id: 'call_1', arguments: '{"message":', block: 0 },
+    { type: 'tool_call', id: 'call_1', arguments: '"say hi"}', block: 0 },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('a call that comes whole, with nothing before it, says what else its item held', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{"message":"say hi"}',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '{"message":"say hi"}',
+      block: 0,
+      provider: { 'openai.responses': { namespace: 'multi_agent_v1' } },
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('a call whose arguments come only with its end says what else its item held at its start', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            item: {
+              id: 'fc_000ee',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_BeCk',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+            output_index: 0,
+          },
+          {
+            type: 'response.function_call_arguments.done',
+            arguments: '{"message":"say hi"}',
+            item_id: 'fc_000ee',
+            output_index: 0,
+          },
+          {
+            type: 'response.output_item.done',
+            item: {
+              id: 'fc_000ee',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{"message":"say hi"}',
+              call_id: 'call_BeCk',
+              name: 'spawn_agent',
+              namespace: 'multi_agent_v1',
+            },
+            output_index: 0,
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_BeCk',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { namespace: 'multi_agent_v1' } },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_BeCk',
+      arguments: '{"message":"say hi"}',
+      block: 0,
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('a call to a custom tool is marked as one, and a call to a function with nothing more is not', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'ctc_1',
+              type: 'custom_tool_call',
+              status: 'completed',
+              call_id: 'call_1',
+              input: '1+1\n',
+              name: 'exec',
+            },
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 1,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              call_id: 'call_2',
+              arguments: '{}',
+              name: 'time',
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'exec',
+      arguments: '1+1\n',
+      block: 0,
+      provider: { 'openai.responses': { type: 'custom_tool_call' } },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_2',
+      name: 'time',
+      arguments: '{}',
+      block: 1,
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('a message that comes whole says its phase', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'msg_1',
+              type: 'message',
+              status: 'completed',
+              role: 'assistant',
+              phase: 'final_answer',
+              content: [
+                { type: 'output_text', text: 'Done.', annotations: [] },
+              ],
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'text',
+      text: 'Done.',
+      block: 0,
+      provider: { 'openai.responses': { phase: 'final_answer' } },
+    },
+    { type: 'finish', reason: 'stop', rawReason: 'completed' },
+  ]);
+});
+
+test('the end of a call says what else its item held that its opening did not', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              caller: 'model',
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: '{}',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{}',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              caller: 'model',
+              namespace: 'agents',
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { caller: 'model' } },
+    },
+    { type: 'tool_call', id: 'call_1', arguments: '{}', block: 0 },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { namespace: 'agents' } },
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('a call whose pieces come before its item goes out with no name under an id the codec made, custom from its first piece, and its end says what else the item held', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.custom_tool_call_input.delta',
+            output_index: 0,
+            delta: '1+',
+          },
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'ctc_1',
+              type: 'custom_tool_call',
+              status: 'in_progress',
+              input: '',
+              call_id: 'call_1',
+              name: 'exec',
+              namespace: 'agents',
+            },
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'ctc_1',
+              type: 'custom_tool_call',
+              status: 'completed',
+              input: '1+1',
+              call_id: 'call_1',
+              name: 'exec',
+              namespace: 'agents',
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 1,
+            delta: '{}',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 1,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{}',
+              call_id: 'call_2',
+              name: 'time',
+              namespace: 'agents',
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_0',
+      arguments: '1+',
+      block: 0,
+      provider: { 'openai.responses': { type: 'custom_tool_call' } },
+    },
+    { type: 'tool_call', id: 'call_0', arguments: '', block: 0 },
+    {
+      type: 'tool_call',
+      id: 'call_0',
+      arguments: '1',
+      block: 0,
+      provider: { 'openai.responses': { namespace: 'agents' } },
+    },
+    { type: 'tool_call', id: 'call_1', arguments: '{}', block: 1 },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '',
+      block: 1,
+      provider: { 'openai.responses': { namespace: 'agents' } },
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('the end of a call says again what its item holds otherwise than its opening told', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: null,
+              caller: { a: 1 },
+            },
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'agents',
+              caller: { a: 2 },
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: { 'openai.responses': { namespace: null, caller: { a: 1 } } },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '',
+      block: 0,
+      provider: {
+        'openai.responses': { namespace: 'agents', caller: { a: 2 } },
+      },
+    },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+  ]);
+});
+
+test('the end of a call that holds what its opening told adds no chunk', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sse(
+          {
+            type: 'response.output_item.added',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'in_progress',
+              arguments: '',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'agents',
+              caller: { kind: 'model', tools: ['a', { b: null }] },
+            },
+          },
+          {
+            type: 'response.function_call_arguments.delta',
+            output_index: 0,
+            delta: '{}',
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              arguments: '{}',
+              call_id: 'call_1',
+              name: 'spawn_agent',
+              namespace: 'agents',
+              caller: { kind: 'model', tools: ['a', { b: null }] },
+            },
+          },
+          { type: 'response.completed', response: {} },
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'spawn_agent',
+      arguments: '',
+      block: 0,
+      provider: {
+        'openai.responses': {
+          namespace: 'agents',
+          caller: { kind: 'model', tools: ['a', { b: null }] },
+        },
+      },
+    },
+    { type: 'tool_call', id: 'call_1', arguments: '{}', block: 0 },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
   ]);
 });

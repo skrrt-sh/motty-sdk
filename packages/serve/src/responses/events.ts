@@ -16,15 +16,22 @@ import {
   number,
   parsed,
   text,
+  without,
 } from '../wire/json.ts';
 import { failed } from '../wire/openai-failure.ts';
 import type { Clean, Cut, FailureReader } from '../wire/upstream-failure.ts';
 import { family } from './family.ts';
-import { field, without } from './fields.ts';
+import { callWritten, field, isCustom } from './fields.ts';
 import { reasoned, reasonedWhole } from './reasoning.ts';
 
 // What has been passed on of one output item, so its end adds only the rest.
-type Seen = { call?: string; given: number; said: boolean; phase?: string };
+type Seen = {
+  call?: string;
+  given: number;
+  said: boolean;
+  phase?: string;
+  told: Map<string, Json>;
+};
 
 function usageOf(response: Dict): { usage?: Usage } {
   const { usage } = response;
@@ -126,24 +133,70 @@ function ending(
 
 function seenAt(items: Map<number, Seen>, event: Dict): [number, Seen] {
   const index = number(field(event, 'output_index')) ?? 0;
-  const seen = items.get(index) ?? { given: 0, said: false };
+  const seen = items.get(index) ?? { given: 0, said: false, told: new Map() };
   items.set(index, seen);
   return [index, seen];
 }
 
-function fragment(block: number, seen: Seen, item: Dict, more: string) {
+// A value is read anew at each event, so one that holds others is compared
+// by its text. Told again for its fields' order alone, it costs one chunk.
+function same(told: Json | undefined, value: Json): boolean {
+  return (
+    told === value ||
+    (typeof value === 'object' &&
+      JSON.stringify(told) === JSON.stringify(value))
+  );
+}
+
+// Whatever else the item held is this family's alone, and so is its being a
+// call to a custom tool, which no other field of a call tells. The end of an
+// item tells what its opening did not, and what it told otherwise.
+function untold(seen: Seen, item: Dict) {
+  let more: [string, Json][] | undefined;
+  for (const name in item) {
+    const value = item[name];
+    const written =
+      name === 'type' ? !isCustom(item) : callWritten.includes(name);
+    if (value === undefined || written || same(seen.told.get(name), value)) {
+      continue;
+    }
+    seen.told.set(name, value);
+    more ??= [];
+    more.push([name, value]);
+  }
+  return more === undefined
+    ? {}
+    : { provider: { [family]: Object.fromEntries(more) } };
+}
+
+function fragment(
+  block: number,
+  seen: Seen,
+  item: Dict,
+  more: string,
+  last = false,
+) {
   const { call_id: id, name } = item;
   const first = seen.call === undefined;
   seen.call ??= text(id) ?? `call_${block}`;
   seen.given += more.length;
-  const chunk: Chunk = {
+  const chunk: Chunk & { type: 'tool_call' } = {
     type: 'tool_call',
     id: seen.call,
     ...(first && typeof name === 'string' ? { name } : {}),
+    ...(first || last ? untold(seen, item) : {}),
     arguments: more,
     block,
   };
   return chunk;
+}
+
+// A piece of a custom tool's input says the call is one before any item does.
+const custom = { type: 'custom_tool_call' };
+
+function phased(seen: Seen, item: Dict): void {
+  const phase = text(field(item, 'phase'));
+  if (phase !== undefined) seen.phase = phase;
 }
 
 function started(block: number, seen: Seen, item: Dict): Chunk[] {
@@ -155,11 +208,9 @@ function started(block: number, seen: Seen, item: Dict): Chunk[] {
       return [
         { type: 'reasoning', text: '', block, provider: { [family]: item } },
       ];
-    case 'message': {
-      const phase = text(field(item, 'phase'));
-      if (phase !== undefined) seen.phase = phase;
+    case 'message':
+      phased(seen, item);
       return [];
-    }
     default:
       return [];
   }
@@ -205,9 +256,11 @@ function ended(block: number, seen: Seen, item: Dict): Chunk[] {
       const whole =
         text(field(item, 'arguments')) ?? text(field(item, 'input')) ?? '';
       const rest = whole.slice(seen.given);
-      return seen.call !== undefined && rest === ''
+      const opened = seen.call !== undefined;
+      const piece = fragment(block, seen, item, rest, true);
+      return opened && rest === '' && piece.provider === undefined
         ? []
-        : [fragment(block, seen, item, rest)];
+        : [piece];
     }
     case 'reasoning':
       return [
@@ -216,6 +269,7 @@ function ended(block: number, seen: Seen, item: Dict): Chunk[] {
       ];
     case 'message':
       if (seen.said) return [];
+      phased(seen, item);
       return list(field(item, 'content')).flatMap((part): Chunk[] => {
         const { type, text: said, refusal, annotations } = dict(part);
         if (type === 'output_text' && typeof said === 'string') {
@@ -298,8 +352,9 @@ function read(event: Dict, items: Map<number, Seen>): Chunk[] {
       seen.said = true;
       return [reasoned(block, 'reasoning_text', delta)];
     case 'response.function_call_arguments.delta':
-    case 'response.custom_tool_call_input.delta':
       return [fragment(block, seen, {}, delta)];
+    case 'response.custom_tool_call_input.delta':
+      return [fragment(block, seen, custom, delta)];
     case 'response.output_text.annotation.added':
       return [cited(block, field(event, 'annotation'))];
     default:

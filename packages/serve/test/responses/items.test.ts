@@ -971,3 +971,38 @@ test('a million calls in one message are each an item, not a stack too deep', ()
 
   expect(input).toHaveLength(1_000_000);
 });
+
+test('a call with free text and its result are written as custom where no tool was declared', () => {
+  expect(
+    inputOf(
+      leaving('responses'),
+      [
+        {
+          role: 'assistant',
+          parts: [
+            { type: 'tool_call', id: 'call_1', name: 'exec', input: '1+1\n' },
+            { type: 'tool_call', id: 'call_2', name: 'time', input: {} },
+          ],
+        },
+        {
+          role: 'tool',
+          parts: [
+            { type: 'tool_result', id: 'call_1', text: '2' },
+            { type: 'tool_result', id: 'call_2', text: 'noon' },
+          ],
+        },
+      ],
+      new Set(),
+    ).input,
+  ).toEqual([
+    {
+      call_id: 'call_1',
+      name: 'exec',
+      type: 'custom_tool_call',
+      input: '1+1\n',
+    },
+    { call_id: 'call_2', name: 'time', type: 'function_call', arguments: '{}' },
+    { type: 'custom_tool_call_output', call_id: 'call_1', output: '2' },
+    { type: 'function_call_output', call_id: 'call_2', output: 'noon' },
+  ]);
+});

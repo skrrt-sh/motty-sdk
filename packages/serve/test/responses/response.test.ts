@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Progress, StreamEvent } from '@mottyjs/core/host';
+import { field } from '../../src/responses/fields.ts';
 import { collected, streamed } from '../../src/responses/response.ts';
 import { parsed } from '../../src/wire/json.ts';
 
@@ -331,4 +332,283 @@ test.each([
       ),
     ),
   ).toMatchObject({ usage: cost === undefined ? {} : { cost } });
+});
+
+test('a field of a call that this API does not name reaches the caller, streamed and collected', async () => {
+  const sent = await Array.fromAsync(
+    streamed(
+      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      run(
+        {
+          type: 'tool_call',
+          id: 'call_1',
+          name: 'spawn_agent',
+          arguments: '{}',
+          provider: { 'openai.responses': { made_up: { kept: true } } },
+        },
+        { type: 'finish', reason: 'tool_calls' },
+      ),
+      'r1',
+    ),
+  );
+  expect(
+    sent
+      .filter(({ event }) => event?.startsWith('response.output_item.'))
+      .map(({ data }) => parsed(data)),
+  ).toMatchObject([
+    {
+      type: 'response.output_item.added',
+      item: { id: 'fc_r1_0', status: 'in_progress', made_up: { kept: true } },
+    },
+    {
+      type: 'response.output_item.done',
+      item: { id: 'fc_r1_0', status: 'completed', made_up: { kept: true } },
+    },
+  ]);
+  expect(
+    collected(
+      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      [
+        {
+          type: 'tool_call',
+          id: 'call_1',
+          name: 'spawn_agent',
+          arguments: '{}',
+          provider: { 'openai.responses': { made_up: { kept: true } } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      'r1',
+    ),
+  ).toMatchObject({
+    output: [
+      {
+        id: 'fc_r1_0',
+        type: 'function_call',
+        status: 'completed',
+        call_id: 'call_1',
+        name: 'spawn_agent',
+        made_up: { kept: true },
+        arguments: '{}',
+      },
+    ],
+  });
+});
+
+test('what a chunk carries never stands beside a field this API writes of a call, streamed and collected', async () => {
+  const sent = await Array.fromAsync(
+    streamed(
+      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      run(
+        {
+          type: 'tool_call',
+          id: 'call_1',
+          name: 'exec',
+          arguments: 'abc',
+          provider: {
+            'openai.responses': {
+              type: 'custom_tool_call',
+              id: 'ctc_up',
+              call_id: 'call_up',
+              name: 'other',
+              arguments: 'LEAK',
+              status: 'weird',
+              input: 'LEAK',
+              namespace: 'agents',
+            },
+          },
+        },
+        {
+          type: 'tool_call',
+          id: 'call_2',
+          name: 'time',
+          arguments: '{}',
+          provider: {
+            'openai.responses': {
+              id: 'fc_up',
+              status: 'weird',
+              input: 'LEAK',
+              arguments: 'LEAK',
+              namespace: 'agents',
+            },
+          },
+        },
+        { type: 'finish', reason: 'tool_calls' },
+      ),
+      'r1',
+    ),
+  );
+  expect(
+    sent
+      .filter(({ event }) => event?.startsWith('response.output_item.'))
+      .map(({ data }) => field(parsed(data), 'item')),
+  ).toEqual([
+    {
+      namespace: 'agents',
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      input: '',
+    },
+    {
+      namespace: 'agents',
+      id: 'fc_r1_1',
+      type: 'function_call',
+      call_id: 'call_2',
+      name: 'time',
+      status: 'in_progress',
+      arguments: '',
+    },
+    {
+      namespace: 'agents',
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      input: 'abc',
+    },
+    {
+      namespace: 'agents',
+      id: 'fc_r1_1',
+      type: 'function_call',
+      call_id: 'call_2',
+      name: 'time',
+      status: 'completed',
+      arguments: '{}',
+    },
+  ]);
+  expect(
+    field(
+      collected(
+        { body: { model: 'coder' }, muted: true, custom: new Set() },
+        [
+          {
+            type: 'tool_call',
+            id: 'call_1',
+            name: 'exec',
+            arguments: 'abc',
+            provider: {
+              'openai.responses': {
+                type: 'custom_tool_call',
+                arguments: 'LEAK',
+                status: 'weird',
+              },
+            },
+          },
+          {
+            type: 'tool_call',
+            id: 'call_2',
+            name: 'time',
+            arguments: '{}',
+            provider: { 'openai.responses': { input: 'LEAK' } },
+          },
+        ],
+        { type: 'finish', reason: 'tool_calls' },
+        'r1',
+      ),
+      'output',
+    ),
+  ).toEqual([
+    {
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      input: 'abc',
+    },
+    {
+      id: 'fc_r1_1',
+      type: 'function_call',
+      call_id: 'call_2',
+      name: 'time',
+      status: 'completed',
+      arguments: '{}',
+    },
+  ]);
+});
+
+test('a field of a call told after its opening is in the item as done, streamed and collected', async () => {
+  const sent = await Array.fromAsync(
+    streamed(
+      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      run(
+        { type: 'tool_call', id: 'call_1', name: 'spawn_agent', arguments: '' },
+        { type: 'tool_call', id: 'call_1', arguments: '{}' },
+        {
+          type: 'tool_call',
+          id: 'call_1',
+          arguments: '',
+          provider: {
+            'openai.responses': {
+              namespace: 'agents',
+              type: 'custom_tool_call',
+              id: 'fc_up',
+              status: 'weird',
+              input: 'LEAK',
+            },
+          },
+        },
+        { type: 'finish', reason: 'tool_calls' },
+      ),
+      'r1',
+    ),
+  );
+  expect(
+    sent
+      .filter(({ event }) => event?.startsWith('response.output_item.'))
+      .map(({ data }) => field(parsed(data), 'item')),
+  ).toEqual([
+    {
+      id: 'fc_r1_0',
+      type: 'function_call',
+      call_id: 'call_1',
+      name: 'spawn_agent',
+      status: 'in_progress',
+      arguments: '',
+    },
+    {
+      id: 'fc_r1_0',
+      type: 'function_call',
+      call_id: 'call_1',
+      name: 'spawn_agent',
+      namespace: 'agents',
+      status: 'completed',
+      arguments: '{}',
+    },
+  ]);
+  expect(
+    field(
+      collected(
+        { body: { model: 'coder' }, muted: true, custom: new Set() },
+        [
+          {
+            type: 'tool_call',
+            id: 'call_1',
+            name: 'spawn_agent',
+            arguments: '',
+          },
+          {
+            type: 'tool_call',
+            id: 'call_1',
+            arguments: '{}',
+            provider: { 'openai.responses': { namespace: 'agents' } },
+          },
+        ],
+        { type: 'finish', reason: 'tool_calls' },
+        'r1',
+      ),
+      'output',
+    ),
+  ).toEqual([
+    {
+      id: 'fc_r1_0',
+      type: 'function_call',
+      call_id: 'call_1',
+      name: 'spawn_agent',
+      namespace: 'agents',
+      status: 'completed',
+      arguments: '{}',
+    },
+  ]);
 });
