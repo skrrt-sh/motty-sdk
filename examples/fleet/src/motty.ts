@@ -14,10 +14,10 @@ export default motty({ name })
   .use(ledger)
   .use(brake)
   .route(
-    ({ family, seat, settings }) => {
+    ({ agent, settings }) => {
       // An agent says which one it is on every request, so one that does not is someone asking about the fleet
-      if (family === undefined) return "board";
-      return seat !== "lead" && settings.fleet.scouts === "small" ? "scout" : "asked";
+      if (agent === undefined) return "board";
+      return agent.seat !== "lead" && settings.fleet.scouts === "small" ? "scout" : "asked";
     },
     { board, scout, asked },
   );

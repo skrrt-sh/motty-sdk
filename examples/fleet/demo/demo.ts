@@ -1,19 +1,28 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { anthropic } from "@mottyjs/adapters/anthropic";
+import { openai } from "@mottyjs/adapters/openai";
 import { mount } from "@mottyjs/serve";
+import { memory } from "@mottyjs/test";
 import { name } from "../src/models";
 import fleet from "../src/motty";
-import { host } from "../src/serve";
+import { price } from "../src/price";
+import { budgetFrom } from "../src/settings";
 import { board } from "./board";
 
 const [scouts = "small", budget = "1", agent = "claude", asked = name] = Bun.argv.slice(2);
 const { PATH } = Bun.env;
 
-const served = mount(fleet, () => ({
-  ...host({ ...Bun.env, SCOUTS: scouts, BUDGET: budget }),
-  // The board is what a run shows, and a record printed after each request would break it up
-  report: () => {},
+// The board is what a run shows, and a record printed after each request would break it up
+const served = mount(fleet, ({ ANTHROPIC_KEY, OPENAI_KEY }) => ({
+  models: [anthropic({ key: ANTHROPIC_KEY }), openai({ key: OPENAI_KEY })],
+  storage: memory(),
+  settings: {
+    fleet: { scouts: scouts === "asked" ? "asked" : "small", budget: budgetFrom(budget) },
+  },
+  limits: { duration: 300_000, calls: 2 },
+  price,
 }));
 
 using server = Bun.serve({ port: 0, fetch: served.fetch, idleTimeout: 240 });
@@ -76,21 +85,24 @@ const agents = {
   },
 };
 const { command, env } = agent === "codex" ? agents.codex : agents.claude;
-const harness = Bun.spawn(command, {
-  cwd: dir,
-  env: { PATH, HOME: dir, ...env },
-  stdin: "ignore",
-  stdout: "pipe",
-  stderr: "pipe",
-});
-const [exit, said, complained] = await Promise.all([
-  harness.exited,
-  harness.stdout.text(),
-  harness.stderr.text(),
-]);
-
-clearInterval(watching);
-console.log(`\n${agent}, scouts ${scouts}, budget $${budget}, exit ${exit}, ${seconds()} s\n${await board(url)}`);
-console.log(`\n${said.trim()}${complained.slice(0, 300)}`);
-await served.close();
-await rm(dir, { recursive: true });
+// An agent that is not installed fails to start, and the directory and the watching end all the same
+try {
+  const harness = Bun.spawn(command, {
+    cwd: dir,
+    env: { PATH, HOME: dir, ...env },
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [exit, said, complained] = await Promise.all([
+    harness.exited,
+    harness.stdout.text(),
+    harness.stderr.text(),
+  ]);
+  console.log(`\n${agent}, scouts ${scouts}, budget $${budget}, exit ${exit}, ${seconds()} s\n${await board(url)}`);
+  console.log(`\n${said.trim()}\n${complained.slice(0, 300)}`);
+} finally {
+  clearInterval(watching);
+  await served.close();
+  await rm(dir, { recursive: true });
+}

@@ -3,7 +3,7 @@ import { model } from "@mottyjs/core";
 // An agent that names no model asks for the motty itself, so this is a model name like the others
 export const name = "fleet";
 
-// An agent stays on its own family: the options it sends are that family's and no other takes them
+// An agent stays on its own family, because no other takes the options it sends
 export const anthropic = {
   lead: model("anthropic/claude-opus-5-5"),
   small: model("anthropic/claude-haiku-5-5"),
