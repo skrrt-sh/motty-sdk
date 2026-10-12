@@ -103,12 +103,14 @@ export function unsaid(reasoning: Reasoning | undefined, defaults: Dict): Dict {
 // Thinking in this API's own words is sent as said. Neutral words are
 // translated: a budget is manual thinking, an effort adaptive, shown unless
 // muted, and an order not to reason the lowest effort, which every model takes.
+// A model that thinks only on a budget is sent the effort with no thinking.
 export function reasoningTo(
   left: Leaving,
   reasoning: Reasoning | undefined,
   kept: Json | undefined,
   steer: Json | undefined,
   said?: Json,
+  adaptive = true,
 ): { thinking?: Dict; effort?: string } {
   const { effort: level, budgetTokens, exclude } = reasoning ?? {};
   const { type, display, ...rest } = dict(kept);
@@ -146,7 +148,10 @@ export function reasoningTo(
     level !== 'none' &&
     (type === 'adaptive' || (!own && effort !== undefined))
   ) {
-    return { thinking: { type: 'adaptive', ...shape }, ...leveled };
+    if (adaptive)
+      return { thinking: { type: 'adaptive', ...shape }, ...leveled };
+    left.without('reasoning.adaptive', true);
+    return leveled;
   }
   left.without('reasoning.hint', kept);
   return leveled;

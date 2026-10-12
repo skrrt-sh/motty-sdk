@@ -11,6 +11,7 @@ import type {
   RunStream,
 } from '@mottyjs/core/host';
 import type { ServerSentEvent } from './sse.ts';
+import type { Effort } from './wire/effort.ts';
 import type { Dict } from './wire/json.ts';
 import type { Clean } from './wire/upstream-failure.ts';
 
@@ -47,7 +48,11 @@ export type Taken = {
   frequencyPenalty: boolean;
   // Whether a temperature and a top-p may be sent in one request.
   together: boolean;
-  effort: boolean;
+  // Every level, none, or the levels the model has a word for.
+  effort: boolean | readonly Effort[];
+  // Whether the model may set its own thinking, with no budget stated. Only
+  // an Anthropic upstream is asked, and one that does not say may.
+  adaptive?: boolean;
 };
 
 // Asked by the model's own name and by what the request says of reasoning:

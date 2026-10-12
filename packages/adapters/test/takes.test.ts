@@ -6,6 +6,7 @@ import {
   minimaxTakes,
   mistralTakes,
   moonshotTakes,
+  openaiChatTakes,
   openaiTakes,
   zaiTakes,
 } from '../src/takes.ts';
@@ -93,14 +94,16 @@ test.each([
 );
 
 test.each([
-  'claude-opus-4-5-20251101',
-  'claude-opus-4-5',
-  'claude-sonnet-4-6',
-  'claude-opus-4-6',
-  'claude-opus-4-7',
-  'claude-haiku-5-5',
-])('%s takes an effort', (model) => {
-  expect(anthropicTakes(model, true)).toMatchObject({ effort: true });
+  ['claude-opus-4-5-20251101', ['low', 'medium', 'high']],
+  ['claude-opus-4-5', ['low', 'medium', 'high']],
+  ['claude-sonnet-4-6', ['low', 'medium', 'high', 'max']],
+  ['claude-opus-4-6', ['low', 'medium', 'high', 'max']],
+  ['claude-opus-4-7', true],
+  ['claude-haiku-5-5', true],
+  ['claude-next', true],
+])('%s takes an effort, at the levels it has a word for', (model, effort) => {
+  expect(anthropicTakes(model, true)).toMatchObject({ effort });
+  expect(anthropicTakes(model, undefined)).toMatchObject({ effort });
 });
 
 test.each([
@@ -113,6 +116,29 @@ test.each([
   'claude-3-haiku-20240307',
 ])('%s takes no effort', (model) => {
   expect(anthropicTakes(model, true)).toMatchObject({ effort: false });
+});
+
+test.each([
+  'claude-opus-4-5-20251101',
+  'claude-opus-4-5',
+  'claude-haiku-4-5',
+  'claude-sonnet-4-5',
+  'claude-opus-4-1',
+  'claude-3-7-sonnet-latest',
+])('%s thinks only on a budget', (model) => {
+  expect(anthropicTakes(model, true)).toMatchObject({ adaptive: false });
+  expect(anthropicTakes(model, undefined)).toMatchObject({ adaptive: false });
+});
+
+test.each([
+  'claude-sonnet-4-6',
+  'claude-opus-4-6',
+  'claude-opus-4-7',
+  'claude-haiku-5-5',
+  'claude-next',
+])('%s may be left to set its own thinking', (model) => {
+  expect(anthropicTakes(model, true)?.adaptive).not.toBe(false);
+  expect(anthropicTakes(model, undefined)?.adaptive).not.toBe(false);
 });
 
 test.each([
@@ -217,7 +243,6 @@ test.each([
     temperature: [0, 2],
     presencePenalty: true,
     frequencyPenalty: true,
-    effort: true,
   });
   expect(openaiTakes(model, false)).toEqual(openaiTakes(model, undefined));
   expect(openaiTakes(model, true)).toMatchObject({
@@ -225,7 +250,6 @@ test.each([
     topP: 1,
     presencePenalty: false,
     frequencyPenalty: false,
-    effort: true,
   });
 });
 
@@ -242,16 +266,14 @@ test.each([
     temperature: [0, 2],
     presencePenalty: true,
     frequencyPenalty: true,
-    effort: true,
   });
-  expect(openaiTakes(model, undefined)).toEqual({
+  expect(openaiTakes(model, undefined)).toMatchObject({
     temperature: 1,
     topP: 1,
     topK: false,
     presencePenalty: false,
     frequencyPenalty: false,
     together: true,
-    effort: true,
   });
   expect(openaiTakes(model, true)).toEqual(openaiTakes(model, undefined));
 });
@@ -274,19 +296,74 @@ test.each([
   'gpt-6.1-sol',
   'chat-latest',
 ])(
-  '%s, which never samples and refuses the order not to reason, is held to the newest behaviour and takes an effort',
+  '%s, which never samples and refuses the order not to reason, is held to the newest behaviour',
   (model) => {
     expect(openaiTakes(model, undefined)).toMatchObject({
       temperature: 1,
       topP: 1,
       presencePenalty: false,
       frequencyPenalty: false,
-      effort: true,
     });
     expect(openaiTakes(model, true)).toEqual(openaiTakes(model, undefined));
-    expect(openaiTakes(model, false)).toEqual(openaiTakes('gpt-5.5', false));
+    expect(openaiTakes(model, false)).toMatchObject({
+      ...openaiTakes('gpt-5.5', false),
+      effort: openaiTakes(model, undefined)?.effort,
+    });
   },
 );
+
+const o = ['low', 'medium', 'high'] as const;
+const first = ['minimal', 'low', 'medium', 'high'] as const;
+const stoppable = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
+const pro = ['medium', 'high', 'xhigh'] as const;
+const newest = ['low', 'medium', 'high', 'xhigh'] as const;
+
+// Each row is what the model named in its own refusal when it was asked live.
+test.each([
+  ['chat-latest', ['medium'], ['medium']],
+  ['o1', o, [...o, 'xhigh']],
+  ['o3', o, [...o, 'xhigh']],
+  ['o3-mini', o, [...o, 'xhigh']],
+  ['o4-mini-2025-04-16', o, [...o, 'xhigh']],
+  ['ft:o4-mini-2025-04-16:acme::9xYz', o, [...o, 'xhigh']],
+  ['gpt-5-pro', ['high'], ['high']],
+  ['gpt-5', first, first],
+  ['gpt-5-mini', first, first],
+  ['gpt-5-nano-2025-08-07', first, first],
+  [
+    'gpt-5.1',
+    ['none', 'low', 'medium', 'high'],
+    ['none', 'low', 'medium', 'high'],
+  ],
+  ['gpt-5.2', stoppable, stoppable],
+  ['gpt-5.3-codex', stoppable, stoppable],
+  ['gpt-5.4-mini-2026-03-17', stoppable, stoppable],
+  ['gpt-5.5', stoppable, stoppable],
+  ['gpt-5.2-pro', pro, pro],
+  ['gpt-5.5-pro-2026-04-23', pro, pro],
+  ['gpt-5.6-luna', [...stoppable, 'max'], stoppable],
+  ['gpt-6-sol', [...stoppable, 'max'], stoppable],
+  ['gpt-6-astra', [...newest, 'max'], newest],
+  ['gpt-6.1-sol', [...newest, 'max'], newest],
+  ['gpt-7', [...newest, 'max'], newest],
+] as const)(
+  '%s takes the effort levels it has a word for on each API',
+  (model, responses, chat) => {
+    for (const reasons of [true, false, undefined]) {
+      expect(openaiTakes(model, reasons)?.effort).toEqual(responses);
+      expect(openaiChatTakes(model, reasons)?.effort).toEqual(chat);
+    }
+  },
+);
+
+test('the two OpenAI rules differ only in the effort levels', () => {
+  for (const model of ['gpt-4o', 'gpt-5.4', 'gpt-6.1-sol', 'o3']) {
+    expect({ ...openaiChatTakes(model, true), effort: undefined }).toEqual({
+      ...openaiTakes(model, true),
+      effort: undefined,
+    });
+  }
+});
 
 test.each([
   'gpt-5.1-codex',
@@ -303,11 +380,12 @@ test.each([
 ])(
   '%s, which did not answer when it was asked, is held to the newest behaviour',
   (model) => {
-    expect(openaiTakes(model, undefined)).toEqual(
-      openaiTakes('gpt-5.5', undefined),
-    );
-    expect(openaiTakes(model, true)).toEqual(openaiTakes('gpt-5.5', true));
-    expect(openaiTakes(model, false)).toEqual(openaiTakes('gpt-5.5', false));
+    for (const reasons of [undefined, true, false]) {
+      expect(openaiTakes(model, reasons)).toMatchObject({
+        ...openaiTakes('gpt-5.5', reasons),
+        effort: ['low', 'medium', 'high', 'xhigh', 'max'],
+      });
+    }
   },
 );
 
@@ -326,11 +404,12 @@ test.each([
 ])(
   '%s, a name nobody asked, is held to the newest behaviour and not to that of a name it starts with',
   (model) => {
-    expect(openaiTakes(model, undefined)).toEqual(
-      openaiTakes('gpt-5.5', undefined),
-    );
-    expect(openaiTakes(model, true)).toEqual(openaiTakes('gpt-5.5', true));
-    expect(openaiTakes(model, false)).toEqual(openaiTakes('gpt-5.5', false));
+    for (const reasons of [undefined, true, false]) {
+      expect(openaiTakes(model, reasons)).toMatchObject({
+        ...openaiTakes('gpt-5.5', reasons),
+        effort: ['low', 'medium', 'high', 'xhigh', 'max'],
+      });
+    }
   },
 );
 
@@ -443,6 +522,7 @@ test('the entry a host imports the rules from exports exactly them, and no type'
     'minimaxTakes',
     'mistralTakes',
     'moonshotTakes',
+    'openaiChatTakes',
     'openaiTakes',
     'zaiTakes',
   ]);

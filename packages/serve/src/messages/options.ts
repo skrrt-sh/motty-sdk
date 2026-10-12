@@ -133,12 +133,15 @@ export function optionsTo(
     ...loose
   } = hint.rest;
   const { thinking: said, output_config: config } = provider;
+  const taken = takes?.(true);
   const { thinking, effort } = reasoningTo(
     left,
-    effortless(left, takes?.(true), options.reasoning),
+    // This API has neither word, and says each as its lowest level.
+    effortless(left, taken, options.reasoning, ['none', 'minimal']),
     shape,
     steer,
     said,
+    taken?.adaptive !== false,
   );
   const { effort: stated } = dict(config);
   left.without('reasoning.own', stated === undefined ? undefined : effort);

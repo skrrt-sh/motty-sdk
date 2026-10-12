@@ -1,11 +1,10 @@
 import type { FinishReason, Json, Options, Part } from '@mottyjs/core/host';
+import { type Effort, nearest } from '../wire/effort.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
 import type { Cut, FailureReader } from '../wire/upstream-failure.ts';
 import { family, hinted } from './family.ts';
 import { wrapped } from './think-tags.ts';
-
-type Effort = NonNullable<NonNullable<Options['reasoning']>['effort']>;
 
 // What a provider adds to Chat Completions. OpenAI's own adds nothing, and
 // refuses a field it does not know, so each addition goes only where named.
@@ -115,34 +114,6 @@ export const reasoningWords = [
   'thinking_budget',
   'chat_template_kwargs',
 ];
-
-const ladder: readonly Effort[] = [
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-];
-
-// A level the upstream has no word for goes as the nearest it has, and as
-// the higher of two equally near.
-function nearest(
-  levels: readonly Effort[] | undefined,
-  level: Effort,
-): Effort | undefined {
-  if (levels === undefined || levels.includes(level)) return level;
-  const at = ladder.indexOf(level);
-  const [first] = levels
-    .filter((each) => each !== 'none')
-    .map((each) => ({ each, rank: ladder.indexOf(each) }))
-    .sort(
-      (one, other) =>
-        Math.abs(one.rank - at) - Math.abs(other.rank - at) ||
-        other.rank - one.rank,
-    );
-  return first?.each;
-}
 
 function turned(word: Exclude<Dialect['asks'], 'reasoning'>, on: boolean) {
   switch (word) {

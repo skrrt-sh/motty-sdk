@@ -609,6 +609,97 @@ test('an effort the model does not take is left out with the adaptive thinking i
   ]);
 });
 
+const budgeted = {
+  temperature: [0, 1],
+  topP: [0, 1],
+  topK: true,
+  presencePenalty: false,
+  frequencyPenalty: false,
+  together: false,
+  adaptive: false,
+} as const;
+
+test('an effort goes with no thinking to a model that thinks only on a budget, and that is reported', () => {
+  const left = leaving('messages');
+
+  const { fields } = optionsTo(
+    left,
+    { reasoning: { effort: 'high' } },
+    undefined,
+    {},
+    () => ({ ...budgeted, effort: true }),
+  );
+
+  expect(fields).toEqual({
+    max_tokens: 64000,
+    output_config: { effort: 'high' },
+  });
+  expect(left.leftOut()).toEqual([
+    {
+      setting: 'reasoning.adaptive',
+      detail:
+        'Anthropic Messages has no field for thinking with no budget, which the model does not take',
+    },
+  ]);
+});
+
+test('a budget is manual thinking beside the effort on a model that thinks only on a budget', () => {
+  const left = leaving('messages');
+
+  const { fields } = optionsTo(
+    left,
+    { reasoning: { effort: 'high', budgetTokens: 2000 } },
+    undefined,
+    {},
+    () => ({ ...budgeted, effort: true }),
+  );
+
+  expect(fields).toEqual({
+    max_tokens: 64000,
+    thinking: { type: 'enabled', budget_tokens: 2000, display: 'summarized' },
+    output_config: { effort: 'high' },
+  });
+  expect(left.leftOut()).toEqual([]);
+});
+
+test.each([true, false])(
+  'adaptive thinking a caller hinted is left out for a model that thinks only on a budget, effort taken %s',
+  (effort) => {
+    const left = leaving('messages');
+
+    const { fields } = optionsTo(
+      left,
+      {
+        reasoning: {},
+        hints: { anthropic: { thinking: { type: 'adaptive' } } },
+      },
+      undefined,
+      {},
+      () => ({ ...budgeted, effort }),
+    );
+
+    expect(fields).toEqual({ max_tokens: 64000 });
+    expect(left.leftOut().map(({ setting }) => setting)).toEqual([
+      'reasoning.adaptive',
+    ]);
+  },
+);
+
+test('adaptive thinking in the API`s own words is sent as said to a model the rule refuses it for', () => {
+  const left = leaving('messages');
+
+  const { fields } = optionsTo(
+    left,
+    { provider: { anthropic: { thinking: { type: 'adaptive' } } } },
+    undefined,
+    {},
+    () => ({ ...budgeted, effort: true }),
+  );
+
+  expect(fields).toEqual({ max_tokens: 64000, thinking: { type: 'adaptive' } });
+  expect(left.leftOut()).toEqual([]);
+});
+
 test('a budget stays as manual thinking where the effort beside it is not taken', () => {
   const left = leaving('messages');
 

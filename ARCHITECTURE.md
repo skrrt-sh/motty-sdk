@@ -966,7 +966,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   against the table; a field the upstream refuses is the upstream's own error.
 - **An adapter says what each of its models takes of the neutral options that differ by model:**
   the sampling settings, each with its range or the one value the model allows, and a reasoning
-  effort. It is a rule over the model's name and whether the request reasons, written once per
+  effort, as every level, none, or the levels the model has a word for. It is a rule over the model's name and whether the request reasons, written once per
   provider, and a connection may state its own in its place. A provider reached through `openai`
   at another address has no rule unless the connection states one, and is sent everything.
 - **The host states prices, and a call's cost is then the host's figure.** `price` in host
@@ -1349,6 +1349,22 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   thirteen current Claude models refuse any temperature but one and most OpenAI reasoning models
   refuse it unless told not to reason, while nearly every OpenAI-style client sends one; and a
   panel that asked every seat for an effort failed on the seat that cannot reason.
+- **A reasoning effort is a ladder, and a rule says which levels a model has a word for.** A
+  level the model lacks goes as the nearest it has, the higher of two equally near, and is
+  reported. An order not to reason goes to a model with no word for it as its lowest level.
+  The levels are asked of the model before the API translates anything, so what is sampled
+  follows the level that is sent. Cause: live, of 13 Claude and 37 OpenAI models no two
+  generations took the same levels, OpenAI's two APIs differed for one model, and a rule that
+  said only whether a model takes an effort sent the rest to a 400. Each model names its levels
+  in its own refusal, and the lists are those. Rejected: reading the levels from a refusal and
+  sending again, a second request for every first call to a model.
+- **A rule says whether a Claude model may be left to set its own thinking.** An effort alone
+  turns that on only where the model takes it. A model that thinks only on a budget is sent
+  the effort with no thinking, and thinking a caller hinted that way is left out, each
+  reported. Thinking said in Anthropic's own words is sent as said. Cause: Opus 4.5 takes an
+  effort and refuses adaptive thinking, so every effort from an OpenAI-style caller failed, and
+  a Messages caller a motty sent to an older Haiku failed the same way. Rejected: a budget made
+  up from the effort, a number no caller said.
 - **The rule names the closed set of older models and holds the rest to the newest behaviour.**
   A model released after the SDK is then treated as the latest known one, and a rule is wrong
   only for a provider that goes back on a change. Rejected: a table of every model, out of date
@@ -1360,7 +1376,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   listed. A model that never samples is not named: each one refuses the order not to reason as
   well, so the newest behaviour leaves its sampling out of every request it accepts. A search
   model neither samples nor takes an effort. A model that can reason is sent no top-p of zero,
-  which Chat Completions refuses: the nearest value is sent and reported.
+  which Chat Completions refuses: the nearest value is sent and reported. The effort levels are
+  closed lists of exact names too, and a name not listed is held to the newest, which has every
+  level and no order not to reason. Chat Completions has a rule of its own: it has no word for
+  the highest level, and takes one level more from the o-series.
 - **A router that drops what a model does not take is given the rule of the model's own
   provider,** by the prefix of its name, so what would be dropped silently is left out here and
   reported.

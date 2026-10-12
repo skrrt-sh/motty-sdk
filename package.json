@@ -25,7 +25,7 @@
     "declarations": "tsc -p tsconfig.declarations.json",
     "test": "bun test",
     "test:browser": "bun test --timeout 20000 ./examples/coder/browser/chat.browser.ts",
-    "test:live": "bun test --timeout 60000 ./packages/adapters/test/openrouter.live.ts ./packages/adapters/test/openrouter-media.live.ts ./packages/adapters/test/openrouter-output.live.ts ./packages/adapters/test/openai.live.ts ./packages/adapters/test/anthropic.live.ts ./packages/adapters/test/claude-code.live.ts ./packages/adapters/test/codex.live.ts ./packages/adapters/test/responses-reasoning.live.ts ./packages/adapters/test/openrouter-open-weight.live.ts ./packages/adapters/test/across-families.live.ts ./packages/adapters/test/responses-gaps.live.ts ./packages/adapters/test/mistral.live.ts ./packages/adapters/test/together.live.ts ./packages/adapters/test/fireworks.live.ts ./packages/adapters/test/typesafe.live.ts",
+    "test:live": "bun test --timeout 60000 ./packages/adapters/test/openrouter.live.ts ./packages/adapters/test/openrouter-media.live.ts ./packages/adapters/test/openrouter-output.live.ts ./packages/adapters/test/openai.live.ts ./packages/adapters/test/anthropic.live.ts ./packages/adapters/test/claude-code.live.ts ./packages/adapters/test/codex.live.ts ./packages/adapters/test/responses-reasoning.live.ts ./packages/adapters/test/openrouter-open-weight.live.ts ./packages/adapters/test/across-families.live.ts ./packages/adapters/test/responses-gaps.live.ts ./packages/adapters/test/mistral.live.ts ./packages/adapters/test/together.live.ts ./packages/adapters/test/fireworks.live.ts ./packages/adapters/test/typesafe.live.ts ./packages/adapters/test/takes.live.ts",
     "record": "RECORD=1 bun test gates",
     "bump": "bun scripts/bump.ts"
   },

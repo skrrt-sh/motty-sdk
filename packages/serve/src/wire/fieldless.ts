@@ -97,6 +97,10 @@ export const fieldless = {
     responses: 'hint',
     messages: 'hint',
   },
+  'reasoning.adaptive': {
+    said: 'thinking with no budget, which the model does not take',
+    messages: 'hint',
+  },
   'reasoning.budgetTokens': {
     said: 'a reasoning budget in tokens',
     chat: 'hint',
@@ -125,6 +129,8 @@ export const fieldless = {
   'reasoning.level': {
     said: 'a reasoning effort the upstream has no level for, sent as the nearest it has',
     chat: 'hint',
+    responses: 'hint',
+    messages: 'hint',
   },
   'reasoning.own': {
     said: "a reasoning option the request also states in the API's own words",
