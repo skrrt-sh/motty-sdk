@@ -64,6 +64,19 @@
         "zod": "^4.0.0",
       },
     },
+    "examples/fleet": {
+      "name": "@acme/fleet",
+      "version": "1.0.0",
+      "dependencies": {
+        "@mottyjs/adapters": "workspace:*",
+        "@mottyjs/core": "workspace:*",
+        "@mottyjs/serve": "workspace:*",
+        "@mottyjs/settings": "workspace:*",
+        "@mottyjs/store": "workspace:*",
+        "@mottyjs/test": "workspace:*",
+        "zod": "^4.0.0",
+      },
+    },
     "packages/adapters": {
       "name": "@mottyjs/adapters",
       "version": "0.1.0",
@@ -159,6 +172,8 @@
     "@acme/council": ["@acme/council@workspace:examples/council"],
 
     "@acme/desk": ["@acme/desk@workspace:examples/desk"],
+
+    "@acme/fleet": ["@acme/fleet@workspace:examples/fleet"],
 
     "@ag-ui/core": ["@ag-ui/core@1.0.0", "", { "peerDependencies": { "zod": "^3.25.18 || ^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-yCRhsQvb4+lmGMrDsi4TOJxqKpm/kb3H64wwL+Z90jNVrkhy17RErfzsNgybfbjNKLM0nenEDYDVJsZHJJSigQ=="],
 

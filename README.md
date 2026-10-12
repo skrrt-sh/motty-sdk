@@ -166,13 +166,15 @@ test("a short question without tools goes to the quick tier", async () => {
 
 ## Examples
 
-Three motties, each with a README that follows one request through it:
+Four motties, each with a README that follows one request through it:
 
 - [`examples/coder`](examples/coder) sends coding-agent requests to the cheapest model that can
   handle them.
 - [`examples/council`](examples/council) puts a hard question to models of three providers and
   has a stronger model merge what they said, within a spending limit.
 - [`examples/desk`](examples/desk) is a customer-support desk served as one model.
+- [`examples/fleet`](examples/fleet) runs a coding agent's subagents through one motty, shows what
+  each one spends, sends them to a small model and stops them at a budget.
 
 The reasons behind the design, and what was rejected, are in [ARCHITECTURE.md](ARCHITECTURE.md).
 The core's own plan is in [CORE.md](CORE.md).
