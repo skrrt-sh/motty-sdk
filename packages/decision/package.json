@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/decision",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Decision models for a motty: choice, score and noul questions answered with probabilities.",
   "keywords": [
     "motty",

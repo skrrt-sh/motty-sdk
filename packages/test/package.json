@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/test",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The motty test kit: scripted models, in-memory storage and a run function for any test runner.",
   "keywords": [
     "motty",

@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The motty builder, model calls, fallback, race, retry and timeout, error classes and types: all a motty or a plugin needs.",
   "keywords": [
     "motty",
