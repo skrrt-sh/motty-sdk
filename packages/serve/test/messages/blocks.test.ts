@@ -89,6 +89,56 @@ test('signed reasoning is a thinking block; unsigned is left out', () => {
   ]);
 });
 
+test('what a tool call in history said beside its input is written back with it', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'tool_call',
+        id: 'toolu_01',
+        name: 'get_weather',
+        input: { location: 'Paris' },
+        hints: { anthropic: { caller: { type: 'direct' } } },
+      },
+    ]),
+  ).toEqual([
+    {
+      type: 'tool_use',
+      id: 'toolu_01',
+      name: 'get_weather',
+      input: { location: 'Paris' },
+      caller: { type: 'direct' },
+    },
+  ]);
+});
+
+test("a tool call's own id, name, input and kind are never replaced by what its hints say", () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'tool_call',
+        id: 'toolu_01',
+        name: 'get_weather',
+        input: { a: 1 },
+        hints: {
+          anthropic: {
+            id: 'other',
+            name: 'other',
+            input: { b: 2 },
+            type: 'text',
+          },
+        },
+      },
+    ]),
+  ).toEqual([
+    {
+      type: 'tool_use',
+      id: 'toolu_01',
+      name: 'get_weather',
+      input: { a: 1 },
+    },
+  ]);
+});
+
 test('a tool call and its result are written back', () => {
   expect(
     blocksOf(leaving('messages'), [

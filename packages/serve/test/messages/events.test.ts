@@ -661,3 +661,425 @@ test('a streamed citation whose title is null is titled by its document, as one 
   expect(whole).toEqual({ type: 'citation', ...told });
   expect(streamed).toEqual({ type: 'citation', ...told, block: 0 });
 });
+
+test('what a message says beside the fields read here rides on the finish', async () => {
+  expect(
+    await read(
+      {
+        type: 'message_start',
+        message: {
+          id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-opus-5-5',
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          container: null,
+          future_message_field: { kept: true },
+          usage: {
+            input_tokens: 25,
+            output_tokens: 1,
+            cache_creation: { ephemeral_1h_input_tokens: 100 },
+            service_tier: 'standard',
+            inference_geo: 'us',
+            server_tool_use: null,
+          },
+        },
+      },
+      {
+        type: 'message_delta',
+        delta: {
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          container: {
+            id: 'container_011',
+            expires_at: '2026-10-12T10:00:00Z',
+          },
+          future_delta_field: 'kept',
+        },
+        usage: {
+          output_tokens: 40,
+          server_tool_use: { web_search_requests: 1 },
+          future_count: 3,
+        },
+        context_management: { applied_edits: [] },
+        future_event_field: 'kept',
+      },
+      { type: 'message_stop' },
+    ),
+  ).toEqual([
+    {
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'end_turn',
+      id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+      model: 'claude-opus-5-5',
+      usage: { input: 25, output: 40 },
+      provider: {
+        anthropic: {
+          future_message_field: { kept: true },
+          container: {
+            id: 'container_011',
+            expires_at: '2026-10-12T10:00:00Z',
+          },
+          future_delta_field: 'kept',
+          usage: {
+            cache_creation: { ephemeral_1h_input_tokens: 100 },
+            service_tier: 'standard',
+            inference_geo: 'us',
+            server_tool_use: { web_search_requests: 1 },
+            future_count: 3,
+          },
+          message_delta: {
+            context_management: { applied_edits: [] },
+            future_event_field: 'kept',
+          },
+        },
+      },
+    },
+  ]);
+});
+
+test('a message that says nothing more leaves a finish with no data of its own', async () => {
+  expect(
+    await read(
+      {
+        type: 'message_start',
+        message: {
+          id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-opus-5-5',
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 25, output_tokens: 1 },
+        },
+      },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 40 },
+      },
+      { type: 'message_stop' },
+    ),
+  ).toEqual([
+    {
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'end_turn',
+      id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+      model: 'claude-opus-5-5',
+      usage: { input: 25, output: 40 },
+    },
+  ]);
+});
+
+test('a block told whole is told when it ends, with what its deltas said', async () => {
+  const chunks = await read(
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'mcp_tool_use',
+        id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+        name: 'echo',
+        server_name: 'example-mcp',
+        input: {},
+      },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: '{"param1":' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: ' "value1"}' },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'content_block_start',
+      index: 1,
+      content_block: {
+        type: 'mcp_tool_result',
+        tool_use_id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+        is_error: false,
+        content: [{ type: 'text', text: 'value1' }],
+      },
+    },
+    { type: 'content_block_stop', index: 1 },
+    {
+      type: 'content_block_start',
+      index: 2,
+      content_block: { type: 'compaction', content: null },
+    },
+    {
+      type: 'content_block_delta',
+      index: 2,
+      delta: {
+        type: 'compaction_delta',
+        content: 'Summary so far',
+        encrypted_content: 'EuYBCkQYAiJA',
+      },
+    },
+    { type: 'content_block_stop', index: 2 },
+    {
+      type: 'content_block_start',
+      index: 3,
+      content_block: { type: 'text', text: '' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 3,
+      delta: { type: 'text_delta', text: 'Done.' },
+    },
+    { type: 'content_block_stop', index: 3 },
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      usage: { output_tokens: 15 },
+    },
+    { type: 'message_stop' },
+  );
+  expect(chunks.slice(0, -1)).toEqual([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+          name: 'echo',
+          server_name: 'example-mcp',
+          input: { param1: 'value1' },
+        },
+      },
+    },
+    {
+      type: 'provider',
+      block: 1,
+      provider: {
+        anthropic: {
+          type: 'mcp_tool_result',
+          tool_use_id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+          is_error: false,
+          content: [{ type: 'text', text: 'value1' }],
+        },
+      },
+    },
+    {
+      type: 'provider',
+      block: 2,
+      provider: {
+        anthropic: {
+          type: 'compaction',
+          content: 'Summary so far',
+          encrypted_content: 'EuYBCkQYAiJA',
+        },
+      },
+    },
+    { type: 'text', text: 'Done.', block: 3 },
+  ]);
+});
+
+test('a block told whole that never ends is still told before the finish', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'compaction', content: 'Summary so far' },
+      },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 15 },
+      },
+      { type: 'message_stop' },
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: { type: 'compaction', content: 'Summary so far' },
+      },
+    },
+    { type: 'finish', reason: 'stop' },
+  ]);
+});
+
+test('a block told whole is still told when the upstream fails before it ends', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_01',
+          name: 'echo',
+          server_name: 'example',
+          input: {},
+        },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '{"text": "hi"}' },
+      },
+      {
+        type: 'error',
+        error: { type: 'overloaded_error', message: 'Overloaded' },
+      },
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_01',
+          name: 'echo',
+          server_name: 'example',
+          input: { text: 'hi' },
+        },
+      },
+    },
+    { type: 'error', error: { code: 'overloaded' } },
+  ]);
+});
+
+test('a block told whole is still told when the stream is cut before it ends', async () => {
+  expect(
+    await read({
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'web_search_tool_result',
+        tool_use_id: 'srvtoolu_01',
+        content: [],
+      },
+    }),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_01',
+          content: [],
+        },
+      },
+    },
+    { type: 'error', error: { code: 'upstream_failed' } },
+  ]);
+});
+
+test('a block told whole is still told when the upstream itself fails, and the failure is thrown as it was', async () => {
+  const failure = new Error('socket closed');
+  async function* upstream() {
+    yield {
+      data: '{"type":"content_block_start","index":0,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_01","content":[]}}',
+    };
+    throw failure;
+  }
+  const stream = events(upstream());
+
+  expect(await stream.next()).toEqual({
+    done: false,
+    value: {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_01',
+          content: [],
+        },
+      },
+    },
+  });
+  await expect(stream.next()).rejects.toBe(failure);
+});
+
+test('a block told whole is still told when an event after it cannot be read', async () => {
+  async function* upstream() {
+    yield {
+      data: '{"type":"content_block_start","index":0,"content_block":{"type":"compaction","content":"Summary"}}',
+    };
+    yield { data: 'not json' };
+  }
+  expect(await Array.fromAsync(events(upstream()))).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: { anthropic: { type: 'compaction', content: 'Summary' } },
+    },
+    { type: 'error' },
+  ]);
+});
+
+test('a delta read here that comes inside a block told whole is part of that block', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'future_block', text: '', thinking: 'Hm' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Hel' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'lo' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'thinking_delta', thinking: 'm.' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'signature_delta', signature: 'EqQB' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'citations_delta', citation: { cited_text: 'Hello' } },
+      },
+      { type: 'content_block_stop', index: 0 },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 15 },
+      },
+      { type: 'message_stop' },
+    ),
+  ).toMatchObject([
+    {
+      type: 'provider',
+      block: 0,
+      provider: {
+        anthropic: {
+          type: 'future_block',
+          text: 'Hello',
+          thinking: 'Hmm.',
+          signature: 'EqQB',
+          citations: [{ cited_text: 'Hello' }],
+        },
+      },
+    },
+    { type: 'finish', reason: 'stop' },
+  ]);
+});

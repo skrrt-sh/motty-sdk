@@ -477,3 +477,309 @@ test('the reasoning count is written with the usage', () => {
     { type: 'message_stop' },
   ]);
 });
+
+test('a tool call of this family is written with the fields its upstream gave it', () => {
+  const write = writer(false);
+  expect([
+    ...write({
+      type: 'tool_call',
+      id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+      name: 'get_weather',
+      arguments: '',
+      block: 0,
+      provider: {
+        anthropic: { caller: { type: 'direct' }, future_block_field: 'kept' },
+      },
+    }),
+    ...write({
+      type: 'tool_call',
+      id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+      arguments: '{"location": "Paris"}',
+      block: 0,
+    }),
+    ...write({
+      type: 'tool_call',
+      id: 'srvtoolu_014hJH82Qum7Td6UV8gDXThB',
+      name: 'web_search',
+      arguments: '{"query": "weather"}',
+      hosted: true,
+      block: 1,
+      provider: {
+        anthropic: {
+          type: 'server_tool_use',
+          caller: { type: 'code_execution_20260120', tool_id: 'srvtoolu_01' },
+        },
+      },
+    }),
+  ]).toEqual([
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'tool_use',
+        id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+        name: 'get_weather',
+        input: {},
+        caller: { type: 'direct' },
+        future_block_field: 'kept',
+      },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: {
+        type: 'input_json_delta',
+        partial_json: '{"location": "Paris"}',
+      },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'content_block_start',
+      index: 1,
+      content_block: {
+        type: 'server_tool_use',
+        id: 'srvtoolu_014hJH82Qum7Td6UV8gDXThB',
+        name: 'web_search',
+        input: {},
+        caller: { type: 'code_execution_20260120', tool_id: 'srvtoolu_01' },
+      },
+    },
+    {
+      type: 'content_block_delta',
+      index: 1,
+      delta: { type: 'input_json_delta', partial_json: '{"query": "weather"}' },
+    },
+  ]);
+});
+
+test.each([
+  ['no data', {}],
+  [
+    "another family's data",
+    { provider: { 'openai.responses': { namespace: 'agents' } } },
+  ],
+  ['empty data of this family', { provider: { anthropic: {} } }],
+])('a tool call with %s is written as it always was', (_, provider) => {
+  expect(
+    writer(false)({
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'get_weather',
+      arguments: '{"location": "Paris"}',
+      ...provider,
+    }),
+  ).toEqual([
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'tool_use',
+        id: 'call_1',
+        name: 'get_weather',
+        input: {},
+      },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: {
+        type: 'input_json_delta',
+        partial_json: '{"location": "Paris"}',
+      },
+    },
+  ]);
+});
+
+test("a tool call's own id, name and kind are never replaced by what rides with it", () => {
+  expect(
+    writer(false)({
+      type: 'tool_call',
+      id: 'toolu_01',
+      name: 'get_weather',
+      arguments: '',
+      provider: {
+        anthropic: { type: 'text', id: 'other', name: 'other', input: [] },
+      },
+    }),
+  ).toEqual([
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'tool_use',
+        id: 'toolu_01',
+        name: 'get_weather',
+        input: {},
+      },
+    },
+  ]);
+});
+
+test('the finish is written with the refusal details the upstream gave', () => {
+  expect(
+    writer(false)({
+      type: 'finish',
+      reason: 'content_filter',
+      rawReason: 'refusal',
+      usage: { input: 10, output: 0 },
+      provider: {
+        anthropic: {
+          stop_details: {
+            type: 'refusal',
+            category: 'cyber',
+            explanation: null,
+          },
+        },
+      },
+    }),
+  ).toEqual([
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'refusal',
+        stop_sequence: null,
+        stop_details: { type: 'refusal', category: 'cyber', explanation: null },
+      },
+      usage: { input_tokens: 10, output_tokens: 0 },
+    },
+    { type: 'message_stop' },
+  ]);
+});
+
+test('the finish is written with what the upstream said of the message, each field where it sat', () => {
+  expect(
+    writer(false)({
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'end_turn',
+      usage: { input: 25, output: 40 },
+      provider: {
+        anthropic: {
+          container: {
+            id: 'container_011',
+            expires_at: '2026-10-12T10:00:00Z',
+          },
+          future_delta_field: 'kept',
+          usage: {
+            service_tier: 'standard',
+            cache_creation: { ephemeral_1h_input_tokens: 100 },
+            future_count: 3,
+            output_tokens: 999,
+          },
+          message_delta: {
+            context_management: { applied_edits: [] },
+            future_event_field: 'kept',
+          },
+        },
+      },
+    }),
+  ).toEqual([
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        container: { id: 'container_011', expires_at: '2026-10-12T10:00:00Z' },
+        future_delta_field: 'kept',
+      },
+      usage: {
+        input_tokens: 25,
+        output_tokens: 40,
+        service_tier: 'standard',
+        cache_creation: { ephemeral_1h_input_tokens: 100 },
+        future_count: 3,
+      },
+      context_management: { applied_edits: [] },
+      future_event_field: 'kept',
+    },
+    { type: 'message_stop' },
+  ]);
+});
+
+test('the counts are the finish`s own, never the ones its upstream reported', () => {
+  expect(
+    writer(false)({
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'end_turn',
+      usage: { input: 25, output: 40 },
+      provider: {
+        anthropic: {
+          usage: {
+            cache_read_input_tokens: 999,
+            output_tokens_details: { thinking_tokens: 7 },
+            cost: 5,
+          },
+        },
+      },
+    }),
+  ).toEqual([
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      usage: { input_tokens: 25, output_tokens: 40 },
+    },
+    { type: 'message_stop' },
+  ]);
+});
+
+test("a finish with another family's data is written as it always was", () => {
+  expect(
+    writer(false)({
+      type: 'finish',
+      reason: 'stop',
+      usage: { input: 25, output: 40 },
+      provider: { 'openai.responses': { service_tier: 'flex' } },
+    }),
+  ).toEqual([
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      usage: { input_tokens: 25, output_tokens: 40 },
+    },
+    { type: 'message_stop' },
+  ]);
+});
+
+test("the message's own fields are never replaced by what rides on the finish", () => {
+  expect(
+    writer(false)({
+      type: 'finish',
+      reason: 'stop',
+      rawReason: 'end_turn',
+      usage: { input: 25, output: 40 },
+      provider: {
+        anthropic: {
+          id: 'msg_other',
+          type: 'x',
+          role: 'user',
+          model: 'other',
+          content: 'gone',
+          container: { id: 'container_011' },
+          message_delta: {
+            id: 'msg_other',
+            type: 'x',
+            role: 'user',
+            model: 'other',
+            content: 'gone',
+            delta: 'gone',
+            usage: 'gone',
+            context_management: { applied_edits: [] },
+          },
+        },
+      },
+    }),
+  ).toEqual([
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        container: { id: 'container_011' },
+      },
+      usage: { input_tokens: 25, output_tokens: 40 },
+      context_management: { applied_edits: [] },
+    },
+    { type: 'message_stop' },
+  ]);
+});

@@ -121,11 +121,11 @@ function blockOf(
         );
       }
       return {
+        ...extra,
         type: part.hosted === true ? 'server_tool_use' : 'tool_use',
         id: part.id,
         name: part.name,
         input: part.input === undefined ? {} : copied(part.input),
-        ...extra,
         ...cache,
       };
     case 'tool_result':

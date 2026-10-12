@@ -1,32 +1,13 @@
-import type { Chunk, Finish, Json, Progress } from '@mottyjs/core/host';
+import type { Chunk, Finish, Progress } from '@mottyjs/core/host';
 import { type Dict, dict, isDict, parsed, text } from '../wire/json.ts';
+import { grown } from './deltas.ts';
+import { besides } from './finish.ts';
 import { opening, writer } from './reply.ts';
 
-function joined(held: Json | undefined, more: Json | undefined): string {
-  return `${text(held) ?? ''}${text(more) ?? ''}`;
-}
-
-function grown(block: Dict, delta: Dict): Dict {
-  const { type, text: said, thinking, signature, citation } = delta;
-  const { text: held, thinking: mind, citations } = block;
-  switch (type) {
-    case 'text_delta':
-      return { ...block, text: joined(held, said) };
-    case 'thinking_delta':
-      return { ...block, thinking: joined(mind, thinking) };
-    case 'signature_delta':
-      return { ...block, signature: signature ?? '' };
-    case 'citations_delta':
-      return {
-        ...block,
-        citations: [
-          ...(Array.isArray(citations) ? citations : []),
-          citation ?? null,
-        ],
-      };
-    default:
-      return block;
-  }
+// What the ending says beside its delta is the message's own, as the delta is.
+function ended(event: Dict): Dict {
+  const { delta, usage } = event;
+  return { ...besides(event), ...dict(delta), usage: usage ?? {} };
 }
 
 // The whole message is the stream folded, so both replies agree on which
@@ -43,13 +24,13 @@ export function collected(
   let json = '';
   let ending: Dict = {};
   for (const event of [...events, finish].flatMap(writer(shown))) {
-    const { type, content_block: block, delta, usage } = event;
+    const { type, content_block: block, delta } = event;
     if (type === 'content_block_start') {
       content.push(dict(block));
       continue;
     }
     if (type === 'message_delta') {
-      ending = { ...dict(delta), usage: usage ?? {} };
+      ending = ended(event);
       continue;
     }
     const last = content.pop();

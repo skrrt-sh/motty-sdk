@@ -6,10 +6,10 @@ import type {
   Terminal,
 } from '@mottyjs/core/host';
 import type { ServerSentEvent } from '../sse.ts';
-import { type Dict, isDict, parsed } from '../wire/json.ts';
+import { type Dict, dict, isDict, parsed } from '../wire/json.ts';
 import { problem } from './errors.ts';
 import { hinted } from './family.ts';
-import { countsTo, stopOf } from './finish.ts';
+import { countsTo, stopOf, unowned } from './finish.ts';
 
 // The counts are known only when the upstream has ended, so the start says
 // none and the message_delta, whose counts are cumulative here, says them.
@@ -129,7 +129,14 @@ export function writer(
         if (begun.has(id)) return [];
         begun.add(id);
         const type = event.hosted === true ? 'server_tool_use' : 'tool_use';
-        const block: Dict = { type, id, name, input: {} };
+        // What its upstream said of the call beside these goes back with it.
+        const block: Dict = {
+          ...hinted(event.provider),
+          type,
+          id,
+          name,
+          input: {},
+        };
         if (calling && (waiting.size > 0 || !isDict(parsed(input)))) {
           waiting.set(id, { block, json });
           return [];
@@ -145,13 +152,24 @@ export function writer(
         return [...within(`provider ${index}`, block), ...closed()];
       }
       case 'finish': {
-        const { stop_sequence: sequence = null } = hinted(event.provider);
+        // An upstream of this family said more of the message than the finish
+        // holds, and each field goes back where it sat.
+        const {
+          usage,
+          message_delta: beside,
+          ...said
+        } = hinted(event.provider);
         return [
           ...closed(),
           {
+            ...unowned(dict(beside)),
             type: 'message_delta',
-            delta: { stop_reason: stopOf(event), stop_sequence: sequence },
-            usage: countsTo(event.usage),
+            delta: {
+              stop_sequence: null,
+              ...unowned(said),
+              stop_reason: stopOf(event),
+            },
+            usage: countsTo(event.usage, dict(usage)),
           },
           { type: 'message_stop' },
         ];
