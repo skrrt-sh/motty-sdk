@@ -65,3 +65,4 @@ export {
 } from './host-options.ts';
 export { buffered } from './request/answer.ts';
 export { counted, hosted } from './request/context.ts';
+export { credentials, forwarded } from './request/forwarded.ts';

@@ -1,5 +1,9 @@
-import { InvalidRequest } from '@mottyjs/core';
-import { type ModelAdapter, type ModelCall, toFacts } from '@mottyjs/core/host';
+import {
+  forwarded,
+  type ModelAdapter,
+  type ModelCall,
+  toFacts,
+} from '@mottyjs/core/host';
 import type { Codec } from '@mottyjs/serve/codec';
 import { parsed } from '@mottyjs/serve/sse';
 import {
@@ -12,7 +16,6 @@ import {
   spent,
   told,
 } from './connection.ts';
-import { passed } from './passed.ts';
 
 type Upstream = {
   codec: Pick<Codec, 'encode' | 'events' | 'failure'>;
@@ -29,6 +32,12 @@ type Upstream = {
 // whole; what each model takes is said in place of the adapter's own rule.
 export type Connection = {
   headers?: { [name: string]: string };
+  /**
+   * The headers a call may state for this connection, by name in any letter
+   * case, or `true` for any header but the ones never sent. None by default,
+   * since a gateway may act on a header the host never thought to state.
+   */
+  forwardHeaders?: Parameters<typeof forwarded>[1];
   body?: Parameters<Codec['encode']>[2];
   takes?: Parameters<Codec['encode']>[3];
 };
@@ -45,9 +54,13 @@ export function chat(upstream: Upstream): ModelAdapter {
     upstream.keyHeader,
     upstream.headers,
   );
+  // A connection with no key still has a header a key would go in.
+  const reserved = [...held.keys(), upstream.keyHeader ?? 'authorization'];
 
   const call: ModelCall = async function* (model, prompt, signal) {
+    const stated = prompt.options?.headers;
     let encoded: ReturnType<Codec['encode']>;
+    let own: ReturnType<typeof forwarded> | undefined;
     try {
       encoded = codec.encode(
         model.slice(prefix.length),
@@ -55,41 +68,26 @@ export function chat(upstream: Upstream): ModelAdapter {
         upstream.body,
         upstream.takes,
       );
+      if (stated !== undefined) {
+        own = forwarded(stated, upstream.forwardHeaders, [
+          ...reserved,
+          ...Object.keys(encoded.headers),
+        ]);
+      }
     } catch (thrown) {
-      // A prompt this API cannot carry never left, so the upstream did
-      // not fail: the refusal is the adapter's own.
+      // A prompt or a header no request can carry never left, so the
+      // upstream did not fail and the refusal is the adapter's own.
       yield { type: 'error', error: { ...toFacts(thrown), upstream: false } };
       return;
     }
-    // Set by name in any case: a connection's header adds, and does not
-    // replace what the API needs. The credential is already set over it.
     const headers = new Headers(held);
-    const own = prompt.options?.headers;
     if (own !== undefined) {
-      try {
-        for (const [name, value] of passed(
-          upstream.prefix,
-          held,
-          upstream.keyHeader,
-          own,
-        )) {
-          headers.set(name, value);
-        }
-      } catch (thrown) {
-        // Only a header no request can carry is the caller's to be told of.
-        if (!(thrown instanceof InvalidRequest)) throw thrown;
-        yield {
-          type: 'error',
-          error: {
-            code: 'invalid_request',
-            status: 400,
-            message: thrown.message,
-            upstream: false,
-          },
-        };
-        return;
+      for (const [name, value] of Object.entries(own.headers)) {
+        headers.set(name, value);
       }
     }
+    // What the API needs is set last, over a connection's or a call's header
+    // of the same name in any letter case.
     for (const [name, value] of Object.entries(encoded.headers)) {
       headers.set(name, value);
     }
@@ -132,7 +130,10 @@ export function chat(upstream: Upstream): ModelAdapter {
         };
         return;
       }
-      const { leftOut } = encoded;
+      const leftOut =
+        own === undefined
+          ? encoded.leftOut
+          : [...encoded.leftOut, ...own.leftOut];
       const { body } = response;
       let ended = false;
       try {

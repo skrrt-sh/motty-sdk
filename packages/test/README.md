@@ -36,6 +36,15 @@ test("a question is answered by the small model", async () => {
 });
 ```
 
+A fake applies a connection's rules for the headers a call may state. It forwards none by default,
+and takes `forwardHeaders` as an adapter does, ahead of its scripts. It holds no headers of its
+own, so a name a real connection or its API states is not left out by a fake. What `sent` returns
+holds only the headers the rules let through, and the rest are warnings on the call:
+
+```ts
+const models = fake({ forwardHeaders: ["x-session"] }, on(mini, "quick reply"));
+```
+
 The SDK as a whole is described in the
 [root README](https://github.com/skrrt-sh/motty-sdk#readme), and the reasons behind its design in
 [ARCHITECTURE.md](https://github.com/skrrt-sh/motty-sdk/blob/main/ARCHITECTURE.md).
