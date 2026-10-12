@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { events } from '../../src/chat-completions/events.ts';
 import { pieces } from '../../src/chat-completions/reply-pieces.ts';
 
 test('text and a refusal are added as they are, with their logprobs', () => {
@@ -122,6 +123,62 @@ test('a call this wire marked as free-form stays free-form to its end', () => {
   expect(piece({ type: 'tool_call', id: 'call_a', arguments: ' -la' })).toEqual(
     { kind: 'call', index: 0, custom: true, input: ' -la' },
   );
+});
+
+test('a field inside a later fragment that is not marked as its custom call is carried inside the custom object', async () => {
+  const piece = pieces(false);
+  const [first, second] = await Array.fromAsync(
+    events(
+      (async function* () {
+        yield {
+          data: '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"custom","function":{"name":"shell","arguments":"l"}}]}}]}',
+        };
+        yield {
+          data: '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"s","signature":"sig"},"late":1}]},"finish_reason":"tool_calls"}]}',
+        };
+        yield { data: '[DONE]' };
+      })(),
+    ),
+  );
+
+  expect(first?.type === 'tool_call' && piece(first)).toMatchObject({
+    kind: 'call',
+    custom: true,
+  });
+  expect(second?.type === 'tool_call' && piece(second)).toEqual({
+    kind: 'call',
+    index: 0,
+    custom: true,
+    input: 's',
+    carried: { late: 1, custom: { signature: 'sig' } },
+  });
+});
+
+test('a field inside an unmarked call to a tool the caller declared custom is carried inside the custom object', () => {
+  expect(
+    pieces(
+      false,
+      new Set(['shell']),
+    )({
+      type: 'tool_call',
+      id: 'call_a',
+      name: 'shell',
+      arguments: 'ls',
+      provider: {
+        'openai.chat': {
+          function: { signature: 's' },
+          extra_content: { a: 1 },
+        },
+      },
+    }),
+  ).toEqual({
+    kind: 'call',
+    index: 0,
+    custom: true,
+    opened: { id: 'call_a', name: 'shell' },
+    input: 'ls',
+    carried: { extra_content: { a: 1 }, custom: { signature: 's' } },
+  });
 });
 
 test('a tool the upstream ran itself, and its result, add nothing', () => {

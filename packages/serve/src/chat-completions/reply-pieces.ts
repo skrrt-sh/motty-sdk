@@ -1,6 +1,7 @@
 import type { Chunk, Json, Progress } from '@mottyjs/core/host';
 import { type Dict, isDict, list, number } from '../wire/json.ts';
 import { hinted } from './family.ts';
+import { callFields, parted } from './unread.ts';
 
 // One shape for both replies, so a stream and a collected message cannot
 // come to differ in what they hold.
@@ -14,6 +15,8 @@ export type Piece =
       // Present on a call's first fragment only, as on the wire.
       opened?: { id: string; name: string };
       input: string;
+      // What the call came with, each field where it sat.
+      carried?: Dict;
     }
   | { kind: 'annotation'; annotation: Dict }
   | { kind: 'audio'; audio: Dict }
@@ -95,13 +98,21 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
         // A tool the upstream ran itself is nothing this caller may answer.
         if (event.hosted === true) return undefined;
         const known = calls.get(event.id);
-        const { type } = hinted(event.provider);
+        const own = hinted(event.provider);
+        const { type } = own;
         // An upstream of another API marks no call: the caller's tools say.
         const call = known ?? {
           index: calls.size,
           custom: type === 'custom' || customs?.has(event.name ?? '') === true,
         };
         calls.set(event.id, call);
+        const kind = call.custom ? 'custom' : 'function';
+        // A fragment may be marked as the other kind than its call is, and
+        // what its object holds is the call's all the same.
+        const stray = own[call.custom ? 'function' : 'custom'];
+        const held =
+          isDict(own[kind]) || !isDict(stray) ? own : { ...own, [kind]: stray };
+        const carried = parted(held, kind, callFields);
         return {
           kind: 'call',
           ...call,
@@ -109,6 +120,7 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
             ? { opened: { id: event.id, name: event.name ?? '' } }
             : {}),
           input: event.arguments,
+          ...(carried === undefined ? {} : { carried }),
         };
       }
       case 'citation': {

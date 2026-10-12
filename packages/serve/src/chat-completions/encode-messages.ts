@@ -6,7 +6,8 @@ import { a, unsupported } from '../wire/refusals.ts';
 import { thinking } from './content-chunks.ts';
 import { type Dialect, inlined, plain, returned } from './dialect.ts';
 import { audio, file, image } from './encode-media.ts';
-import { hinted, own } from './family.ts';
+import { family, hinted, own } from './family.ts';
+import { callFields, rebuilt } from './unread.ts';
 
 type Known = Exclude<Part, { type: 'provider' }>;
 
@@ -75,11 +76,21 @@ function call(
   left.without('tool.cache', part.cache);
   left.without('hosted', part.hosted);
   const { id, name, input } = part;
+  // What a call holds for another API alone is not this wire's to refuse.
+  const carried = {
+    ...hinted(part.hints),
+    ...(part.provider?.[family] === undefined
+      ? {}
+      : own(part.provider, 'a tool call')),
+  };
   if (typeof input === 'string') {
-    return { id, type: 'custom', custom: { name, input } };
+    const outer = { id, type: 'custom' };
+    return rebuilt(carried, 'custom', callFields, outer, { name, input });
   }
   const written = part.raw ?? JSON.stringify(input);
-  return { id, type: 'function', function: { name, arguments: written } };
+  const outer = { id, type: 'function' };
+  const inner = { name, arguments: written };
+  return rebuilt(carried, 'function', callFields, outer, inner);
 }
 
 function result(

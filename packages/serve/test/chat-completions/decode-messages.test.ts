@@ -699,3 +699,71 @@ test('reasoning under one name is read where the other name is null', () => {
     ],
   });
 });
+
+test('a field of a tool call that is not read is kept on the part as a hint, where it sat', () => {
+  expect(
+    messageOf({
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          id: 'call_a',
+          type: 'function',
+          function: { name: 'weather', arguments: '{}', signature: 'c2ln' },
+          extra_content: { google: { thought_signature: 'c2ln' } },
+        },
+        {
+          id: 'call_b',
+          type: 'custom',
+          custom: { name: 'shell', input: 'ls', signature: 'c2ln' },
+          vendor: { a: 1 },
+        },
+      ],
+    }),
+  ).toEqual({
+    role: 'assistant',
+    parts: [
+      {
+        type: 'tool_call',
+        id: 'call_a',
+        name: 'weather',
+        input: {},
+        hints: {
+          'openai.chat': {
+            extra_content: { google: { thought_signature: 'c2ln' } },
+            function: { signature: 'c2ln' },
+          },
+        },
+      },
+      {
+        type: 'tool_call',
+        id: 'call_b',
+        name: 'shell',
+        input: 'ls',
+        hints: {
+          'openai.chat': { vendor: { a: 1 }, custom: { signature: 'c2ln' } },
+        },
+      },
+    ],
+  });
+});
+
+test('a tool call`s place in a stream is no field of the call', () => {
+  expect(
+    messageOf({
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          index: 0,
+          id: 'call_a',
+          type: 'function',
+          function: { name: 'now', arguments: '{}' },
+        },
+      ],
+    }),
+  ).toEqual({
+    role: 'assistant',
+    parts: [{ type: 'tool_call', id: 'call_a', name: 'now', input: {} }],
+  });
+});

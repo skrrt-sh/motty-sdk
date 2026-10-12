@@ -419,3 +419,256 @@ test('a field of sound named as the prototype is a field like any other', () => 
     '"audio":{"id":"audio_1","__proto__":{"x":1},"data":"UklG"}',
   );
 });
+
+test('what a tool call came with is collected into the call, where it sat', () => {
+  expect(
+    collected(
+      [
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          name: 'weather',
+          arguments: '{"city":',
+          provider: {
+            'openai.chat': {
+              extra_content: { google: { thought_signature: 'c2ln' } },
+              function: { signature: 'c2ln' },
+            },
+          },
+        },
+        {
+          type: 'tool_call',
+          id: 'call_b',
+          name: 'shell',
+          arguments: 'ls',
+          provider: {
+            'openai.chat': { type: 'custom', custom: { signature: 'c2ln' } },
+          },
+        },
+        { type: 'tool_call', id: 'call_a', arguments: '"Oslo"}' },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            {
+              extra_content: { google: { thought_signature: 'c2ln' } },
+              id: 'call_a',
+              type: 'function',
+              function: {
+                signature: 'c2ln',
+                name: 'weather',
+                arguments: '{"city":"Oslo"}',
+              },
+            },
+            {
+              id: 'call_b',
+              type: 'custom',
+              custom: { signature: 'c2ln', name: 'shell', input: 'ls' },
+            },
+          ],
+        },
+      },
+    ],
+  });
+});
+
+test('what a later fragment of a tool call came with is collected too', () => {
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: '{}',
+          provider: { 'openai.chat': { extra_content: { a: 1 } } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            {
+              extra_content: { a: 1 },
+              id: 'call_a',
+              type: 'function',
+              function: { name: 'weather', arguments: '{}' },
+            },
+          ],
+        },
+      },
+    ],
+  });
+});
+
+test('a tool call with nothing of this API`s is collected as its own fields alone', () => {
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '{}' },
+        {
+          type: 'tool_call',
+          id: 'call_b',
+          name: 'now',
+          arguments: '{}',
+          provider: { 'openai.responses': { namespace: 'time' } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toEqual({
+    id: 'chatcmpl-req_1',
+    object: 'chat.completion',
+    created: expect.any(Number),
+    model: 'coder',
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: null,
+          refusal: null,
+          tool_calls: [
+            {
+              id: 'call_a',
+              type: 'function',
+              function: { name: 'weather', arguments: '{}' },
+            },
+            {
+              id: 'call_b',
+              type: 'function',
+              function: { name: 'now', arguments: '{}' },
+            },
+          ],
+        },
+        logprobs: null,
+        finish_reason: 'tool_calls',
+      },
+    ],
+  });
+});
+
+test('a carried index is not collected into the call', () => {
+  const whole = collected(
+    [
+      {
+        type: 'tool_call',
+        id: 'call_a',
+        name: 'weather',
+        arguments: '{}',
+        provider: { 'openai.chat': { index: 9 } },
+      },
+    ],
+    { type: 'finish', reason: 'tool_calls' },
+    { id: 'req_1', model: 'coder', muted: false },
+  );
+
+  expect(JSON.stringify(whole)).not.toContain('"index":9');
+});
+
+test('a carried id or type never takes the place of the call`s own', () => {
+  expect(
+    collected(
+      [
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          name: 'weather',
+          arguments: '',
+          provider: { 'openai.chat': { id: 'call_stray' } },
+        },
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: '{}',
+          provider: { 'openai.chat': { id: 'call_late', type: 'stray' } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            {
+              id: 'call_a',
+              type: 'function',
+              function: { name: 'weather', arguments: '{}' },
+            },
+          ],
+        },
+      },
+    ],
+  });
+});
+
+test('a carried name, arguments or input is not collected into a function call', () => {
+  const whole = collected(
+    [
+      { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+      {
+        type: 'tool_call',
+        id: 'call_a',
+        arguments: '{}',
+        provider: {
+          'openai.chat': {
+            function: { name: 'stray', arguments: 'stray', input: 'stray' },
+          },
+        },
+      },
+    ],
+    { type: 'finish', reason: 'tool_calls' },
+    { id: 'req_1', model: 'coder', muted: false },
+  );
+
+  expect(whole).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [{ function: { name: 'weather', arguments: '{}' } }],
+        },
+      },
+    ],
+  });
+  expect(JSON.stringify(whole)).not.toContain('stray');
+});
+
+test('a carried name, arguments or input is not collected into a custom call', () => {
+  const whole = collected(
+    [
+      {
+        type: 'tool_call',
+        id: 'call_a',
+        name: 'shell',
+        arguments: 'ls',
+        provider: {
+          'openai.chat': {
+            type: 'custom',
+            custom: { name: 'stray', arguments: 'stray', input: 'stray' },
+          },
+        },
+      },
+    ],
+    { type: 'finish', reason: 'tool_calls' },
+    { id: 'req_1', model: 'coder', muted: false },
+  );
+
+  expect(whole).toMatchObject({
+    choices: [
+      { message: { tool_calls: [{ custom: { name: 'shell', input: 'ls' } }] } },
+    ],
+  });
+  expect(JSON.stringify(whole)).not.toContain('stray');
+});

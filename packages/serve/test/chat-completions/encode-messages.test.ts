@@ -921,3 +921,161 @@ test('the reasoning of a user turn has no place inside its text', () => {
   ).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Hi' }] }]);
   expect(left.leftOut().map(({ setting }) => setting)).toEqual(['reasoning']);
 });
+
+test('what a tool call holds for this API is written back where it sat', () => {
+  expect(
+    wireMessages(leaving('chat'), [
+      {
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            name: 'weather',
+            input: {},
+            hints: {
+              'openai.chat': {
+                extra_content: { google: { thought_signature: 'c2ln' } },
+                function: { signature: 'c2ln' },
+              },
+            },
+          },
+          {
+            type: 'tool_call',
+            id: 'call_b',
+            name: 'shell',
+            input: 'ls',
+            provider: {
+              'openai.chat': {
+                type: 'custom',
+                vendor: { a: 1 },
+                custom: { signature: 'c2ln' },
+              },
+            },
+          },
+        ],
+      },
+    ]),
+  ).toEqual([
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          extra_content: { google: { thought_signature: 'c2ln' } },
+          id: 'call_a',
+          type: 'function',
+          function: { signature: 'c2ln', name: 'weather', arguments: '{}' },
+        },
+        {
+          vendor: { a: 1 },
+          id: 'call_b',
+          type: 'custom',
+          custom: { signature: 'c2ln', name: 'shell', input: 'ls' },
+        },
+      ],
+    },
+  ]);
+});
+
+test('nothing a tool call holds for this API outranks its own fields', () => {
+  expect(
+    wireMessages(leaving('chat'), [
+      {
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            name: 'weather',
+            input: {},
+            hints: {
+              'openai.chat': {
+                id: 'call_z',
+                type: 'custom',
+                function: { name: 'other', arguments: '{"a":1}' },
+              },
+            },
+          },
+        ],
+      },
+    ]),
+  ).toEqual([
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          id: 'call_a',
+          type: 'function',
+          function: { name: 'weather', arguments: '{}' },
+        },
+      ],
+    },
+  ]);
+});
+
+test('a tool call that holds only another API`s data is written as its own fields alone', () => {
+  expect(
+    wireMessages(leaving('chat'), [
+      {
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            name: 'weather',
+            input: {},
+            provider: { anthropic: { caller: { type: 'direct' } } },
+            hints: { 'openai.responses': { namespace: 'time' } },
+          },
+        ],
+      },
+    ]),
+  ).toEqual([
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          id: 'call_a',
+          type: 'function',
+          function: { name: 'weather', arguments: '{}' },
+        },
+      ],
+    },
+  ]);
+});
+
+test('a field a tool call never has of its own in a history is not written from what it holds', () => {
+  expect(
+    wireMessages(leaving('chat'), [
+      {
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            name: 'weather',
+            input: {},
+            hints: {
+              'openai.chat': { index: 9, function: { input: 'stray' } },
+            },
+          },
+        ],
+      },
+    ]),
+  ).toEqual([
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          id: 'call_a',
+          type: 'function',
+          function: { name: 'weather', arguments: '{}' },
+        },
+      ],
+    },
+  ]);
+});

@@ -158,3 +158,34 @@ test('a tool choice that is not well formed is refused', () => {
     }),
   ).toThrow('allowed_tools needs a mode and its tools');
 });
+
+test('a field of a tool that is not read is kept as a hint, where it sat', () => {
+  expect(
+    toolOf({
+      type: 'function',
+      function: { name: 'now', parameters: { type: 'object' }, vendor: 1 },
+      cache_control: { type: 'ephemeral' },
+    }),
+  ).toEqual({
+    type: 'function',
+    name: 'now',
+    input: { type: 'object' },
+    hints: {
+      'openai.chat': {
+        cache_control: { type: 'ephemeral' },
+        function: { vendor: 1 },
+      },
+    },
+  });
+  expect(
+    toolOf({
+      type: 'custom',
+      custom: { name: 'shell', vendor: 1 },
+      defer: true,
+    }),
+  ).toEqual({
+    type: 'custom',
+    name: 'shell',
+    hints: { 'openai.chat': { defer: true, custom: { vendor: 1 } } },
+  });
+});

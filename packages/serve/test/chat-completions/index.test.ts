@@ -5,7 +5,7 @@ import {
   chatCompletionsIn,
 } from '../../src/chat-completions/index.ts';
 import { responses } from '../../src/responses/index.ts';
-import { isDict, parsed } from '../../src/wire/json.ts';
+import { dict, isDict, list, parsed } from '../../src/wire/json.ts';
 
 async function* sent(...frames: string[]) {
   for (const data of frames) yield { data };
@@ -487,4 +487,91 @@ test('a field of a caller that is not known is held under this API`s own key: it
   expect(() => responses.encode('gpt-5', { messages, options })).toThrow(
     'The Responses API cannot carry an option of openai.chat',
   );
+});
+
+test('what an upstream`s tool call came with reaches the caller, and comes back to the upstream when the caller echoes it', async () => {
+  const { streamed, collected } = chatCompletions.decode(
+    { model: 'coder', messages: [], stream: true },
+    new Headers(),
+  );
+  const read = await Array.fromAsync(
+    chatCompletions.events(
+      sent(
+        '{"id":"chatcmpl-9","model":"gemini-x","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"weather","arguments":""},"extra_content":{"google":{"thought_signature":"c2ln"}}}]},"finish_reason":null}]}',
+        '{"id":"chatcmpl-9","model":"gemini-x","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"city\\":\\"Oslo\\"}"}}]},"finish_reason":"tool_calls"}]}',
+        '[DONE]',
+      ),
+    ),
+  );
+  const finish = read.find((event) => event.type === 'finish');
+  if (finish === undefined) throw new Error('The stream did not finish');
+  const [first] = await Array.fromAsync(
+    streamed(
+      (async function* () {
+        yield* read;
+      })(),
+      '9',
+    ),
+  );
+  const whole = collected(
+    read.filter((event) => !isTerminal(event)),
+    finish,
+    '9',
+  );
+  const { choices } = dict(whole);
+  const [choice] = list(choices);
+  const { message } = dict(choice);
+
+  expect(parsed(first?.data ?? '')).toMatchObject({
+    choices: [
+      {
+        delta: {
+          tool_calls: [
+            { extra_content: { google: { thought_signature: 'c2ln' } } },
+          ],
+        },
+      },
+    ],
+  });
+  expect(message).toMatchObject({
+    tool_calls: [
+      {
+        extra_content: { google: { thought_signature: 'c2ln' } },
+        id: 'call_a',
+        type: 'function',
+        function: { name: 'weather', arguments: '{"city":"Oslo"}' },
+      },
+    ],
+  });
+
+  const { request } = chatCompletions.decode(
+    {
+      model: 'coder',
+      messages: [
+        { role: 'user', content: 'Weather?' },
+        message ?? null,
+        { role: 'tool', tool_call_id: 'call_a', content: 'Rain' },
+      ],
+    },
+    new Headers(),
+  );
+
+  expect(chatCompletions.encode('gemini-x', request).body).toMatchObject({
+    messages: [
+      { role: 'user', content: 'Weather?' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            extra_content: { google: { thought_signature: 'c2ln' } },
+            id: 'call_a',
+            type: 'function',
+            function: { name: 'weather', arguments: '{"city":"Oslo"}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'call_a', content: 'Rain' },
+    ],
+  });
 });

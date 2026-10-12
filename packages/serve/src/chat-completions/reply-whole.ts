@@ -3,6 +3,7 @@ import type { Dict } from '../wire/json.ts';
 import { joined } from './dialect.ts';
 import { reasonWritten, replyFields } from './finish.ts';
 import { pieces } from './reply-pieces.ts';
+import { callFields, merged, rebuilt } from './unread.ts';
 import { usageField } from './usage.ts';
 
 // Sound arrives in fragments of one object: its data and its transcript
@@ -40,8 +41,13 @@ export function collected(
     content: [],
     refusal: [],
   };
-  const calls: { id: string; name: string; custom: boolean; input: string }[] =
-    [];
+  const calls: {
+    id: string;
+    name: string;
+    custom: boolean;
+    input: string;
+    carried?: Dict;
+  }[] = [];
   const annotations: Json[] = [];
   const details: Json[] = [];
   const images: Json[] = [];
@@ -61,10 +67,14 @@ export function collected(
         tokens[added.kind].push(...(added.logprobs ?? []));
         break;
       case 'call': {
-        const { opened, custom, input, index } = added;
+        const { opened, custom, input, index, carried } = added;
         if (opened !== undefined) calls.push({ ...opened, custom, input: '' });
         const call = calls[index];
-        if (call !== undefined) call.input += input;
+        if (call === undefined) break;
+        call.input += input;
+        if (carried === undefined) break;
+        const kind = call.custom ? 'custom' : 'function';
+        call.carried = merged(call.carried, carried, kind);
         break;
       }
       case 'annotation':
@@ -96,10 +106,22 @@ export function collected(
     ...(calls.length === 0
       ? {}
       : {
-          tool_calls: calls.map(({ id, name, custom, input }) =>
+          tool_calls: calls.map(({ id, name, custom, input, carried }) =>
             custom
-              ? { id, type: 'custom', custom: { name, input } }
-              : { id, type: 'function', function: { name, arguments: input } },
+              ? rebuilt(
+                  carried,
+                  'custom',
+                  callFields,
+                  { id, type: 'custom' },
+                  { name, input },
+                )
+              : rebuilt(
+                  carried,
+                  'function',
+                  callFields,
+                  { id, type: 'function' },
+                  { name, arguments: input },
+                ),
           ),
         }),
     ...(annotations.length === 0 ? {} : { annotations }),

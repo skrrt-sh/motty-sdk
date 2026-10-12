@@ -1157,3 +1157,71 @@ test.each([
     ).toThrow(`Chat Completions cannot carry ${what} of `);
   },
 );
+
+test('what a tool holds for this API is written back where it sat', () => {
+  const { body } = encode('gpt-x', {
+    messages: [],
+    tools: [
+      {
+        type: 'function',
+        name: 'now',
+        input: { type: 'object' },
+        hints: {
+          'openai.chat': {
+            cache_control: { type: 'ephemeral' },
+            function: { vendor: 1, name: 'other' },
+          },
+        },
+      },
+      {
+        type: 'custom',
+        name: 'shell',
+        provider: { 'openai.chat': { defer: true, custom: { vendor: 1 } } },
+      },
+    ],
+  });
+
+  expect(body).toHaveProperty('tools', [
+    {
+      cache_control: { type: 'ephemeral' },
+      type: 'function',
+      function: { vendor: 1, name: 'now', parameters: { type: 'object' } },
+    },
+    { defer: true, type: 'custom', custom: { vendor: 1, name: 'shell' } },
+  ]);
+});
+
+test('a user longer than the Responses API takes is sent as said', () => {
+  const { body, leftOut } = encode('gpt-x', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { user: 'u'.repeat(150) },
+  });
+  expect(body).toHaveProperty('user', 'u'.repeat(150));
+  expect(leftOut).toEqual([]);
+});
+
+test('a field a tool was not given is not written from what it holds', () => {
+  const { body } = encode('gpt-x', {
+    messages: [],
+    tools: [
+      {
+        type: 'function',
+        name: 'now',
+        input: { type: 'object' },
+        hints: {
+          'openai.chat': {
+            custom: { vendor: 1 },
+            function: { description: 'stray', strict: true },
+          },
+        },
+      },
+    ],
+  });
+
+  expect(body).toHaveProperty('tools', [
+    {
+      type: 'function',
+      function: { name: 'now', parameters: { type: 'object' } },
+    },
+  ]);
+});

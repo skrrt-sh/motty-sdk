@@ -869,3 +869,75 @@ test('reasoning under one name is read where the other name is null', async () =
     { type: 'finish', reason: 'stop', rawReason: 'stop' },
   ]);
 });
+
+test('a field of a tool call that is not read rides on the fragment that brought it', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sent(
+          '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"weather","arguments":""},"extra_content":{"google":{"thought_signature":"c2ln"}}}]},"finish_reason":null}]}',
+          '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":"tool_calls"}]}',
+          '[DONE]',
+        ),
+      ),
+    ),
+  ).toEqual([
+    {
+      type: 'tool_call',
+      id: 'call_a',
+      name: 'weather',
+      arguments: '',
+      provider: {
+        'openai.chat': {
+          extra_content: { google: { thought_signature: 'c2ln' } },
+        },
+      },
+    },
+    { type: 'tool_call', id: 'call_a', arguments: '{}' },
+    { type: 'finish', reason: 'tool_calls', rawReason: 'tool_calls' },
+  ]);
+});
+
+test('a field inside a tool call`s function that is not read is kept inside it', async () => {
+  const [first] = await Array.fromAsync(
+    events(
+      sent(
+        '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"weather","arguments":"{}","signature":"c2ln"}}]},"finish_reason":"tool_calls"}]}',
+        '[DONE]',
+      ),
+    ),
+  );
+
+  expect(first).toEqual({
+    type: 'tool_call',
+    id: 'call_a',
+    name: 'weather',
+    arguments: '{}',
+    provider: { 'openai.chat': { function: { signature: 'c2ln' } } },
+  });
+});
+
+test('a field of a custom tool call that is not read is kept beside its mark', async () => {
+  const [first] = await Array.fromAsync(
+    events(
+      sent(
+        '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"custom","custom":{"name":"shell","input":"ls","signature":"c2ln"},"vendor":{"a":1}}]},"finish_reason":"tool_calls"}]}',
+        '[DONE]',
+      ),
+    ),
+  );
+
+  expect(first).toEqual({
+    type: 'tool_call',
+    id: 'call_a',
+    name: 'shell',
+    arguments: 'ls',
+    provider: {
+      'openai.chat': {
+        vendor: { a: 1 },
+        custom: { signature: 'c2ln' },
+        type: 'custom',
+      },
+    },
+  });
+});

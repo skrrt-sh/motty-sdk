@@ -25,6 +25,7 @@ import { type Dialect, plain } from './dialect.ts';
 import { family } from './family.ts';
 import { reasonFailed, reasonRead } from './finish.ts';
 import { untagged } from './think-tags.ts';
+import { callFields, parted } from './unread.ts';
 import { usageRead } from './usage.ts';
 
 function probable(tokens: Json | undefined): { provider?: Dict } {
@@ -44,21 +45,31 @@ function reader(dialect: Dialect) {
       : untagged(dialect.tagged === 'open');
   let owed: Json[] = [];
 
+  // What a call holds beside what is read is the upstream's to get back, so
+  // it rides on the fragment that brought it, each field where it sat.
   function called(raw: Json): StreamEvent {
-    const { index, id, type, function: fn, custom } = dict(raw);
+    const call = dict(raw);
+    const { index, id, type, function: fn, custom } = call;
     const at = number(index) ?? 0;
     if (typeof id === 'string' && id !== '') ids.set(at, id);
     const free = isDict(custom);
     const { name, arguments: source, input } = dict(free ? custom : fn);
+    const marked = free || type === 'custom';
+    // A call marked custom that has no custom object is read from its
+    // function, so what that holds is carried as the custom object's.
+    const more = parted(
+      marked && !free ? { ...call, custom: fn ?? null } : call,
+      marked ? 'custom' : 'function',
+      callFields,
+    );
+    // The caller's wire writes a free-form call apart from a function's.
+    const own = marked ? { ...more, type: 'custom' } : more;
     return {
       type: 'tool_call',
       id: ids.get(at) ?? `call_${at}`,
       ...(typeof name === 'string' ? { name } : {}),
       arguments: text(free ? input : source) ?? '',
-      // The caller's wire writes a free-form call apart from a function's.
-      ...(free || type === 'custom'
-        ? { provider: { [family]: { type: 'custom' } } }
-        : {}),
+      ...(own === undefined ? {} : { provider: { [family]: own } }),
     };
   }
 
