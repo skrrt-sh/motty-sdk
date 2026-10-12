@@ -120,6 +120,8 @@ export type Options = {
   presencePenalty?: number;
   frequencyPenalty?: number;
   user?: string;
+  // Headers the call asks to be sent with the request that answers it.
+  headers?: { readonly [name: string]: string };
   provider?: ProviderData;
   hints?: ProviderData;
 };

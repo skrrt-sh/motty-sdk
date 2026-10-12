@@ -1,3 +1,4 @@
+import { InvalidRequest } from '@mottyjs/core';
 import { type ModelAdapter, type ModelCall, toFacts } from '@mottyjs/core/host';
 import type { Codec } from '@mottyjs/serve/codec';
 import { parsed } from '@mottyjs/serve/sse';
@@ -11,6 +12,7 @@ import {
   spent,
   told,
 } from './connection.ts';
+import { passed } from './passed.ts';
 
 type Upstream = {
   codec: Pick<Codec, 'encode' | 'events' | 'failure'>;
@@ -62,6 +64,32 @@ export function chat(upstream: Upstream): ModelAdapter {
     // Set by name in any case: a connection's header adds, and does not
     // replace what the API needs. The credential is already set over it.
     const headers = new Headers(held);
+    const own = prompt.options?.headers;
+    if (own !== undefined) {
+      try {
+        for (const [name, value] of passed(
+          upstream.prefix,
+          held,
+          upstream.keyHeader,
+          own,
+        )) {
+          headers.set(name, value);
+        }
+      } catch (thrown) {
+        // Only a header no request can carry is the caller's to be told of.
+        if (!(thrown instanceof InvalidRequest)) throw thrown;
+        yield {
+          type: 'error',
+          error: {
+            code: 'invalid_request',
+            status: 400,
+            message: thrown.message,
+            upstream: false,
+          },
+        };
+        return;
+      }
+    }
     for (const [name, value] of Object.entries(encoded.headers)) {
       headers.set(name, value);
     }

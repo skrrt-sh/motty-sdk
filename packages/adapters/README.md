@@ -36,6 +36,24 @@ export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL })
 }));
 ```
 
+A connection takes `headers` for every request it makes and `body` fields in the provider's own
+names. A call may state headers of its own in its options, for a harness whose headers an upstream
+expects. Sending on a caller's is one line in the motty:
+
+```ts
+import { model, motty } from "@mottyjs/core";
+
+export default motty({ name: "relay" }).handle(({ request, prompt }) => {
+  prompt.options = { ...prompt.options, headers: Object.fromEntries(request.headers) };
+  return model("anthropic/claude-sonnet").complete(prompt);
+});
+```
+
+The connection's headers and the credential always win over a call's of the same name. Headers of
+the connection itself, credentials and cookies, headers that say where a request came from, and
+headers that describe the caller's body are never sent. Whatever else the caller sent reaches the
+model provider, a token for another service included, so send on only what the upstream needs.
+
 `jwt` verifies a signed token against exactly one of a key set address (`jwks`), a public key in
 PEM (`key`) or a shared secret (`secret`), and gives its `sub` as the caller's id. By default it
 checks the signature and the times the token itself states, and a token that states no expiry is
