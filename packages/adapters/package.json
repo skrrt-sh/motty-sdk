@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/adapters",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Host-side adapters for a motty: model providers, Redis storage, and jwt and bearer auth.",
   "keywords": [
     "motty",
