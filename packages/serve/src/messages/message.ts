@@ -1,6 +1,6 @@
 import type { Chunk, Finish, Progress } from '@mottyjs/core/host';
-import { type Dict, dict, isDict, parsed, text } from '../wire/json.ts';
-import { grown } from './deltas.ts';
+import { type Dict, dict } from '../wire/json.ts';
+import { type Held, whole } from './deltas.ts';
 import { besides } from './finish.ts';
 import { opening, writer } from './reply.ts';
 
@@ -11,8 +11,7 @@ function ended(event: Dict): Dict {
 }
 
 // The whole message is the stream folded, so both replies agree on which
-// chunks make a block. Input here must be an object, so arguments that are
-// not one go under the key this API's guide gives input that did not parse.
+// chunks make a block.
 export function collected(
   events: readonly (Chunk | Progress)[],
   finish: Finish,
@@ -20,35 +19,15 @@ export function collected(
   model: string,
   shown: boolean,
 ): Dict {
-  const content: Dict[] = [];
-  let json = '';
+  const content: Held[] = [];
   let ending: Dict = {};
   for (const event of [...events, finish].flatMap(writer(shown))) {
     const { type, content_block: block, delta } = event;
     if (type === 'content_block_start') {
-      content.push(dict(block));
-      continue;
-    }
-    if (type === 'message_delta') {
-      ending = ended(event);
-      continue;
-    }
-    const last = content.pop();
-    if (last === undefined) continue;
-    if (type === 'content_block_delta') {
-      const fields = dict(delta);
-      const { partial_json: partial } = fields;
-      json += text(partial) ?? '';
-      content.push(grown(last, fields));
-      continue;
-    }
-    const input = parsed(json);
-    content.push(
-      json === ''
-        ? last
-        : { ...last, input: isDict(input) ? input : { INVALID_JSON: json } },
-    );
-    json = '';
+      content.push({ block: dict(block), deltas: [] });
+    } else if (type === 'content_block_delta') {
+      content.at(-1)?.deltas.push(dict(delta));
+    } else if (type === 'message_delta') ending = ended(event);
   }
-  return { ...opening(id, model), content, ...ending };
+  return { ...opening(id, model), content: content.map(whole), ...ending };
 }

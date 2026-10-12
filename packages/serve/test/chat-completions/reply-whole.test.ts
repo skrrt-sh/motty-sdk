@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import type { Chunk } from '@mottyjs/core/host';
 import { collected } from '../../src/chat-completions/reply-whole.ts';
 
 test('text is collected into one completion with its usage', () => {
@@ -558,117 +559,116 @@ test('a tool call with nothing of this API`s is collected as its own fields alon
   });
 });
 
-test('a carried index is not collected into the call', () => {
-  const whole = collected(
-    [
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        name: 'weather',
-        arguments: '{}',
-        provider: { 'openai.chat': { index: 9 } },
-      },
-    ],
-    { type: 'finish', reason: 'tool_calls' },
-    { id: 'req_1', model: 'coder', muted: false },
-  );
+test.each([
+  [
+    { index: 9, id: 'call_stray' },
+    { id: 'call_late', type: 'stray' },
+    { type: 'function', function: { name: 'shell', arguments: 'ls' } },
+  ],
+  [
+    {},
+    { function: { name: 'stray', arguments: 'stray', input: 'stray' } },
+    { type: 'function', function: { name: 'shell', arguments: 'ls' } },
+  ],
+  [
+    {
+      type: 'custom',
+      custom: { name: 'stray', arguments: 'stray', input: 'stray' },
+    },
+    {},
+    { type: 'custom', custom: { name: 'shell', input: 'ls' } },
+  ],
+])(
+  'a carried field never takes the place of the call`s own: %j, then %j',
+  (first, second, call) => {
+    expect(
+      collected(
+        [
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            name: 'shell',
+            arguments: 'l',
+            provider: { 'openai.chat': first },
+          },
+          {
+            type: 'tool_call',
+            id: 'call_a',
+            arguments: 's',
+            provider: { 'openai.chat': second },
+          },
+        ],
+        { type: 'finish', reason: 'tool_calls' },
+        { id: 'req_1', model: 'coder', muted: false },
+      ),
+    ).toHaveProperty('choices.0.message.tool_calls', [
+      { id: 'call_a', ...call },
+    ]);
+  },
+);
 
-  expect(JSON.stringify(whole)).not.toContain('"index":9');
-});
-
-test('a carried id or type never takes the place of the call`s own', () => {
+test('what a later fragment not marked as its custom call holds inside is collected inside the custom object', () => {
   expect(
     collected(
       [
         {
           type: 'tool_call',
           id: 'call_a',
-          name: 'weather',
-          arguments: '',
-          provider: { 'openai.chat': { id: 'call_stray' } },
+          name: 'shell',
+          arguments: 'l',
+          provider: {
+            'openai.chat': { type: 'custom', custom: { early: 1 } },
+          },
         },
         {
           type: 'tool_call',
           id: 'call_a',
-          arguments: '{}',
-          provider: { 'openai.chat': { id: 'call_late', type: 'stray' } },
+          arguments: 's',
+          provider: {
+            'openai.chat': { function: { signature: 'sig' }, late: 1 },
+          },
         },
       ],
       { type: 'finish', reason: 'tool_calls' },
       { id: 'req_1', model: 'coder', muted: false },
     ),
-  ).toMatchObject({
-    choices: [
-      {
-        message: {
-          tool_calls: [
-            {
-              id: 'call_a',
-              type: 'function',
-              function: { name: 'weather', arguments: '{}' },
-            },
-          ],
-        },
-      },
-    ],
-  });
+  ).toHaveProperty('choices.0.message.tool_calls', [
+    {
+      late: 1,
+      id: 'call_a',
+      type: 'custom',
+      custom: { early: 1, signature: 'sig', name: 'shell', input: 'ls' },
+    },
+  ]);
 });
 
-test('a carried name, arguments or input is not collected into a function call', () => {
+test('a call of many fragments that each carry a field of their own is collected whole', () => {
   const whole = collected(
     [
       { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        arguments: '{}',
-        provider: {
-          'openai.chat': {
-            function: { name: 'stray', arguments: 'stray', input: 'stray' },
+      ...Array.from(
+        { length: 40_000 },
+        (_, at): Chunk => ({
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: 'x',
+          provider: {
+            'openai.chat': { [`k${at}`]: at, function: { [`f${at}`]: at } },
           },
-        },
-      },
+        }),
+      ),
     ],
     { type: 'finish', reason: 'tool_calls' },
     { id: 'req_1', model: 'coder', muted: false },
   );
 
-  expect(whole).toMatchObject({
-    choices: [
-      {
-        message: {
-          tool_calls: [{ function: { name: 'weather', arguments: '{}' } }],
-        },
-      },
-    ],
-  });
-  expect(JSON.stringify(whole)).not.toContain('stray');
-});
-
-test('a carried name, arguments or input is not collected into a custom call', () => {
-  const whole = collected(
-    [
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        name: 'shell',
-        arguments: 'ls',
-        provider: {
-          'openai.chat': {
-            type: 'custom',
-            custom: { name: 'stray', arguments: 'stray', input: 'stray' },
-          },
-        },
-      },
-    ],
-    { type: 'finish', reason: 'tool_calls' },
-    { id: 'req_1', model: 'coder', muted: false },
+  expect(whole).toHaveProperty('choices.0.message.tool_calls.0.k39999', 39_999);
+  expect(whole).toHaveProperty(
+    'choices.0.message.tool_calls.0.function.f39999',
+    39_999,
   );
-
-  expect(whole).toMatchObject({
-    choices: [
-      { message: { tool_calls: [{ custom: { name: 'shell', input: 'ls' } }] } },
-    ],
-  });
-  expect(JSON.stringify(whole)).not.toContain('stray');
+  expect(whole).toHaveProperty(
+    'choices.0.message.tool_calls.0.function.arguments',
+    'x'.repeat(40_000),
+  );
 });

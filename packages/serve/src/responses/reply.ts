@@ -1,7 +1,8 @@
 import type { Chunk, Progress } from '@mottyjs/core/host';
 import type { Dict } from '../wire/json.ts';
+import { unsupported } from '../wire/refusals.ts';
 import { called, given } from './calls.ts';
-import { held } from './family.ts';
+import { api, held } from './family.ts';
 import { field } from './fields.ts';
 import {
   type Call,
@@ -26,6 +27,7 @@ export type Asked = {
 export function reply(asked: Asked, id: string) {
   const output: Dict[] = [];
   const calls = new Map<string, Call>();
+  const over = new Set<string>();
   const writing: Writing = { id, output, open: undefined, added, settled };
 
   function added(item: Dict): Sent {
@@ -98,10 +100,26 @@ export function reply(asked: Asked, id: string) {
         return said(writing, event);
       case 'citation':
         return cited(writing, event);
-      case 'tool_call':
-        return event.hosted === true
-          ? []
-          : called(writing, calls, asked.custom, event);
+      case 'tool_call': {
+        if (event.hosted === true) return [];
+        // An item that is done cannot be opened again on this wire, and its
+        // arguments were written whole, so more of them fails the reply.
+        if (over.has(event.id)) {
+          if (event.arguments === '') return [];
+          unsupported(
+            `${api} cannot write a tool call that was told more after it ended`,
+          );
+        }
+        const sent = called(writing, calls, asked.custom, event);
+        const call = event.ended === true ? calls.get(event.id) : undefined;
+        if (call === undefined) return sent;
+        // Only a call said to have ended is done here, as pieces of calls
+        // made together may come in turn and no other chunk says the last.
+        calls.delete(event.id);
+        over.add(event.id);
+        sent.push(given(call), done(call.index, callItem(call, 'completed')));
+        return sent;
+      }
       case 'provider':
         return whole(held(event.provider));
       case 'file':

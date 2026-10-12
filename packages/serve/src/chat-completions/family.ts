@@ -23,7 +23,7 @@ export const elsewhere: ReadonlySet<string> = new Set([
   'truncation',
 ]);
 
-export const { hinted, own, addressed, marked, noted } = providerData(
+export const { hinted, own, mine, addressed, marked, noted } = providerData(
   family,
   api,
   'openai',

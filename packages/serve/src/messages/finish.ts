@@ -51,9 +51,10 @@ export function merged(held: Dict, more: Dict): Dict {
   };
 }
 
-// One reading names each count, so none is both counted and kept apart.
-// What the upstream said beside them is no count the neutral usage holds.
-function counted(wire: Dict): { usage: Usage; rest: Dict } {
+// This wire counts cached and cache-writing tokens beside the input, the
+// neutral usage inside it. One reading names each count, so what is kept
+// apart to be written back as it came is never also counted.
+export function counted(wire: Dict): { usage: Usage; rest: Dict } {
   const {
     input_tokens: fresh,
     output_tokens: output,
@@ -86,24 +87,16 @@ function counted(wire: Dict): { usage: Usage; rest: Dict } {
   };
 }
 
-// This wire counts cached and cache-writing tokens beside the input, the
-// neutral usage inside it.
 export function countsOf(wire: Dict): Usage {
   return counted(wire).usage;
 }
 
-// What the upstream reported beside the counts read here is no count the
-// neutral usage holds, so it is kept apart and written back as it came.
-export function uncounted(wire: Dict): Dict {
-  return counted(wire).rest;
-}
-
-// Of a usage carried from the upstream only what is no count is written:
-// the counts are the neutral usage's, which a motty may have changed.
+// A motty may have changed the counts, so they are written from the neutral
+// usage, and a usage carried from the upstream gives only what is no count.
 export function countsTo(usage: Usage | undefined, carried: Dict = {}): Dict {
   const { input = 0, output = 0, cached, cacheWrite, reasoning } = usage ?? {};
   const { cost } = usage ?? {};
-  const { output_tokens_details: more, ...rest } = uncounted(carried);
+  const { output_tokens_details: more, ...rest } = counted(carried).rest;
   const details = given({ ...dict(more), thinking_tokens: reasoning });
   return {
     ...rest,

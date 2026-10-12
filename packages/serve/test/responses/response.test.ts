@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import type { Progress, StreamEvent } from '@mottyjs/core/host';
+import type { Chunk, Finish, Progress, StreamEvent } from '@mottyjs/core/host';
 import { field } from '../../src/responses/fields.ts';
 import { collected, streamed } from '../../src/responses/response.ts';
-import { parsed } from '../../src/wire/json.ts';
+import { dict, parsed } from '../../src/wire/json.ts';
 
 async function* run(...events: (StreamEvent | Progress)[]) {
   yield* events;
@@ -396,48 +396,67 @@ test('a field of a call that this API does not name reaches the caller, streamed
 });
 
 test('what a chunk carries never stands beside a field this API writes of a call, streamed and collected', async () => {
+  const chunks: Chunk[] = [
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'exec',
+      arguments: 'abc',
+      provider: {
+        'openai.responses': {
+          type: 'custom_tool_call',
+          id: 'ctc_up',
+          call_id: 'call_up',
+          name: 'other',
+          arguments: 'LEAK',
+          status: 'weird',
+          input: 'LEAK',
+          namespace: 'agents',
+        },
+      },
+    },
+    {
+      type: 'tool_call',
+      id: 'call_2',
+      name: 'time',
+      arguments: '{}',
+      provider: {
+        'openai.responses': {
+          id: 'fc_up',
+          status: 'weird',
+          input: 'LEAK',
+          arguments: 'LEAK',
+          namespace: 'agents',
+        },
+      },
+    },
+  ];
   const sent = await Array.fromAsync(
     streamed(
       { body: { model: 'coder' }, muted: true, custom: new Set() },
-      run(
-        {
-          type: 'tool_call',
-          id: 'call_1',
-          name: 'exec',
-          arguments: 'abc',
-          provider: {
-            'openai.responses': {
-              type: 'custom_tool_call',
-              id: 'ctc_up',
-              call_id: 'call_up',
-              name: 'other',
-              arguments: 'LEAK',
-              status: 'weird',
-              input: 'LEAK',
-              namespace: 'agents',
-            },
-          },
-        },
-        {
-          type: 'tool_call',
-          id: 'call_2',
-          name: 'time',
-          arguments: '{}',
-          provider: {
-            'openai.responses': {
-              id: 'fc_up',
-              status: 'weird',
-              input: 'LEAK',
-              arguments: 'LEAK',
-              namespace: 'agents',
-            },
-          },
-        },
-        { type: 'finish', reason: 'tool_calls' },
-      ),
+      run(...chunks, { type: 'finish', reason: 'tool_calls' }),
       'r1',
     ),
   );
+  const done = [
+    {
+      namespace: 'agents',
+      id: 'ctc_r1_0',
+      type: 'custom_tool_call',
+      call_id: 'call_1',
+      name: 'exec',
+      input: 'abc',
+    },
+    {
+      namespace: 'agents',
+      id: 'fc_r1_1',
+      type: 'function_call',
+      call_id: 'call_2',
+      name: 'time',
+      status: 'completed',
+      arguments: '{}',
+    },
+  ];
   expect(
     sent
       .filter(({ event }) => event?.startsWith('response.output_item.'))
@@ -460,100 +479,56 @@ test('what a chunk carries never stands beside a field this API writes of a call
       status: 'in_progress',
       arguments: '',
     },
-    {
-      namespace: 'agents',
-      id: 'ctc_r1_0',
-      type: 'custom_tool_call',
-      call_id: 'call_1',
-      name: 'exec',
-      input: 'abc',
-    },
-    {
-      namespace: 'agents',
-      id: 'fc_r1_1',
-      type: 'function_call',
-      call_id: 'call_2',
-      name: 'time',
-      status: 'completed',
-      arguments: '{}',
-    },
+    ...done,
   ]);
   expect(
     field(
       collected(
         { body: { model: 'coder' }, muted: true, custom: new Set() },
-        [
-          {
-            type: 'tool_call',
-            id: 'call_1',
-            name: 'exec',
-            arguments: 'abc',
-            provider: {
-              'openai.responses': {
-                type: 'custom_tool_call',
-                arguments: 'LEAK',
-                status: 'weird',
-              },
-            },
-          },
-          {
-            type: 'tool_call',
-            id: 'call_2',
-            name: 'time',
-            arguments: '{}',
-            provider: { 'openai.responses': { input: 'LEAK' } },
-          },
-        ],
+        chunks,
         { type: 'finish', reason: 'tool_calls' },
         'r1',
       ),
       'output',
     ),
-  ).toEqual([
-    {
-      id: 'ctc_r1_0',
-      type: 'custom_tool_call',
-      call_id: 'call_1',
-      name: 'exec',
-      input: 'abc',
-    },
-    {
-      id: 'fc_r1_1',
-      type: 'function_call',
-      call_id: 'call_2',
-      name: 'time',
-      status: 'completed',
-      arguments: '{}',
-    },
-  ]);
+  ).toEqual(done);
 });
 
 test('a field of a call told after its opening is in the item as done, streamed and collected', async () => {
+  const chunks: Chunk[] = [
+    { type: 'tool_call', id: 'call_1', name: 'spawn_agent', arguments: '' },
+    { type: 'tool_call', id: 'call_1', arguments: '{}' },
+    {
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '',
+      provider: {
+        'openai.responses': {
+          namespace: 'agents',
+          type: 'custom_tool_call',
+          id: 'fc_up',
+          status: 'weird',
+          input: 'LEAK',
+        },
+      },
+    },
+  ];
   const sent = await Array.fromAsync(
     streamed(
       { body: { model: 'coder' }, muted: true, custom: new Set() },
-      run(
-        { type: 'tool_call', id: 'call_1', name: 'spawn_agent', arguments: '' },
-        { type: 'tool_call', id: 'call_1', arguments: '{}' },
-        {
-          type: 'tool_call',
-          id: 'call_1',
-          arguments: '',
-          provider: {
-            'openai.responses': {
-              namespace: 'agents',
-              type: 'custom_tool_call',
-              id: 'fc_up',
-              status: 'weird',
-              input: 'LEAK',
-            },
-          },
-        },
-        { type: 'finish', reason: 'tool_calls' },
-      ),
+      run(...chunks, { type: 'finish', reason: 'tool_calls' }),
       'r1',
     ),
   );
+  const done = {
+    id: 'fc_r1_0',
+    type: 'function_call',
+    call_id: 'call_1',
+    name: 'spawn_agent',
+    namespace: 'agents',
+    status: 'completed',
+    arguments: '{}',
+  };
   expect(
     sent
       .filter(({ event }) => event?.startsWith('response.output_item.'))
@@ -567,48 +542,152 @@ test('a field of a call told after its opening is in the item as done, streamed 
       status: 'in_progress',
       arguments: '',
     },
-    {
-      id: 'fc_r1_0',
-      type: 'function_call',
-      call_id: 'call_1',
-      name: 'spawn_agent',
-      namespace: 'agents',
-      status: 'completed',
-      arguments: '{}',
-    },
+    done,
   ]);
   expect(
     field(
       collected(
         { body: { model: 'coder' }, muted: true, custom: new Set() },
-        [
-          {
-            type: 'tool_call',
-            id: 'call_1',
-            name: 'spawn_agent',
-            arguments: '',
-          },
-          {
-            type: 'tool_call',
-            id: 'call_1',
-            arguments: '{}',
-            provider: { 'openai.responses': { namespace: 'agents' } },
-          },
-        ],
+        chunks,
         { type: 'finish', reason: 'tool_calls' },
         'r1',
       ),
       'output',
     ),
-  ).toEqual([
+  ).toEqual([done]);
+});
+
+test('of what a finish carries, only the turn`s end is written on the response, under what this API writes, streamed and collected', async () => {
+  const finish: Finish = {
+    type: 'finish',
+    reason: 'stop',
+    provider: {
+      'openai.responses': {
+        end_turn: false,
+        service_tier: 'priority',
+        prompt_cache_key: 'k',
+        type: 'response.made_up',
+        sequence_number: 9,
+        id: 'resp_up',
+        output: ['LEAK'],
+        incomplete_details: { reason: 'interrupted' },
+      },
+      'openai.chat': { system_fingerprint: 'fp' },
+    },
+  };
+  const asked = {
+    body: { model: 'coder' },
+    muted: true,
+    custom: new Set<string>(),
+  };
+  const sent = await Array.fromAsync(streamed(asked, run(finish), 'r1'));
+  expect(sent.at(-1)?.event).toBe('response.completed');
+  const { response } = dict(parsed(sent.at(-1)?.data ?? ''));
+  expect(response).toEqual({
+    ...dict(field(parsed(sent[0]?.data ?? ''), 'response')),
+    end_turn: false,
+    status: 'completed',
+    completed_at: expect.any(Number),
+  });
+  expect(collected(asked, [], finish, 'r1')).toEqual({
+    ...dict(response),
+    created_at: expect.any(Number),
+    completed_at: expect.any(Number),
+  });
+});
+
+test('a call told more after it ended fails the reply, streamed and collected', async () => {
+  const asked = { body: {}, muted: true, custom: new Set<string>() };
+  const chunks: Chunk[] = [
+    { type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' },
+    { type: 'tool_call', id: 'a', arguments: '', ended: true },
+    { type: 'tool_call', id: 'a', arguments: '1}' },
+  ];
+  const finish: Finish = { type: 'finish', reason: 'tool_calls' };
+  const sent = await Array.fromAsync(
+    streamed(asked, run(...chunks, finish), 'r1'),
+  );
+  expect(sent.at(-1)?.event).toBe('response.failed');
+  expect(parsed(sent.at(-1)?.data ?? '')).toMatchObject({
+    response: {
+      status: 'failed',
+      error: {
+        message:
+          'The Responses API cannot write a tool call that was told more after it ended',
+      },
+    },
+  });
+  expect(() => collected(asked, chunks, finish, 'r1')).toThrow(
+    'The Responses API cannot write a tool call that was told more after it ended',
+  );
+});
+
+test('text that is empty and holds nothing for this API opens no message, streamed and collected', async () => {
+  const asked = { body: {}, muted: true, custom: new Set<string>() };
+  const chunks: Chunk[] = [
+    { type: 'text', text: '', block: 0 },
+    { type: 'tool_call', id: 'a', name: 'f', arguments: '{}', block: 1 },
+  ];
+  const finish: Finish = { type: 'finish', reason: 'tool_calls' };
+  const sent = await Array.fromAsync(
+    streamed(asked, run(...chunks, finish), 'r1'),
+  );
+  expect(sent.map(({ event }) => event)).toEqual([
+    'response.created',
+    'response.in_progress',
+    'response.output_item.added',
+    'response.function_call_arguments.delta',
+    'response.function_call_arguments.done',
+    'response.output_item.done',
+    'response.completed',
+  ]);
+  expect(field(collected(asked, chunks, finish, 'r1'), 'output')).toEqual([
     {
       id: 'fc_r1_0',
       type: 'function_call',
-      call_id: 'call_1',
-      name: 'spawn_agent',
-      namespace: 'agents',
       status: 'completed',
+      call_id: 'a',
+      name: 'f',
       arguments: '{}',
     },
   ]);
 });
+
+test.each([
+  [
+    'openai.responses',
+    'other',
+    'response.incomplete',
+    { reason: 'interrupted' },
+  ],
+  ['openai.responses', 'stop', 'response.completed', null],
+  ['openai.chat', 'other', 'response.completed', null],
+] as const)(
+  'a reason %s gave for not finishing is written where the finish is %s: %s',
+  async (family, reason, event, details) => {
+    const sent = await Array.fromAsync(
+      streamed(
+        { body: {}, muted: true, custom: new Set() },
+        run(
+          { type: 'text', text: 'Hel' },
+          {
+            type: 'finish',
+            reason,
+            provider: {
+              [family]: { incomplete_details: { reason: 'interrupted' } },
+            },
+          },
+        ),
+        'r1',
+      ),
+    );
+    expect(sent.at(-1)?.event).toBe(event);
+    expect(parsed(sent.at(-1)?.data ?? '')).toMatchObject({
+      response: {
+        status: details === null ? 'completed' : 'incomplete',
+        incomplete_details: details,
+        output: [{ status: details === null ? 'completed' : 'incomplete' }],
+      },
+    });
+  },
+);

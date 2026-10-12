@@ -4,7 +4,7 @@ import type { Dict } from '../wire/json.ts';
 import { errorBody } from '../wire/openai-error.ts';
 import { reasonWritten, replyFields } from './finish.ts';
 import { type Piece, pieces } from './reply-pieces.ts';
-import { callFields, rebuilt } from './unread.ts';
+import { wireCall } from './unread.ts';
 import { usageField } from './usage.ts';
 
 function delta(piece: Piece): Dict {
@@ -24,17 +24,8 @@ function delta(piece: Piece): Dict {
     case 'refusal':
       return { refusal: piece.text };
     case 'call': {
-      const { index, custom, opened, input, carried } = piece;
-      const kind = custom ? 'custom' : 'function';
-      const name = opened === undefined ? {} : { name: opened.name };
-      const outer = {
-        index,
-        ...(opened === undefined ? {} : { id: opened.id, type: kind }),
-      };
-      const inner = custom ? { ...name, input } : { ...name, arguments: input };
-      return {
-        tool_calls: [rebuilt(carried, kind, callFields, outer, inner)],
-      };
+      const { index, type, opened, input, carried } = piece;
+      return { tool_calls: [wireCall(type, input, carried, opened, index)] };
     }
     case 'annotation':
       return { annotations: [piece.annotation] };

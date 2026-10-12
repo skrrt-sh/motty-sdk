@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test';
+import { Unsupported } from '@mottyjs/core';
 import type { Chunk } from '@mottyjs/core/host';
+import { called } from '../../src/responses/calls.ts';
+import type { Call, Writing } from '../../src/responses/output.ts';
 import { reply } from '../../src/responses/reply.ts';
 
 test('text opens a message, fills it, and the end completes it', () => {
@@ -126,14 +129,14 @@ test('progress is sent as the text it is, a piece at a time', () => {
   ]);
 });
 
-test('a reply that failed finished none of the items still being written', () => {
+test('a reply that failed finished none of the items still being written, and the ones before are done', () => {
   const { output, push, closed } = reply(
     { body: {}, muted: false, custom: new Set(['patch']) },
     'r1',
   );
+  push({ type: 'text', text: 'Hel' });
   push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{"c' });
   push({ type: 'tool_call', id: 'call_2', name: 'patch', arguments: '***' });
-  push({ type: 'text', text: 'Hel' });
 
   const sent = closed('failed');
 
@@ -143,7 +146,16 @@ test('a reply that failed finished none of the items still being written', () =>
   });
   expect(output).toEqual([
     {
-      id: 'fc_r1_0',
+      id: 'msg_r1_0',
+      type: 'message',
+      status: 'completed',
+      role: 'assistant',
+      content: [
+        { type: 'output_text', text: 'Hel', annotations: [], logprobs: [] },
+      ],
+    },
+    {
+      id: 'fc_r1_1',
       type: 'function_call',
       status: 'incomplete',
       call_id: 'call_1',
@@ -151,20 +163,11 @@ test('a reply that failed finished none of the items still being written', () =>
       arguments: '{"c',
     },
     {
-      id: 'ctc_r1_1',
+      id: 'ctc_r1_2',
       type: 'custom_tool_call',
       call_id: 'call_2',
       name: 'patch',
       input: '***',
-    },
-    {
-      id: 'msg_r1_2',
-      type: 'message',
-      status: 'incomplete',
-      role: 'assistant',
-      content: [
-        { type: 'output_text', text: 'Hel', annotations: [], logprobs: [] },
-      ],
     },
   ]);
 });
@@ -714,6 +717,82 @@ test('a new block of text is a new message, and it keeps its phase', () => {
   expect(output[1]).not.toHaveProperty('phase');
 });
 
+test('text that is empty adds nothing with no phase, and with one says of its item alone, as it opens or after its text', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  expect(push({ type: 'text', text: '', block: 0 })).toEqual([]);
+  expect(
+    push({
+      type: 'refusal',
+      text: '',
+      block: 0,
+      provider: { anthropic: { phase: 'commentary' } },
+    }),
+  ).toEqual([]);
+  expect(output).toEqual([]);
+  expect(
+    push({
+      type: 'text',
+      text: '',
+      block: 0,
+      provider: { 'openai.responses': { phase: 'commentary' } },
+    }),
+  ).toEqual([
+    {
+      type: 'response.output_item.added',
+      output_index: 0,
+      item: {
+        phase: 'commentary',
+        id: 'msg_r1_0',
+        type: 'message',
+        status: 'in_progress',
+        role: 'assistant',
+        content: [],
+      },
+    },
+  ]);
+  push({ type: 'citation', url: 'https://x.test', block: 0 });
+  push({ type: 'text', text: 'a', block: 0 });
+  expect(
+    push({
+      type: 'text',
+      text: '',
+      block: 0,
+      provider: {
+        'openai.responses': { phase: 'final_answer', id: 'up', role: 'user' },
+      },
+    }),
+  ).toEqual([]);
+  closed('whole');
+  expect(output).toEqual([
+    {
+      phase: 'final_answer',
+      id: 'msg_r1_0',
+      type: 'message',
+      status: 'completed',
+      role: 'assistant',
+      content: [
+        {
+          type: 'output_text',
+          text: 'a',
+          annotations: [
+            {
+              type: 'url_citation',
+              url: 'https://x.test',
+              title: '',
+              start_index: 0,
+              end_index: 0,
+            },
+          ],
+          logprobs: [],
+        },
+      ],
+    },
+  ]);
+});
+
 test('a refusal is its own part of the message it comes in', () => {
   const { output, push, closed } = reply(
     { body: {}, muted: true, custom: new Set() },
@@ -1005,55 +1084,6 @@ test('the writer writes nothing for what has no form: the reply is ended before'
   expect(output).toEqual([]);
 });
 
-test('what else the item of a call held is written into the item the caller reads', () => {
-  const { output, push, closed } = reply(
-    { body: {}, muted: true, custom: new Set() },
-    'r1',
-  );
-  expect(
-    push({
-      type: 'tool_call',
-      id: 'call_1',
-      name: 'spawn_agent',
-      arguments: '',
-      provider: {
-        'openai.responses': { namespace: 'multi_agent_v1', made_up: [1] },
-      },
-    }),
-  ).toEqual([
-    {
-      type: 'response.output_item.added',
-      output_index: 0,
-      item: {
-        id: 'fc_r1_0',
-        type: 'function_call',
-        status: 'in_progress',
-        call_id: 'call_1',
-        name: 'spawn_agent',
-        namespace: 'multi_agent_v1',
-        made_up: [1],
-        arguments: '',
-      },
-    },
-  ]);
-  push({ type: 'tool_call', id: 'call_1', arguments: '{"message":"hi"}' });
-  expect(closed('whole').at(-1)).toEqual({
-    type: 'response.output_item.done',
-    output_index: 0,
-    item: {
-      id: 'fc_r1_0',
-      type: 'function_call',
-      status: 'completed',
-      call_id: 'call_1',
-      name: 'spawn_agent',
-      namespace: 'multi_agent_v1',
-      made_up: [1],
-      arguments: '{"message":"hi"}',
-    },
-  });
-  expect(output).toHaveLength(1);
-});
-
 test('a call the upstream marked as custom is written as one where no tool was declared', () => {
   const { output, push, closed } = reply(
     { body: {}, muted: true, custom: new Set() },
@@ -1143,48 +1173,6 @@ test('a call with no provider data is a function call of the fields this API has
   expect(output).toHaveLength(1);
 });
 
-test('a late chunk of a call opened as custom adds what it held, and the call stays custom', () => {
-  const { output, push, closed } = reply(
-    { body: {}, muted: true, custom: new Set() },
-    'r1',
-  );
-  push({
-    type: 'tool_call',
-    id: 'call_1',
-    name: 'exec',
-    arguments: '1+',
-    provider: { 'openai.responses': { type: 'custom_tool_call' } },
-  });
-  expect(
-    push({
-      type: 'tool_call',
-      id: 'call_1',
-      arguments: '1',
-      provider: {
-        'openai.responses': { type: 'function_call', namespace: 'agents' },
-      },
-    }),
-  ).toEqual([
-    {
-      type: 'response.custom_tool_call_input.delta',
-      item_id: 'ctc_r1_0',
-      output_index: 0,
-      delta: '1',
-    },
-  ]);
-  closed('whole');
-  expect(output).toEqual([
-    {
-      id: 'ctc_r1_0',
-      type: 'custom_tool_call',
-      call_id: 'call_1',
-      name: 'exec',
-      namespace: 'agents',
-      input: '1+1',
-    },
-  ]);
-});
-
 test('a late chunk of a call adds nothing that was written for another family', () => {
   const { output, push, closed } = reply(
     { body: {}, muted: true, custom: new Set() },
@@ -1207,5 +1195,248 @@ test('a late chunk of a call adds nothing that was written for another family', 
       name: 'weather',
       arguments: '{}',
     },
+  ]);
+});
+
+test('each item is done in the place the upstream gave it, a call when its chunk says it ended', () => {
+  const { push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  expect(
+    [
+      ...push({
+        type: 'reasoning',
+        text: '',
+        block: 0,
+        provider: {
+          'openai.responses': { type: 'reasoning', id: 'rs_1', summary: [] },
+        },
+      }),
+      ...push({
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'weather',
+        arguments: '{}',
+        ended: true,
+        block: 1,
+      }),
+      ...push({
+        type: 'provider',
+        block: 2,
+        provider: {
+          'openai.responses': { type: 'web_search_call', id: 'ws_1' },
+        },
+      }),
+      ...push({
+        type: 'tool_call',
+        id: 'call_2',
+        name: 'exec',
+        arguments: '1+1',
+        ended: true,
+        block: 3,
+        provider: { 'openai.responses': { type: 'custom_tool_call' } },
+      }),
+      ...push({ type: 'text', text: 'Done.', block: 4 }),
+      ...closed('whole'),
+    ].flatMap(({ type, output_index: index, item }) =>
+      type === 'response.output_item.done'
+        ? [[index, typeof item === 'object' ? item : undefined]]
+        : [],
+    ),
+  ).toMatchObject([
+    [0, { type: 'reasoning' }],
+    [1, { type: 'function_call', status: 'completed', arguments: '{}' }],
+    [2, { type: 'web_search_call' }],
+    [3, { type: 'custom_tool_call', input: '1+1' }],
+    [4, { type: 'message', status: 'completed' }],
+  ]);
+});
+
+test('calls in a row are each done as they end, with what the last chunk held, and the end of the reply adds nothing', () => {
+  const { push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{"c' });
+  expect(
+    push({
+      type: 'tool_call',
+      id: 'call_1',
+      arguments: '":1}',
+      ended: true,
+      provider: { 'openai.responses': { namespace: 'agents' } },
+    }),
+  ).toEqual([
+    {
+      type: 'response.function_call_arguments.delta',
+      item_id: 'fc_r1_0',
+      output_index: 0,
+      delta: '":1}',
+    },
+    {
+      type: 'response.function_call_arguments.done',
+      item_id: 'fc_r1_0',
+      output_index: 0,
+      arguments: '{"c":1}',
+    },
+    {
+      type: 'response.output_item.done',
+      output_index: 0,
+      item: {
+        namespace: 'agents',
+        id: 'fc_r1_0',
+        type: 'function_call',
+        status: 'completed',
+        call_id: 'call_1',
+        name: 'weather',
+        arguments: '{"c":1}',
+      },
+    },
+  ]);
+  push({ type: 'tool_call', id: 'call_2', name: 'time', arguments: '{}' });
+  expect(
+    push({ type: 'tool_call', id: 'call_2', arguments: '', ended: true }),
+  ).toMatchObject([
+    { type: 'response.function_call_arguments.done', arguments: '{}' },
+    { type: 'response.output_item.done', output_index: 1 },
+  ]);
+  expect(closed('whole')).toEqual([]);
+});
+
+test('a call to a custom tool whose pieces come around text, with none said to be the last, is written whole when the reply ends', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set(['patch']) },
+    'r1',
+  );
+  push({
+    type: 'tool_call',
+    id: 'call_1',
+    name: 'patch',
+    arguments: '*** Begin',
+  });
+  expect(push({ type: 'text', text: 'Patching.' })).not.toContainEqual(
+    expect.objectContaining({ type: 'response.output_item.done' }),
+  );
+  expect(
+    push({ type: 'tool_call', id: 'call_1', arguments: '\n*** End' }),
+  ).toEqual([
+    {
+      type: 'response.custom_tool_call_input.delta',
+      item_id: 'ctc_r1_0',
+      output_index: 0,
+      delta: '\n*** End',
+    },
+  ]);
+  expect(closed('whole')).toMatchObject([
+    { type: 'response.output_text.done' },
+    { type: 'response.content_part.done' },
+    { type: 'response.output_item.done', output_index: 1 },
+    {
+      type: 'response.custom_tool_call_input.done',
+      input: '*** Begin\n*** End',
+    },
+    {
+      type: 'response.output_item.done',
+      output_index: 0,
+      item: { type: 'custom_tool_call', input: '*** Begin\n*** End' },
+    },
+  ]);
+  expect(output).toHaveLength(2);
+});
+
+test('a call told more after it ended fails the reply, and an empty piece after its end adds nothing', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  push({
+    type: 'tool_call',
+    id: 'call_1',
+    name: 'weather',
+    arguments: '{}',
+    ended: true,
+  });
+  expect(push({ type: 'tool_call', id: 'call_1', arguments: '' })).toEqual([]);
+  expect(() =>
+    push({ type: 'tool_call', id: 'call_1', arguments: '1}' }),
+  ).toThrow(
+    new Unsupported(
+      'The Responses API cannot write a tool call that was told more after it ended',
+    ),
+  );
+  expect(closed('failed')).toEqual([]);
+  expect(output).toMatchObject([
+    { type: 'function_call', call_id: 'call_1', arguments: '{}' },
+  ]);
+  expect(output).toHaveLength(1);
+});
+
+test.each([
+  ['whole', 'completed'],
+  ['cut', 'incomplete'],
+  ['failed', 'incomplete'],
+] as const)(
+  'a call the upstream ended stays completed in a reply that ended %s, and the call still open is %s',
+  (end, status) => {
+    const { output, push, closed } = reply(
+      { body: {}, muted: true, custom: new Set() },
+      'r1',
+    );
+    push({
+      type: 'tool_call',
+      id: 'call_1',
+      name: 'weather',
+      arguments: '{}',
+      ended: true,
+    });
+    push({
+      type: 'tool_call',
+      id: 'call_2',
+      name: 'weather',
+      arguments: '{"c',
+    });
+
+    closed(end);
+
+    expect(output).toMatchObject([
+      { type: 'function_call', status: 'completed', arguments: '{}' },
+      { type: 'function_call', status, arguments: '{"c' },
+    ]);
+  },
+);
+
+test('what a later chunk of a call holds is added to the item where it is, however many chunks hold some', () => {
+  const calls = new Map<string, Call>();
+  const writing: Writing = {
+    id: 'r1',
+    output: [],
+    open: undefined,
+    added: (item) => ({ type: 'response.output_item.added', item }),
+    settled: () => [],
+  };
+  called(writing, calls, new Set(), {
+    type: 'tool_call',
+    id: 'call_1',
+    name: 'weather',
+    arguments: '',
+  });
+  const opened = calls.get('call_1')?.item;
+  called(writing, calls, new Set(), {
+    type: 'tool_call',
+    id: 'call_1',
+    arguments: '',
+    provider: {
+      'openai.responses': { namespace: 'agents', ['__proto__']: { a: 1 } },
+    },
+  });
+  expect(calls.get('call_1')?.item).toBe(opened);
+  expect(Object.entries(opened ?? {})).toEqual([
+    ['id', 'fc_r1_0'],
+    ['type', 'function_call'],
+    ['call_id', 'call_1'],
+    ['name', 'weather'],
+    ['namespace', 'agents'],
+    ['__proto__', { a: 1 }],
   ]);
 });

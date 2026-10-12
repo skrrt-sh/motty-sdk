@@ -3,26 +3,22 @@ import type { Dict } from '../wire/json.ts';
 import { joined } from './dialect.ts';
 import { reasonWritten, replyFields } from './finish.ts';
 import { pieces } from './reply-pieces.ts';
-import { callFields, merged, rebuilt } from './unread.ts';
+import { type Kind, mergedUnread, wireCall } from './unread.ts';
 import { usageField } from './usage.ts';
 
 // Sound arrives in fragments of one object: its data and its transcript
 // grow, and what names it is said once.
-function heard(whole: Dict, fragment: Dict): Dict {
-  // Made from entries, a key named as the prototype is a key like any other.
-  return Object.fromEntries([
-    ...Object.entries(whole),
-    ...Object.entries(fragment).map(([key, value]): [string, Json] => {
-      const held =
-        key === 'data' || key === 'transcript' ? whole[key] : undefined;
-      return [
-        key,
-        typeof held === 'string' && typeof value === 'string'
-          ? held + value
-          : value,
-      ];
-    }),
-  ]);
+function heard(whole: Map<string, Json>, fragment: Dict): void {
+  for (const [key, value] of Object.entries(fragment)) {
+    const held =
+      key === 'data' || key === 'transcript' ? whole.get(key) : undefined;
+    whole.set(
+      key,
+      typeof held === 'string' && typeof value === 'string'
+        ? held + value
+        : value,
+    );
+  }
 }
 
 export function collected(
@@ -44,14 +40,14 @@ export function collected(
   const calls: {
     id: string;
     name: string;
-    custom: boolean;
+    type: Kind;
     input: string;
-    carried?: Dict;
+    carried: Dict[];
   }[] = [];
   const annotations: Json[] = [];
   const details: Json[] = [];
   const images: Json[] = [];
-  let audio: Dict | undefined;
+  let audio: Map<string, Json> | undefined;
   for (const event of events) {
     const added = piece(event);
     switch (added?.kind) {
@@ -67,21 +63,22 @@ export function collected(
         tokens[added.kind].push(...(added.logprobs ?? []));
         break;
       case 'call': {
-        const { opened, custom, input, index, carried } = added;
-        if (opened !== undefined) calls.push({ ...opened, custom, input: '' });
+        const { opened, type, input, index, carried } = added;
+        if (opened !== undefined) {
+          calls.push({ ...opened, type, input: '', carried: [] });
+        }
         const call = calls[index];
         if (call === undefined) break;
         call.input += input;
-        if (carried === undefined) break;
-        const kind = call.custom ? 'custom' : 'function';
-        call.carried = merged(call.carried, carried, kind);
+        if (carried !== undefined) call.carried.push(carried);
         break;
       }
       case 'annotation':
         annotations.push(added.annotation);
         break;
       case 'audio':
-        audio = heard(audio ?? {}, added.audio);
+        audio ??= new Map();
+        heard(audio, added.audio);
         break;
       case 'image':
         images.push(added.image);
@@ -106,26 +103,13 @@ export function collected(
     ...(calls.length === 0
       ? {}
       : {
-          tool_calls: calls.map(({ id, name, custom, input, carried }) =>
-            custom
-              ? rebuilt(
-                  carried,
-                  'custom',
-                  callFields,
-                  { id, type: 'custom' },
-                  { name, input },
-                )
-              : rebuilt(
-                  carried,
-                  'function',
-                  callFields,
-                  { id, type: 'function' },
-                  { name, arguments: input },
-                ),
+          tool_calls: calls.map(({ id, name, type, input, carried }) =>
+            wireCall(type, input, mergedUnread(carried, type), { id, name }),
           ),
         }),
     ...(annotations.length === 0 ? {} : { annotations }),
-    ...(audio === undefined ? {} : { audio }),
+    // Made from entries, a key named as the prototype is a key like any other.
+    ...(audio === undefined ? {} : { audio: Object.fromEntries(audio) }),
     ...(images.length === 0 ? {} : { images }),
   };
   return {

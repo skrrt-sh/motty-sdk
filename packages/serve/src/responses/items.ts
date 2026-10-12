@@ -4,8 +4,8 @@ import { type Dict, text, without } from '../wire/json.ts';
 import { breakpoint } from '../wire/openai-cache.ts';
 import { a, unsupported } from '../wire/refusals.ts';
 import { inputContent } from './content.ts';
-import { carried, held, hinted, own } from './family.ts';
-import { field } from './fields.ts';
+import { carried, held, hinted, mine, own } from './family.ts';
+import { callNeutral, field } from './fields.ts';
 
 type Call = Part & { type: 'tool_call' };
 type Result = Part & { type: 'tool_result' };
@@ -14,7 +14,7 @@ function callItem(left: Leaving, part: Call, custom: boolean): Dict {
   left.without('hosted', part.hosted);
   const written = part.raw ?? JSON.stringify(part.input);
   return {
-    ...carried(part, 'a tool call'),
+    ...without({ ...hinted(part.hints), ...mine(part.provider) }, callNeutral),
     call_id: part.id,
     name: part.name,
     ...(custom

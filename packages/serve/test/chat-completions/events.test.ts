@@ -941,3 +941,61 @@ test('a field of a custom tool call that is not read is kept beside its mark', a
     },
   });
 });
+
+test('what a call marked custom holds inside its function object is kept as the custom object`s', async () => {
+  const [first] = await Array.fromAsync(
+    events(
+      sent(
+        '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"custom","function":{"name":"shell","arguments":"ls","signature":"c2ln"}}]},"finish_reason":"tool_calls"}]}',
+        '[DONE]',
+      ),
+    ),
+  );
+
+  expect(first).toEqual({
+    type: 'tool_call',
+    id: 'call_a',
+    name: 'shell',
+    arguments: 'ls',
+    provider: {
+      'openai.chat': { custom: { signature: 'c2ln' }, type: 'custom' },
+    },
+  });
+});
+
+test('an entry of tool calls that is no object is no call', async () => {
+  expect(
+    await Array.fromAsync(
+      events(
+        sent(
+          '{"choices":[{"index":0,"delta":{"tool_calls":[null,5,"x",[]]},"finish_reason":"stop"}]}',
+          '[DONE]',
+        ),
+      ),
+    ),
+  ).toEqual([{ type: 'finish', reason: 'stop', rawReason: 'stop' }]);
+});
+
+test.each([
+  ['"function":{"name":"weather","arguments":{"a":1}}'],
+  ['"type":"custom","custom":{"name":"weather","input":{"a":1}}'],
+])(
+  'arguments given as an object are read as its JSON text: %s',
+  async (call) => {
+    const [first] = await Array.fromAsync(
+      events(
+        sent(
+          `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a",${call}}]},"finish_reason":"tool_calls"}]}`,
+          '[DONE]',
+        ),
+      ),
+    );
+
+    expect(first).toMatchObject({
+      type: 'tool_call',
+      id: 'call_a',
+      name: 'weather',
+      arguments: '{"a":1}',
+    });
+  },
+);

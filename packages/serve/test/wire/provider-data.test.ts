@@ -3,7 +3,7 @@ import { Unsupported } from '@mottyjs/core';
 import { dict, parsed } from '../../src/wire/json.ts';
 import { providerData } from '../../src/wire/provider-data.ts';
 
-const { hinted, own, marked, noted } = providerData(
+const { hinted, own, mine, marked, noted } = providerData(
   'openai.chat',
   'Chat Completions',
 );
@@ -46,6 +46,62 @@ test('a map with no entry for this wire fails the call', () => {
     own({ anthropic: {}, 'openai.responses': {} }, 'an option'),
   ).toThrow('Chat Completions cannot carry an option of anthropic');
 });
+
+test('a refusal names the fields that cannot be carried, never what they hold', () => {
+  expect(() =>
+    own(
+      { 'openai.responses': { client_metadata: { token: 'sk-secret' } } },
+      'options',
+    ),
+  ).toThrow(
+    new Unsupported(
+      'Chat Completions cannot carry options of openai.responses: client_metadata',
+    ),
+  );
+  expect(() =>
+    own(
+      { anthropic: { defer_loading: true, eager_input_streaming: true } },
+      'a tool option',
+    ),
+  ).toThrow(
+    new Unsupported(
+      'Chat Completions cannot carry a tool option of anthropic: defer_loading, eager_input_streaming',
+    ),
+  );
+});
+
+test.each([[{ anthropic: {} }], [{ anthropic: 'not an object' }]])(
+  'a refusal of an entry with no field names the family alone',
+  (data) => {
+    expect(() => own(data, 'an option')).toThrow(
+      new Unsupported('Chat Completions cannot carry an option of anthropic'),
+    );
+  },
+);
+
+test('a refusal names five fields and counts the rest', () => {
+  expect(() =>
+    own({ anthropic: { a: 1, b: 1, c: 1, d: 1, e: 1, f: 1, g: 1 } }, 'a tool'),
+  ).toThrow(
+    new Unsupported(
+      'Chat Completions cannot carry a tool of anthropic: a, b, c, d, e and 2 more',
+    ),
+  );
+});
+
+test.each([
+  [{ anthropic: { caller: { type: 'direct' } } }, {}],
+  [undefined, {}],
+  [
+    { anthropic: { caller: { type: 'direct' } }, 'openai.chat': { a: 1 } },
+    { a: 1 },
+  ],
+])(
+  'what a map holds for another wire alone is read as nothing and not refused',
+  (data, read) => {
+    expect(mine(data)).toEqual(read);
+  },
+);
 
 test('a map with an entry for each wire is read for this one alone', () => {
   expect(

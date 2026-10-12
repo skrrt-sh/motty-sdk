@@ -1,7 +1,7 @@
 import type { Chunk } from '@mottyjs/core/host';
 import { without } from '../wire/json.ts';
 import { held } from './family.ts';
-import { callWritten, isCustom } from './fields.ts';
+import { callUncarried, isCustom, put } from './fields.ts';
 import { type Call, callItem, type Sent, type Writing } from './output.ts';
 
 export function called(
@@ -16,7 +16,7 @@ export function called(
     sent.push(...writing.settled());
     const index = writing.output.length;
     const own = held(event.provider) ?? {};
-    // An upstream of another API marks no call: the caller's tools say.
+    // An upstream of another API marks no call, so the caller's tools say.
     const custom = isCustom(own) || customs.has(event.name ?? '');
     const itemId = `${custom ? 'ctc' : 'fc'}_${writing.id}_${index}`;
     call = {
@@ -25,7 +25,7 @@ export function called(
       holds: custom ? 'input' : 'arguments',
       given: '',
       item: {
-        ...without(own, callWritten),
+        ...without(own, callUncarried),
         id: itemId,
         type: custom ? 'custom_tool_call' : 'function_call',
         call_id: event.id,
@@ -35,10 +35,7 @@ export function called(
     calls.set(event.id, call);
     sent.push(writing.added(callItem(call, 'in_progress')));
   } else if (event.provider !== undefined) {
-    // What the opening did not tell is in the item as done. What the call is
-    // was written when it opened, and stays.
-    const late = without(held(event.provider) ?? {}, callWritten);
-    call.item = { ...call.item, ...late };
+    put(call.item, without(held(event.provider) ?? {}, callUncarried));
   }
   if (event.arguments === '') return sent;
   call.given += event.arguments;

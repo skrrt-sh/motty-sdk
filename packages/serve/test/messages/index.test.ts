@@ -519,6 +519,53 @@ test('a failure inside the upstream stream reaches the caller as an error event'
   });
 });
 
+test('a block the codec passes whole that a failing upstream never ended reaches the caller, and then the failure', async () => {
+  const sent = await reply(
+    [
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'mcp_tool_use',
+          id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+          name: 'echo',
+          server_name: 'example-mcp',
+          input: {},
+        },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '{"param1":' },
+      },
+      {
+        type: 'error',
+        error: { type: 'overloaded_error', message: 'Overloaded' },
+      },
+    ],
+    true,
+    null,
+  );
+  expect(sent.slice(1)).toEqual([
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'mcp_tool_use',
+        id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
+        name: 'echo',
+        server_name: 'example-mcp',
+        input: { INVALID_JSON: '{"param1":' },
+      },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'error',
+      error: { type: 'overloaded_error', message: 'Overloaded' },
+    },
+  ]);
+});
+
 test("a first-event failure is answered as this API's error body", () => {
   const facts = messages.failure(
     529,
@@ -980,80 +1027,6 @@ test('a block the codec passes whole reaches the caller with what its deltas sai
   expect(await reply(wire, false, { type: 'adaptive' })).toMatchObject([
     { content: [called, compacted] },
   ]);
-});
-
-test('a tool call keeps a field the codec does not read from the upstream to the caller and back', async () => {
-  const [message] = await reply(
-    [
-      {
-        type: 'content_block_start',
-        index: 0,
-        content_block: {
-          type: 'tool_use',
-          id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-          name: 'get_weather',
-          input: {},
-          caller: { type: 'direct' },
-          future_block_field: 'kept',
-        },
-      },
-      {
-        type: 'content_block_delta',
-        index: 0,
-        delta: {
-          type: 'input_json_delta',
-          partial_json: '{"location": "Paris"}',
-        },
-      },
-      { type: 'content_block_stop', index: 0 },
-      {
-        type: 'message_delta',
-        delta: { stop_reason: 'tool_use', stop_sequence: null },
-        usage: { input_tokens: 25, output_tokens: 9 },
-      },
-      { type: 'message_stop' },
-    ],
-    false,
-    { type: 'adaptive' },
-  );
-  const { content } = dict(message);
-  const { request } = messages.decode(
-    {
-      model: 'claude-opus-5-5',
-      max_tokens: 1024,
-      messages: [
-        { role: 'user', content: 'Weather?' },
-        { role: 'assistant', content: content ?? null },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-              content: 'Sunny',
-            },
-          ],
-        },
-      ],
-    },
-    new Headers(),
-  );
-  const { messages: sent } = dict(
-    messages.encode('claude-opus-5-5', request).body,
-  );
-  expect(list(sent)[1]).toEqual({
-    role: 'assistant',
-    content: [
-      {
-        type: 'tool_use',
-        id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-        name: 'get_weather',
-        input: { location: 'Paris' },
-        caller: { type: 'direct' },
-        future_block_field: 'kept',
-      },
-    ],
-  });
 });
 
 test('a body field the codec does not read reaches an upstream of this family as it was sent', () => {

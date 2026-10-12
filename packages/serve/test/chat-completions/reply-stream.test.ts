@@ -675,34 +675,111 @@ test('a tool call with nothing of this API`s is sent as its own fields alone', a
   ]);
 });
 
-test('a carried index never takes the place of the call`s own', async () => {
-  const [first] = await frames(
-    run(
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        name: 'weather',
-        arguments: '{}',
-        provider: { 'openai.chat': { index: 9 } },
-      },
-      { type: 'finish', reason: 'tool_calls' },
-    ),
-  );
+test.each([
+  [{ id: 'call_stray' }],
+  [{ type: 'stray' }],
+  [{ function: { name: 'stray' } }],
+])(
+  'a carried field the call has of its own is not written on a fragment that does not open it: %j',
+  async (carried) => {
+    const [, second] = await frames(
+      run(
+        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: '{}',
+          provider: { 'openai.chat': carried },
+        },
+        { type: 'finish', reason: 'tool_calls' },
+      ),
+    );
 
-  expect(first).toMatchObject({
-    choices: [{ delta: { tool_calls: [{ index: 0 }] } }],
-  });
+    expect(second).toMatchObject({
+      choices: [
+        {
+          delta: { tool_calls: [{ index: 0, function: { arguments: '{}' } }] },
+        },
+      ],
+    });
+    expect(JSON.stringify(second)).not.toContain('stray');
+  },
+);
+
+test.each([
+  [
+    { index: 9, function: { input: 'stray', arguments: 'stray' } },
+    { type: 'function', function: { name: 'shell', arguments: 'ls' } },
+  ],
+  [
+    { type: 'custom', custom: { arguments: 'stray', input: 'stray' } },
+    { type: 'custom', custom: { name: 'shell', input: 'ls' } },
+  ],
+])(
+  'a carried field never takes the place of the call`s own on the fragment that opens it: %j',
+  async (carried, call) => {
+    const [first] = await frames(
+      run(
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          name: 'shell',
+          arguments: 'ls',
+          provider: { 'openai.chat': carried },
+        },
+        { type: 'finish', reason: 'tool_calls' },
+      ),
+    );
+
+    expect(first).toMatchObject({
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{ index: 0, id: 'call_a', ...call }],
+          },
+        },
+      ],
+    });
+    expect(JSON.stringify(first)).not.toContain('stray');
+  },
+);
+
+test('a late fragment with no input and nothing this wire writes is not sent', async () => {
+  expect(
+    await frames(
+      run(
+        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '{}' },
+        {
+          type: 'tool_call',
+          id: 'call_a',
+          arguments: '',
+          provider: { 'openai.responses': { namespace: 'time' } },
+        },
+        { type: 'finish', reason: 'tool_calls' },
+      ),
+    ),
+  ).toHaveLength(3);
 });
 
-test('a carried id is not written on a fragment that does not open the call', async () => {
+test('what a later fragment not marked as its custom call holds inside is sent inside the custom object', async () => {
   const [, second] = await frames(
     run(
-      { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
       {
         type: 'tool_call',
         id: 'call_a',
-        arguments: '{}',
-        provider: { 'openai.chat': { id: 'call_stray' } },
+        name: 'shell',
+        arguments: 'l',
+        provider: { 'openai.chat': { type: 'custom' } },
+      },
+      {
+        type: 'tool_call',
+        id: 'call_a',
+        arguments: 's',
+        provider: {
+          'openai.chat': { function: { signature: 'sig' }, late: 1 },
+        },
       },
       { type: 'finish', reason: 'tool_calls' },
     ),
@@ -710,97 +787,14 @@ test('a carried id is not written on a fragment that does not open the call', as
 
   expect(second).toMatchObject({
     choices: [
-      { delta: { tool_calls: [{ index: 0, function: { arguments: '{}' } }] } },
-    ],
-  });
-  expect(JSON.stringify(second)).not.toContain('call_stray');
-});
-
-test('a carried type is not written on a fragment that does not open the call', async () => {
-  const [, second] = await frames(
-    run(
-      { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        arguments: '{}',
-        provider: { 'openai.chat': { type: 'stray' } },
-      },
-      { type: 'finish', reason: 'tool_calls' },
-    ),
-  );
-
-  expect(JSON.stringify(second)).not.toContain('stray');
-});
-
-test('a carried name is not written on a fragment that does not open the call', async () => {
-  const [, second] = await frames(
-    run(
-      { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        arguments: '{}',
-        provider: { 'openai.chat': { function: { name: 'stray' } } },
-      },
-      { type: 'finish', reason: 'tool_calls' },
-    ),
-  );
-
-  expect(JSON.stringify(second)).not.toContain('stray');
-});
-
-test('a carried input is not written beside a function call`s arguments', async () => {
-  const [first] = await frames(
-    run(
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        name: 'weather',
-        arguments: '{}',
-        provider: {
-          'openai.chat': { function: { input: 'stray', arguments: 'stray' } },
-        },
-      },
-      { type: 'finish', reason: 'tool_calls' },
-    ),
-  );
-
-  expect(first).toMatchObject({
-    choices: [
       {
         delta: {
-          tool_calls: [{ function: { name: 'weather', arguments: '{}' } }],
+          tool_calls: [
+            { late: 1, index: 0, custom: { signature: 'sig', input: 's' } },
+          ],
         },
       },
     ],
   });
-  expect(JSON.stringify(first)).not.toContain('stray');
-});
-
-test('carried arguments are not written beside a custom call`s input', async () => {
-  const [first] = await frames(
-    run(
-      {
-        type: 'tool_call',
-        id: 'call_a',
-        name: 'shell',
-        arguments: 'ls',
-        provider: {
-          'openai.chat': {
-            type: 'custom',
-            custom: { arguments: 'stray', input: 'stray' },
-          },
-        },
-      },
-      { type: 'finish', reason: 'tool_calls' },
-    ),
-  );
-
-  expect(first).toMatchObject({
-    choices: [
-      { delta: { tool_calls: [{ custom: { name: 'shell', input: 'ls' } }] } },
-    ],
-  });
-  expect(JSON.stringify(first)).not.toContain('stray');
+  expect(JSON.stringify(second)).not.toContain('function');
 });

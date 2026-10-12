@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
 import {
+  counted,
   countsOf,
   countsTo,
   merged,
   reasonOf,
   stopOf,
-  uncounted,
 } from '../../src/messages/finish.ts';
 import { dict, parsed } from '../../src/wire/json.ts';
 
@@ -150,7 +150,7 @@ test('what usage holds beside the counts read here is kept apart, and no count i
     inference_geo: 'us',
     future_count: 3,
   };
-  expect(uncounted(wire)).toEqual({
+  expect(counted(wire).rest).toEqual({
     cache_creation: {
       ephemeral_5m_input_tokens: 0,
       ephemeral_1h_input_tokens: 100,
@@ -168,7 +168,7 @@ test('what usage holds beside the counts read here is kept apart, and no count i
     reasoning: 12,
     cost: 0.0042,
   });
-  expect(uncounted({ input_tokens: 25, output_tokens: 40 })).toEqual({});
+  expect(counted({ input_tokens: 25, output_tokens: 40 }).rest).toEqual({});
 });
 
 test('what the thinking details hold beside the count read here goes back beside it', () => {
@@ -178,11 +178,11 @@ test('what the thinking details hold beside the count read here goes back beside
     output_tokens_details: { thinking_tokens: 2, future_tokens: 9 },
   };
 
-  expect(uncounted(wire)).toEqual({
+  expect(counted(wire).rest).toEqual({
     output_tokens_details: { future_tokens: 9 },
   });
-  expect(countsTo(countsOf(wire), uncounted(wire))).toEqual(wire);
-  expect(countsTo({ input: 25, output: 40 }, uncounted(wire))).toEqual({
+  expect(countsTo(countsOf(wire), counted(wire).rest)).toEqual(wire);
+  expect(countsTo({ input: 25, output: 40 }, counted(wire).rest)).toEqual({
     input_tokens: 25,
     output_tokens: 40,
     output_tokens_details: { future_tokens: 9 },

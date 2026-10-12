@@ -20,7 +20,7 @@ import {
 } from './dialect.ts';
 import { wireMessages } from './encode-messages.ts';
 import { addressed, hinted, own } from './family.ts';
-import { rebuilt, toolFields } from './unread.ts';
+import { toolFields, withUnread } from './unread.ts';
 
 function tool(left: Leaving, wanted: Tool): Dict {
   if (wanted.type !== 'custom') left.without('tool.cache', wanted.cache);
@@ -32,7 +32,7 @@ function tool(left: Leaving, wanted: Tool): Dict {
         ...own(wanted.provider, 'a tool option'),
       };
       const inside = { name, description, parameters: copied(input), strict };
-      return rebuilt(
+      return withUnread(
         carried,
         'function',
         toolFields,
@@ -50,7 +50,7 @@ function tool(left: Leaving, wanted: Tool): Dict {
         grammar === undefined
           ? undefined
           : { type: 'grammar', grammar: { ...grammar } };
-      return rebuilt(
+      return withUnread(
         carried,
         'custom',
         toolFields,

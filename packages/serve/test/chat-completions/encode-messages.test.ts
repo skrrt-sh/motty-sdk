@@ -991,9 +991,10 @@ test('nothing a tool call holds for this API outranks its own fields', () => {
             input: {},
             hints: {
               'openai.chat': {
+                index: 9,
                 id: 'call_z',
                 type: 'custom',
-                function: { name: 'other', arguments: '{"a":1}' },
+                function: { name: 'other', arguments: '{"a":1}', input: 'ls' },
               },
             },
           },
@@ -1028,39 +1029,6 @@ test('a tool call that holds only another API`s data is written as its own field
             input: {},
             provider: { anthropic: { caller: { type: 'direct' } } },
             hints: { 'openai.responses': { namespace: 'time' } },
-          },
-        ],
-      },
-    ]),
-  ).toEqual([
-    {
-      role: 'assistant',
-      content: null,
-      tool_calls: [
-        {
-          id: 'call_a',
-          type: 'function',
-          function: { name: 'weather', arguments: '{}' },
-        },
-      ],
-    },
-  ]);
-});
-
-test('a field a tool call never has of its own in a history is not written from what it holds', () => {
-  expect(
-    wireMessages(leaving('chat'), [
-      {
-        role: 'assistant',
-        parts: [
-          {
-            type: 'tool_call',
-            id: 'call_a',
-            name: 'weather',
-            input: {},
-            hints: {
-              'openai.chat': { index: 9, function: { input: 'stray' } },
-            },
           },
         ],
       },

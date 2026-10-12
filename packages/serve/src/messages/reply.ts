@@ -6,7 +6,8 @@ import type {
   Terminal,
 } from '@mottyjs/core/host';
 import type { ServerSentEvent } from '../sse.ts';
-import { type Dict, dict, isDict, parsed } from '../wire/json.ts';
+import { type Dict, dict } from '../wire/json.ts';
+import { inputOf } from './deltas.ts';
 import { problem } from './errors.ts';
 import { hinted } from './family.ts';
 import { countsTo, stopOf, unowned } from './finish.ts';
@@ -129,7 +130,6 @@ export function writer(
         if (begun.has(id)) return [];
         begun.add(id);
         const type = event.hosted === true ? 'server_tool_use' : 'tool_use';
-        // What its upstream said of the call beside these goes back with it.
         const block: Dict = {
           ...hinted(event.provider),
           type,
@@ -137,7 +137,7 @@ export function writer(
           name,
           input: {},
         };
-        if (calling && (waiting.size > 0 || !isDict(parsed(input)))) {
+        if (calling && (waiting.size > 0 || inputOf(input) === undefined)) {
           waiting.set(id, { block, json });
           return [];
         }
@@ -152,8 +152,6 @@ export function writer(
         return [...within(`provider ${index}`, block), ...closed()];
       }
       case 'finish': {
-        // An upstream of this family said more of the message than the finish
-        // holds, and each field goes back where it sat.
         const {
           usage,
           message_delta: beside,

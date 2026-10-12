@@ -696,33 +696,6 @@ test('the finish is written with what the upstream said of the message, each fie
   ]);
 });
 
-test('the counts are the finish`s own, never the ones its upstream reported', () => {
-  expect(
-    writer(false)({
-      type: 'finish',
-      reason: 'stop',
-      rawReason: 'end_turn',
-      usage: { input: 25, output: 40 },
-      provider: {
-        anthropic: {
-          usage: {
-            cache_read_input_tokens: 999,
-            output_tokens_details: { thinking_tokens: 7 },
-            cost: 5,
-          },
-        },
-      },
-    }),
-  ).toEqual([
-    {
-      type: 'message_delta',
-      delta: { stop_reason: 'end_turn', stop_sequence: null },
-      usage: { input_tokens: 25, output_tokens: 40 },
-    },
-    { type: 'message_stop' },
-  ]);
-});
-
 test("a finish with another family's data is written as it always was", () => {
   expect(
     writer(false)({
@@ -736,49 +709,6 @@ test("a finish with another family's data is written as it always was", () => {
       type: 'message_delta',
       delta: { stop_reason: 'end_turn', stop_sequence: null },
       usage: { input_tokens: 25, output_tokens: 40 },
-    },
-    { type: 'message_stop' },
-  ]);
-});
-
-test("the message's own fields are never replaced by what rides on the finish", () => {
-  expect(
-    writer(false)({
-      type: 'finish',
-      reason: 'stop',
-      rawReason: 'end_turn',
-      usage: { input: 25, output: 40 },
-      provider: {
-        anthropic: {
-          id: 'msg_other',
-          type: 'x',
-          role: 'user',
-          model: 'other',
-          content: 'gone',
-          container: { id: 'container_011' },
-          message_delta: {
-            id: 'msg_other',
-            type: 'x',
-            role: 'user',
-            model: 'other',
-            content: 'gone',
-            delta: 'gone',
-            usage: 'gone',
-            context_management: { applied_edits: [] },
-          },
-        },
-      },
-    }),
-  ).toEqual([
-    {
-      type: 'message_delta',
-      delta: {
-        stop_reason: 'end_turn',
-        stop_sequence: null,
-        container: { id: 'container_011' },
-      },
-      usage: { input_tokens: 25, output_tokens: 40 },
-      context_management: { applied_edits: [] },
     },
     { type: 'message_stop' },
   ]);

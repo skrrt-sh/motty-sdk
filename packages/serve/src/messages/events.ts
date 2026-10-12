@@ -1,19 +1,18 @@
-import type { Chunk, Finish, Json, StreamEvent } from '@mottyjs/core/host';
+import type {
+  Chunk,
+  Finish,
+  Json,
+  StreamEvent,
+  Terminal,
+} from '@mottyjs/core/host';
 import type { ServerSentEvent } from '../sse.ts';
 import { cutShort, unreadable } from '../wire/broken-stream.ts';
 import { type Dict, dict, isDict, number, parsed } from '../wire/json.ts';
 import type { Clean } from '../wire/upstream-failure.ts';
-import { grown } from './deltas.ts';
+import { type Held, whole } from './deltas.ts';
 import { failed } from './errors.ts';
 import { family, marked } from './family.ts';
-import {
-  besides,
-  countsOf,
-  merged,
-  reasonOf,
-  uncounted,
-  unowned,
-} from './finish.ts';
+import { besides, counted, countsOf, merged, reasonOf } from './finish.ts';
 import { cited } from './parts.ts';
 
 type Placed = { block?: number };
@@ -27,37 +26,21 @@ function signed(data: Dict, placed: Placed): Chunk {
   };
 }
 
-type Held = { block: Dict; json: string };
-
-// A block this codec does not read comes whole and goes back as it came.
-function whole({ block, json }: Held, placed: Placed): Chunk {
-  const input = parsed(json);
-  return {
-    type: 'provider',
-    ...placed,
-    provider: { [family]: isDict(input) ? { ...block, input } : block },
-  };
+function passedWhole(held: Held, placed: Placed): Chunk {
+  return { type: 'provider', ...placed, provider: { [family]: whole(held) } };
 }
 
-// While such a block is open every delta at its place is its own, also one
-// of a kind read elsewhere, so nothing it says is told ahead of it.
-function fed({ block, json }: Held, delta: Dict): Held {
-  const { partial_json: more } = delta;
-  return {
-    block: grown(block, delta),
-    json: typeof more === 'string' ? json + more : json,
-  };
-}
-
-// Only a block of a kind read here starts with chunks; any other is held.
 function started(block: Dict, placed: Placed): Chunk[] | undefined {
-  const { type, text, thinking, signature, id, name, input, ...rest } = block;
+  const { type, ...fields } = block;
   switch (type) {
-    case 'text':
+    case 'text': {
+      const { text } = fields;
       return typeof text === 'string' && text !== ''
         ? [{ type: 'text', text, ...placed }]
         : [];
+    }
     case 'thinking': {
+      const { thinking, signature } = fields;
       // The signature travels apart from the text, as it does in a delta: a
       // caller of another API is given the text and not the signature.
       const said: Chunk[] =
@@ -74,9 +57,12 @@ function started(block: Dict, placed: Placed): Chunk[] | undefined {
       return [signed(block, placed)];
     case 'tool_use':
     case 'server_tool_use': {
+      const { id, name, input, ...rest } = fields;
       if (typeof id !== 'string') return [];
       const full = isDict(input) && Object.keys(input).length > 0;
       const hosted = type === 'server_tool_use';
+      // Its own type marks a call this API's upstream ran as this API's.
+      const unread = hosted ? { ...rest, type } : rest;
       return [
         {
           type: 'tool_call',
@@ -85,13 +71,16 @@ function started(block: Dict, placed: Placed): Chunk[] | undefined {
           arguments: full ? JSON.stringify(input) : '',
           ...(hosted ? { hosted } : {}),
           ...placed,
-          // Its own type marks a call this API's upstream ran as this API's.
-          ...marked(hosted ? { ...rest, type } : rest),
+          // An empty field is kept too, so a call reads the same streamed as
+          // it does sent back whole.
+          ...(Object.keys(unread).length === 0
+            ? {}
+            : { provider: { [family]: unread } }),
         },
       ];
     }
     default:
-      return undefined;
+      return typeof type === 'string' ? undefined : [];
   }
 }
 
@@ -127,24 +116,20 @@ function continued(
   }
 }
 
-// What the message says that is not read here rides as this family's own:
-// its own fields as they are named, and what sat beside the delta apart.
+// What the message says that is not read here rides as this family's own,
+// each field under its own name and what sat beside the delta kept apart.
 function ended(start: Dict, stop: Dict, counts: Dict, beside: Dict): Finish {
-  const { id, model } = start;
+  const { id, model, type, role, content, ...opened } = start;
   const { stop_reason: reason, ...said } = stop;
+  const { usage, rest } = counted(counts);
   return {
     type: 'finish',
     reason: reasonOf(reason),
-    usage: countsOf(counts),
+    usage,
     ...(typeof reason === 'string' ? { rawReason: reason } : {}),
     ...(typeof id === 'string' ? { id } : {}),
     ...(typeof model === 'string' ? { model } : {}),
-    ...marked({
-      ...unowned(start),
-      ...said,
-      usage: uncounted(counts),
-      message_delta: beside,
-    }),
+    ...marked({ ...opened, ...said, usage: rest, message_delta: beside }),
   };
 }
 
@@ -159,35 +144,33 @@ export async function* events(
   // The calls that have said no input yet. One that ends so takes nothing,
   // which the two OpenAI APIs write as an empty object and never as no text.
   const bare = new Map<number | undefined, string>();
-  // The blocks told whole that have not ended: one's content may come in
-  // deltas, so each is told when it ends, or before the stream's own end.
-  const held = new Map<number | undefined, Held>();
+  // A reply cut short stops its last block too, so a block's stop does not
+  // say its call is whole. The start of the next block does.
+  const own = new Map<number | undefined, string>();
+  let ending: Chunk | undefined;
+  // A block not read here may get its content in deltas, so it is told when
+  // it ends. This wire sends one block at a time, so the next block's start
+  // ends it as well, and every block is told in the order it came.
+  let held: { at: number | undefined; open: Held } | undefined;
   let start: Dict = {};
   let stop: Dict = {};
   let counts: Dict = {};
   let beside: Dict = {};
+  let last: Terminal | undefined;
   function* unended(): Generator<Chunk, void, undefined> {
-    for (const [block, open] of held) {
-      yield whole(open, block === undefined ? {} : { block });
-    }
-    held.clear();
+    if (held === undefined) return;
+    const { at, open } = held;
+    held = undefined;
+    yield passedWhole(open, at === undefined ? {} : { block: at });
   }
   try {
-    for await (const { data } of messages) {
+    reading: for await (const { data } of messages) {
       const event: Json | undefined = parsed(data);
       if (!isDict(event)) {
-        yield* unended();
-        yield { type: 'error', error: unreadable(), usage: countsOf(counts) };
-        return;
+        last = { type: 'error', error: unreadable(), usage: countsOf(counts) };
+        break;
       }
-      const {
-        type,
-        index,
-        message,
-        content_block: block,
-        delta,
-        usage,
-      } = event;
+      const { type, index, message, content_block, delta, usage } = event;
       const at = number(index);
       const placed = at === undefined ? {} : { block: at };
       switch (type) {
@@ -198,14 +181,19 @@ export async function* events(
           break;
         }
         case 'content_block_start': {
-          const chunks = started(dict(block), placed);
+          yield* unended();
+          if (ending !== undefined) yield ending;
+          ending = undefined;
+          const block = dict(content_block);
+          const chunks = started(block, placed);
           if (chunks === undefined) {
-            held.set(at, { block: dict(block), json: '' });
+            held = { at, open: { block, deltas: [] } };
             break;
           }
           for (const chunk of chunks) {
             if (chunk.type === 'tool_call') {
               calls.set(at, chunk.id);
+              if (chunk.hosted !== true) own.set(at, chunk.id);
               if (chunk.arguments === '') bare.set(at, chunk.id);
             }
             yield chunk;
@@ -213,9 +201,10 @@ export async function* events(
           break;
         }
         case 'content_block_delta': {
-          const open = held.get(at);
-          if (open !== undefined) {
-            held.set(at, fed(open, dict(delta)));
+          // Every delta at a held block's place is its own, one of a kind
+          // read elsewhere too, so nothing it says is told ahead of it.
+          if (held !== undefined && held.at === at) {
+            held.open.deltas.push(dict(delta));
             break;
           }
           const chunk = continued(dict(delta), placed, calls.get(at));
@@ -227,10 +216,18 @@ export async function* events(
           break;
         }
         case 'content_block_stop': {
-          const open = held.get(at);
-          if (open !== undefined) {
-            held.delete(at);
-            yield whole(open, placed);
+          if (held !== undefined && held.at === at) yield* unended();
+          calls.delete(at);
+          const call = own.get(at);
+          if (call !== undefined) {
+            own.delete(at);
+            ending = {
+              type: 'tool_call',
+              id: call,
+              arguments: '',
+              ended: true,
+              ...placed,
+            };
           }
           const id = bare.get(at);
           if (id === undefined) break;
@@ -244,27 +241,26 @@ export async function* events(
           beside = merged(beside, besides(event));
           break;
         case 'message_stop':
-          yield* unended();
-          yield ended(start, stop, counts, beside);
-          return;
+          last = ended(start, stop, counts, beside);
+          break reading;
         case 'error':
-          yield* unended();
-          // Told inside a stream it has no status: only its own name tells it.
-          yield {
+          // Told inside a stream it has no status, so only its name tells it.
+          last = {
             type: 'error',
             error: failed(event, clean),
             usage: countsOf(counts),
           };
-          return;
+          break reading;
       }
     }
   } catch (error) {
     yield* unended();
     throw error;
   }
-  const { stop_reason: reason } = stop;
   yield* unended();
-  yield typeof reason === 'string'
-    ? ended(start, stop, counts, beside)
-    : { type: 'error', error: cutShort(), usage: countsOf(counts) };
+  const { stop_reason: reason } = stop;
+  yield last ??
+    (typeof reason === 'string'
+      ? ended(start, stop, counts, beside)
+      : { type: 'error', error: cutShort(), usage: countsOf(counts) });
 }

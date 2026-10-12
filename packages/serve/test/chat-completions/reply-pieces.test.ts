@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { events } from '../../src/chat-completions/events.ts';
 import { pieces } from '../../src/chat-completions/reply-pieces.ts';
 
 test('text and a refusal are added as they are, with their logprobs', () => {
@@ -85,7 +84,7 @@ test('fragments of tool calls are numbered by call, opened once each', () => {
   ).toEqual({
     kind: 'call',
     index: 0,
-    custom: false,
+    type: 'function',
     opened: { id: 'call_a', name: 'weather' },
     input: '',
   });
@@ -94,7 +93,7 @@ test('fragments of tool calls are numbered by call, opened once each', () => {
   ).toEqual({
     kind: 'call',
     index: 1,
-    custom: false,
+    type: 'function',
     opened: { id: 'call_b', name: 'now' },
     input: '{}',
   });
@@ -103,7 +102,7 @@ test('fragments of tool calls are numbered by call, opened once each', () => {
   ).toEqual({
     kind: 'call',
     index: 0,
-    custom: false,
+    type: 'function',
     input: '{"city":"Oslo"}',
   });
 });
@@ -119,42 +118,13 @@ test('a call this wire marked as free-form stays free-form to its end', () => {
       arguments: 'ls',
       provider: { 'openai.chat': { type: 'custom' } },
     }),
-  ).toMatchObject({ kind: 'call', custom: true });
+  ).toMatchObject({ kind: 'call', type: 'custom' });
   expect(piece({ type: 'tool_call', id: 'call_a', arguments: ' -la' })).toEqual(
-    { kind: 'call', index: 0, custom: true, input: ' -la' },
+    { kind: 'call', index: 0, type: 'custom', input: ' -la' },
   );
 });
 
-test('a field inside a later fragment that is not marked as its custom call is carried inside the custom object', async () => {
-  const piece = pieces(false);
-  const [first, second] = await Array.fromAsync(
-    events(
-      (async function* () {
-        yield {
-          data: '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"custom","function":{"name":"shell","arguments":"l"}}]}}]}',
-        };
-        yield {
-          data: '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"s","signature":"sig"},"late":1}]},"finish_reason":"tool_calls"}]}',
-        };
-        yield { data: '[DONE]' };
-      })(),
-    ),
-  );
-
-  expect(first?.type === 'tool_call' && piece(first)).toMatchObject({
-    kind: 'call',
-    custom: true,
-  });
-  expect(second?.type === 'tool_call' && piece(second)).toEqual({
-    kind: 'call',
-    index: 0,
-    custom: true,
-    input: 's',
-    carried: { late: 1, custom: { signature: 'sig' } },
-  });
-});
-
-test('a field inside an unmarked call to a tool the caller declared custom is carried inside the custom object', () => {
+test('what a fragment holds for this API is carried as it came', () => {
   expect(
     pieces(
       false,
@@ -165,19 +135,58 @@ test('a field inside an unmarked call to a tool the caller declared custom is ca
       name: 'shell',
       arguments: 'ls',
       provider: {
-        'openai.chat': {
-          function: { signature: 's' },
-          extra_content: { a: 1 },
-        },
+        'openai.chat': { function: { signature: 's' }, id: 'call_stray' },
+        'openai.responses': { namespace: 'time' },
       },
     }),
   ).toEqual({
     kind: 'call',
     index: 0,
-    custom: true,
+    type: 'custom',
     opened: { id: 'call_a', name: 'shell' },
     input: 'ls',
-    carried: { extra_content: { a: 1 }, custom: { signature: 's' } },
+    carried: { function: { signature: 's' }, id: 'call_stray' },
+  });
+});
+
+test.each([
+  [{}],
+  [{ provider: { 'openai.responses': { namespace: 'time' } } }],
+  [{ provider: { 'openai.chat': { index: 9, function: { name: 'stray' } } } }],
+])(
+  'a later fragment with no input and nothing this wire writes adds nothing: %j',
+  (more) => {
+    const piece = pieces(false);
+    piece({
+      type: 'tool_call',
+      id: 'call_a',
+      name: 'weather',
+      arguments: '{}',
+    });
+
+    expect(
+      piece({ type: 'tool_call', id: 'call_a', arguments: '', ...more }),
+    ).toBeUndefined();
+  },
+);
+
+test('a later fragment with no input that carries a field is added', () => {
+  const piece = pieces(false);
+  piece({ type: 'tool_call', id: 'call_a', name: 'weather', arguments: '{}' });
+
+  expect(
+    piece({
+      type: 'tool_call',
+      id: 'call_a',
+      arguments: '',
+      provider: { 'openai.chat': { extra_content: { a: 1 } } },
+    }),
+  ).toEqual({
+    kind: 'call',
+    index: 0,
+    type: 'function',
+    input: '',
+    carried: { extra_content: { a: 1 } },
   });
 });
 

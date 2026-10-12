@@ -13,7 +13,7 @@ import {
 import { detailed } from '../wire/openai-detail.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { family, marked, noted } from './family.ts';
-import { callFields, parted } from './unread.ts';
+import { callFields, unreadOf } from './unread.ts';
 
 // What the object inside a part holds beside what is read is a hint, and
 // goes back inside it. An image's detail is one both OpenAI APIs read.
@@ -110,8 +110,6 @@ function picturesOf(images: Json | undefined): Part[] {
   );
 }
 
-// What a call holds beside what is read is a hint, and goes back where it
-// sat. Its place in a stream is no field of the call.
 function callOf(raw: Json): Part {
   const call = dict(raw);
   const { id, type = 'function', function: fn, custom } = call;
@@ -121,14 +119,14 @@ function callOf(raw: Json): Part {
     if (typeof name !== 'string' || typeof input !== 'string') {
       invalid('A custom tool call needs a name and an input');
     }
-    const more = noted(parted(call, 'custom', callFields) ?? {});
+    const more = noted(unreadOf(call, 'custom', callFields) ?? {});
     return { type: 'tool_call', id, name, input, ...more };
   }
   const { name, arguments: source } = dict(fn);
   if (type !== 'function' || typeof name !== 'string') {
     invalid('A tool call needs a function name');
   }
-  const more = noted(parted(call, 'function', callFields) ?? {});
+  const more = noted(unreadOf(call, 'function', callFields) ?? {});
   const written = text(source) ?? '';
   const input = parsed(written);
   // A bare string is a custom tool's input, never a function's arguments.

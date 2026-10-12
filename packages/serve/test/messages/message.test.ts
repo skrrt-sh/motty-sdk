@@ -244,34 +244,50 @@ test('a collected message holds what the ending said of it, in the delta and bes
   });
 });
 
-test("a collected message's own fields are never replaced by what rides on the finish", () => {
+test("the message's own fields are never replaced by what rides on the finish, streamed or collected", () => {
+  const finish = {
+    type: 'finish',
+    reason: 'stop',
+    rawReason: 'end_turn',
+    usage: { input: 25, output: 40 },
+    provider: {
+      anthropic: {
+        id: 'msg_other',
+        type: 'x',
+        role: 'user',
+        model: 'other',
+        content: 'gone',
+        container: { id: 'container_011' },
+        message_delta: {
+          id: 'msg_other',
+          type: 'x',
+          role: 'user',
+          model: 'other',
+          content: 'gone',
+          delta: 'gone',
+          usage: 'gone',
+          context_management: { applied_edits: [] },
+        },
+      },
+    },
+  } as const;
+  expect(writer(false)(finish)).toEqual([
+    {
+      type: 'message_delta',
+      delta: {
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        container: { id: 'container_011' },
+      },
+      usage: { input_tokens: 25, output_tokens: 40 },
+      context_management: { applied_edits: [] },
+    },
+    { type: 'message_stop' },
+  ]);
   expect(
     collected(
       [{ type: 'text', text: 'Hello', block: 0 }],
-      {
-        type: 'finish',
-        reason: 'stop',
-        rawReason: 'end_turn',
-        usage: { input: 25, output: 40 },
-        provider: {
-          anthropic: {
-            id: 'msg_other',
-            type: 'x',
-            role: 'user',
-            model: 'other',
-            content: 'gone',
-            container: { id: 'container_011' },
-            message_delta: {
-              id: 'msg_other',
-              type: 'x',
-              role: 'user',
-              model: 'other',
-              content: 'gone',
-              context_management: { applied_edits: [] },
-            },
-          },
-        },
-      },
+      finish,
       'req_1',
       'coder',
       false,

@@ -10,7 +10,7 @@ import {
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { partsOf } from './content.ts';
 import { family, hinted, noted } from './family.ts';
-import { callRead, field } from './fields.ts';
+import { callNeutral, field, isCustom } from './fields.ts';
 
 // An item's id and state matter to this API alone; any other field this
 // codec does not read still reaches the model.
@@ -47,8 +47,8 @@ function callOf(item: Dict, at: string): Part {
   if (typeof id !== 'string' || typeof name !== 'string') {
     invalid(`${at} needs a call_id and a name`);
   }
-  const more = extra(item, callRead);
-  if (field(item, 'type') === 'custom_tool_call') {
+  const more = extra(item, callNeutral);
+  if (isCustom(item)) {
     return { type: 'tool_call', id, name, input: text(input) ?? '', ...more };
   }
   const given = text(source) ?? '';

@@ -139,6 +139,77 @@ test("a tool call's own id, name, input and kind are never replaced by what its 
   ]);
 });
 
+test.each([
+  [
+    { type: 'text', text: 'Look' },
+    { type: 'other', text: 'other' },
+    { type: 'text', text: 'Look' },
+  ],
+  [
+    { type: 'image', url: 'https://x.test/cat.png' },
+    { type: 'other', source: 'other' },
+    { type: 'image', source: { type: 'url', url: 'https://x.test/cat.png' } },
+  ],
+  [
+    { type: 'file', id: 'file_011C', name: 'Q3' },
+    { type: 'other', source: 'other', title: 'other' },
+    {
+      type: 'document',
+      source: { type: 'file', file_id: 'file_011C' },
+      title: 'Q3',
+    },
+  ],
+  [
+    { type: 'tool_result', id: 'toolu_01', text: 'Sunny', failed: true },
+    { type: 'other', tool_use_id: 'other', content: 'other', is_error: false },
+    {
+      type: 'tool_result',
+      tool_use_id: 'toolu_01',
+      content: 'Sunny',
+      is_error: true,
+    },
+  ],
+] as const)(
+  'the own fields of a %j part are never replaced by what its hints say',
+  (part, hinted, block) => {
+    expect(
+      blocksOf(leaving('messages'), [
+        { ...part, hints: { anthropic: { ...hinted, note: 'kept' } } },
+      ]),
+    ).toEqual([{ ...block, note: 'kept' }]);
+  },
+);
+
+test("signed reasoning's own fields are never replaced by what rides with it", () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'reasoning',
+        text: 'Step one.',
+        provider: {
+          anthropic: { signature: 'EqQB', type: 'text', thinking: 'other' },
+        },
+      },
+    ]),
+  ).toEqual([{ type: 'thinking', thinking: 'Step one.', signature: 'EqQB' }]);
+});
+
+test.each([
+  ['*** Begin Patch', 'free text'],
+  [[1], 'not an object'],
+  [null, 'not an object'],
+])('a tool call whose input is %j fails the call', (input, cause) => {
+  expect(() =>
+    blocksOf(leaving('messages'), [
+      { type: 'tool_call', id: 'call_1', name: 'apply_patch', input },
+    ]),
+  ).toThrow(
+    new Unsupported(
+      `Anthropic Messages cannot carry a tool call whose input is ${cause}`,
+    ),
+  );
+});
+
 test('a tool call and its result are written back', () => {
   expect(
     blocksOf(leaving('messages'), [
@@ -506,3 +577,66 @@ test('a tool answers with text, an image and a document', () => {
     },
   ]);
 });
+
+test('a tool call that holds only another API`s data is written as its own fields alone', () => {
+  expect(
+    blocksOf(leaving('messages'), [
+      {
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'time',
+        input: {},
+        provider: { 'openai.chat': { extra_content: { google: {} } } },
+      },
+      {
+        type: 'tool_call',
+        id: 'toolu_01',
+        name: 'now',
+        input: {},
+        provider: {
+          'openai.chat': { extra_content: { google: {} } },
+          anthropic: { caller: { type: 'direct' } },
+        },
+      },
+    ]),
+  ).toEqual([
+    { type: 'tool_use', id: 'call_1', name: 'time', input: {} },
+    {
+      caller: { type: 'direct' },
+      type: 'tool_use',
+      id: 'toolu_01',
+      name: 'now',
+      input: {},
+    },
+  ]);
+});
+
+test.each([
+  [
+    {
+      type: 'tool_call' as const,
+      id: 'ws_1',
+      name: 'web_search',
+      input: {},
+      hosted: true,
+      provider: { 'openai.responses': { type: 'web_search_call' } },
+    },
+    'Anthropic Messages cannot carry a tool_call part of openai.responses: type',
+  ],
+  [
+    {
+      type: 'tool_result' as const,
+      id: 'call_1',
+      text: 'noon',
+      provider: { 'openai.responses': { status: 'completed' } },
+    },
+    'Anthropic Messages cannot carry a tool_result part of openai.responses: status',
+  ],
+])(
+  'a hosted call or a result that holds only another API`s data still fails the call',
+  (part, message) => {
+    expect(() => blocksOf(leaving('messages'), [part])).toThrow(
+      new Unsupported(message),
+    );
+  },
+);

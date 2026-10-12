@@ -847,91 +847,65 @@ test.each([
   },
 );
 
-test('a user of 64 characters is sent as it is', () => {
-  const { body, leftOut } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: { user: 'u'.repeat(64) },
-  });
-  expect(body).toHaveProperty('user', 'u'.repeat(64));
-  expect(leftOut).toEqual([]);
-});
-
-test('a user of 65 characters is left out and reported, never cut short', () => {
-  const { body, leftOut } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: { user: 'u'.repeat(65) },
-  });
-  expect(body).not.toHaveProperty('user');
-  expect(leftOut).toEqual([
+test.each([
+  ['of 64 characters', { user: 'u'.repeat(64) }, {}, 'u'.repeat(64), false],
+  [
+    'of 64 characters said in this API`s own words',
+    { provider: { 'openai.responses': { user: 'p'.repeat(64) } } },
+    {},
+    'p'.repeat(64),
+    false,
+  ],
+  ['of 65 characters', { user: 'u'.repeat(65) }, {}, undefined, true],
+  [
+    'of 65 characters said in this API`s own words',
+    { provider: { 'openai.responses': { user: 'p'.repeat(65) } } },
+    {},
+    undefined,
+    true,
+  ],
+  [
+    'too long, which gives way to none said as a hint or in this API`s own words, long or short',
     {
-      setting: 'user.long',
-      detail:
-        'The Responses API has no field for a user longer than 64 characters',
-    },
-  ]);
-});
-
-test('a user of 65 characters said in this API`s own words is left out and reported', () => {
-  const { body, leftOut } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: { provider: { 'openai.responses': { user: 'p'.repeat(65) } } },
-  });
-  expect(body).not.toHaveProperty('user');
-  expect(leftOut).toEqual([
-    {
-      setting: 'user.long',
-      detail:
-        'The Responses API has no field for a user longer than 64 characters',
-    },
-  ]);
-});
-
-test('a long user gives way to no user said as a hint or in this API`s own words, long or short', () => {
-  const { body, leftOut } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: {
       user: 'u'.repeat(65),
       hints: { 'openai.responses': { user: 'h'.repeat(65) } },
       provider: { 'openai.responses': { user: 'short' } },
     },
-  });
-  expect(body).not.toHaveProperty('user');
-  expect(leftOut).toEqual([
-    {
-      setting: 'user.long',
-      detail:
-        'The Responses API has no field for a user longer than 64 characters',
-    },
-  ]);
-});
-
-test('a long user gives way to no user of the connection, which would name another caller', () => {
-  const { body, leftOut } = encode(
-    'gpt-5',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { user: 'u'.repeat(65) },
-    },
+    {},
+    undefined,
+    true,
+  ],
+  [
+    'too long, which gives way to none of the connection, which would name another caller',
+    { user: 'u'.repeat(65) },
     { user: 'connection' },
-  );
-  expect(body).not.toHaveProperty('user');
-  expect(leftOut).toEqual([
-    {
-      setting: 'user.long',
-      detail:
-        'The Responses API has no field for a user longer than 64 characters',
-    },
-  ]);
-});
-
-test('a request with no user is sent none and reports nothing', () => {
-  const { body, leftOut } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: { maxTokens: 256 },
-  });
-  expect(body).not.toHaveProperty('user');
-  expect(leftOut).toEqual([]);
-});
+    undefined,
+    true,
+  ],
+  ['that was not said', { maxTokens: 256 }, {}, undefined, false],
+] as const)(
+  'a user %s is sent whole or left out and reported, never cut short',
+  (_, options, defaults, sent, reported) => {
+    const { body, leftOut } = encode(
+      'gpt-5',
+      { messages: [{ role: 'user', text: 'Hi' }], options },
+      defaults,
+    );
+    const { user } = dict(body);
+    expect(user).toBe(sent);
+    expect(leftOut).toEqual(
+      reported
+        ? [
+            {
+              setting: 'user.long',
+              detail:
+                'The Responses API has no field for a user longer than 64 characters',
+            },
+          ]
+        : [],
+    );
+  },
+);
 
 test('the long user id of an Anthropic Messages caller is left out of the request and reported', () => {
   const { request } = messages.decode(
