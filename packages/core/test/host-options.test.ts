@@ -316,6 +316,41 @@ test('once the adapter knows the caller it is not asked about the next credentia
   expect(tokens).toEqual(['sk-ada']);
 });
 
+test('a caller the host gives is the caller, and the adapter is not asked', async () => {
+  const tokens: string[] = [];
+  const { host } = await hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        tokens.push(token);
+        return { id: 'eve' };
+      },
+    },
+  })({
+    ...asked({ 'x-api-key': 'sk-eve', authorization: 'Bearer sk-eve' }),
+    caller: { id: 'ada' },
+  });
+
+  expect(host.caller).toEqual({ id: 'ada' });
+  expect(tokens).toEqual([]);
+});
+
+test('every credential header is removed when the host gives the caller, those of the other APIs too', async () => {
+  const { request } = await hosting(echo(), {
+    auth: { verify: () => ({ id: 'eve' }) },
+  })({
+    ...asked({
+      'x-api-key': 'sk-ada',
+      authorization: 'Bearer sk-ada',
+      'api-key': 'sk-azure',
+      'x-trace': 'trace-7',
+    }),
+    removed: ['api-key'],
+    caller: { id: 'ada' },
+  });
+
+  expect([...request.headers]).toEqual([['x-trace', 'trace-7']]);
+});
+
 test.each([
   'sk-ada',
   'Basic sk-ada',
@@ -467,6 +502,59 @@ test('two motties with different names never reach one stored key, a colon or a 
   }
 
   expect(keys).toEqual(['a:b:x', 'a%3Ab:x', 'a%253Ab:x', 'acme/coder:x']);
+});
+
+test("a namespace the host gives is ahead of every key in place of the motty's name, escaped as a name is", async () => {
+  const keys: string[] = [];
+  const { host } = await hosting(echo(), {
+    namespace: 'acme:50%',
+    storage: {
+      get: async (key) => {
+        keys.push(`get ${key}`);
+        return undefined;
+      },
+      set: async (key) => {
+        keys.push(`set ${key}`);
+      },
+      delete: async (key) => {
+        keys.push(`delete ${key}`);
+      },
+      increment: async (key) => {
+        keys.push(`increment ${key}`);
+        return 1;
+      },
+    },
+  })(asked());
+
+  await host.storage?.get('seen');
+  await host.storage?.set('seen', 5);
+  await host.storage?.delete('seen');
+  await host.storage?.increment?.('seen', 1);
+
+  expect(keys).toEqual([
+    'get acme%3A50%25:seen',
+    'set acme%3A50%25:seen',
+    'delete acme%3A50%25:seen',
+    'increment acme%3A50%25:seen',
+  ]);
+});
+
+test("a host given no namespace keeps the motty's name ahead of its keys, beside one that was given one", async () => {
+  const keys: string[] = [];
+  const storage = {
+    get: async () => undefined,
+    set: async (key: string) => {
+      keys.push(key);
+    },
+    delete: async () => {},
+  };
+  const named = await hosting(echo(), { storage })(asked());
+  const spaced = await hosting(echo(), { storage, namespace: 'acme' })(asked());
+
+  await named.host.storage?.set('seen', 1);
+  await spaced.host.storage?.set('seen', 1);
+
+  expect(keys).toEqual(['coder:seen', 'acme:seen']);
 });
 
 test("an increment is handed over with the motty's name ahead of its key, and its result comes back", async () => {
@@ -992,6 +1080,87 @@ test('each request gets its own id, and the report is the record with that id an
     { id: second.request.id },
   ]);
   expect(first.host.settings).toEqual({ tiers: { deepProbability: 0.5 } });
+});
+
+test("an id the host gives is the request's, the report's and the one a models function is told", async () => {
+  const reports: Report[] = [];
+  const told: string[] = [];
+  const served = echo();
+  const { request, host } = await hosting(served, {
+    models: (given) => {
+      told.push(given.id);
+      return [];
+    },
+    report: (report) => reports.push(report),
+  })({ ...asked(), id: 'req_7.a~b-c' });
+
+  await Array.fromAsync(contractOf(served).run(request, host));
+  await Bun.sleep(0);
+
+  expect(request.id).toBe('req_7.a~b-c');
+  expect(told).toEqual(['req_7.a~b-c']);
+  expect(reports.map(({ id }) => id)).toEqual(['req_7.a~b-c']);
+});
+
+test('an id as long as the host may give is taken', async () => {
+  const { request } = await hosting(
+    echo(),
+    {},
+  )({ ...asked(), id: 'a'.repeat(128) });
+
+  expect(request.id).toBe('a'.repeat(128));
+});
+
+test.each(['', 'a b', 'a/b', 'req-7\n', 'r\u00e9q', 'a'.repeat(129)])(
+  'an id of %p is not one the host may give, and the request is refused before the adapter is asked or anything reported',
+  async (id) => {
+    const tokens: string[] = [];
+    const reports: Report[] = [];
+    const works: Promise<void>[] = [];
+    const admit = hosting(echo(), {
+      auth: {
+        verify: (token) => {
+          tokens.push(token);
+          return { id: 'ada' };
+        },
+      },
+      report: (report) => reports.push(report),
+    });
+
+    const refused = await admit({
+      ...asked({ 'x-api-key': 'sk-ada' }),
+      id,
+      delivered: (work) => works.push(work),
+    }).catch((thrown: unknown) => thrown);
+    const unasked = await admit({
+      headers: new Headers({ 'x-api-key': 'sk-ada' }),
+      credentials: ['x-api-key'],
+      id,
+    }).catch((thrown: unknown) => thrown);
+
+    expect(refused).toEqual(
+      new Error('The request id is not one the host may give'),
+    );
+    expect(unasked).toEqual(
+      new Error('The request id is not one the host may give'),
+    );
+    expect(tokens).toEqual([]);
+    expect(reports).toEqual([]);
+    expect(works).toEqual([]);
+  },
+);
+
+test('a request given no id gets its own, beside one whose id the host gave', async () => {
+  const admit = hosting(echo(), {});
+
+  const given = await admit({ ...asked(), id: 'req-7' });
+  const first = await admit(asked());
+  const second = await admit(asked());
+
+  expect(given.request.id).toBe('req-7');
+  expect(first.request.id).toMatch(/^[0-9a-f-]{36}$/);
+  expect(second.request.id).toMatch(/^[0-9a-f-]{36}$/);
+  expect(second.request.id).not.toBe(first.request.id);
 });
 
 test('what the edge left out of the reply is on the report, and a reply with nothing left out says nothing', async () => {
@@ -1719,6 +1888,67 @@ test('whoever asked is told the id of the report made when the auth adapter thre
   expect(told).toEqual(reports.map(({ id }) => id));
 });
 
+test('the report made when the auth adapter threw carries the id the host gave, and whoever asked is told it', async () => {
+  const reports: Report[] = [];
+  const told: string[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: () => {
+        throw new Error('The key set is gone');
+      },
+    },
+    report: (report) => reports.push(report),
+  });
+
+  await expect(
+    admit({
+      ...asked({ 'x-api-key': 'sk-ada' }),
+      id: 'req-7',
+      reported: (id) => told.push(id),
+    }),
+  ).rejects.toThrow('The key set is gone');
+
+  expect(reports.map(({ id }) => id)).toEqual(['req-7']);
+  expect(told).toEqual(['req-7']);
+});
+
+test('whoever asked is handed, once, the work of the report made when the auth adapter threw, and none when an SDK error made no report', async () => {
+  const order: string[] = [];
+  const works: Promise<void>[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        throw token === 'sk-ada'
+          ? new Error('The key set is gone')
+          : new Overloaded('The key set is being rotated');
+      },
+    },
+    report: async () => {
+      await Bun.sleep(0);
+      order.push('report');
+    },
+  });
+
+  await expect(
+    admit({
+      ...asked({ 'x-api-key': 'sk-eve' }),
+      delivered: (work) => works.push(work),
+    }),
+  ).rejects.toThrow('The key set is being rotated');
+  await expect(
+    admit({
+      headers: new Headers({ 'x-api-key': 'sk-ada' }),
+      credentials: ['x-api-key'],
+      delivered: (work) => works.push(work),
+    }),
+  ).rejects.toThrow('The key set is gone');
+
+  expect(works).toHaveLength(1);
+  expect(order).toEqual([]);
+  await works[0];
+  expect(order).toEqual(['report']);
+});
+
 test('a request in which no service of the host threw has no failures on its report', async () => {
   const reports: Report[] = [];
   const served = echo();
@@ -1730,6 +1960,91 @@ test('a request in which no service of the host threw has no failures on its rep
   await Bun.sleep(0);
 
   expect(reports[0]).not.toHaveProperty('failed');
+});
+
+test("whoever asked is handed work that ends only once the report's own has, after the request is over", async () => {
+  const order: string[] = [];
+  const works: Promise<void>[] = [];
+  const held = Promise.withResolvers<void>();
+  const served = echo();
+  const { request, host } = await hosting(served, {
+    report: async () => {
+      order.push('report');
+      await held.promise;
+    },
+  })({
+    ...asked(),
+    over: () => order.push('over'),
+    delivered: (work) => {
+      order.push('delivered');
+      works.push(work);
+    },
+  });
+
+  await Array.fromAsync(contractOf(served).run(request, host));
+  await Bun.sleep(0);
+  works[0]?.then(() => order.push('ended'));
+  await Bun.sleep(0);
+
+  expect(works).toHaveLength(1);
+  expect(order).toEqual(['over', 'report', 'delivered']);
+  held.resolve();
+  await works[0];
+  expect(order).toEqual(['over', 'report', 'delivered', 'ended']);
+});
+
+test.each([
+  {
+    how: 'rejects',
+    report: async () => {
+      throw new Error('The log is full');
+    },
+  },
+  {
+    how: 'throws',
+    report: () => {
+      throw new Error('The log is full');
+    },
+  },
+])(
+  'a report that $how still ends the work it is handed over as, and leaves no rejection unhandled',
+  async ({ report }) => {
+    const unhandled: unknown[] = [];
+    const seen = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', seen);
+    const works: Promise<void>[] = [];
+    const served = echo();
+    const { request, host } = await hosting(served, { report })({
+      ...asked(),
+      delivered: (work) => works.push(work),
+    });
+
+    const events = await Array.fromAsync(contractOf(served).run(request, host));
+    await Bun.sleep(0);
+    const ended = await works[0];
+    await Bun.sleep(0);
+    process.off('unhandledRejection', seen);
+
+    expect(works).toHaveLength(1);
+    expect(ended).toBeUndefined();
+    expect(events.at(-1)).toMatchObject({ type: 'finish' });
+    expect(unhandled).toEqual([]);
+  },
+);
+
+test('a host with no report still hands over work, which has ended', async () => {
+  const works: Promise<void>[] = [];
+  const served = echo();
+  const { request, host } = await hosting(
+    served,
+    {},
+  )({ ...asked(), delivered: (work) => works.push(work) });
+
+  await Array.fromAsync(contractOf(served).run(request, host));
+  await Bun.sleep(0);
+
+  expect(works).toHaveLength(1);
+  expect(await works[0]).toBeUndefined();
 });
 
 test('what one request writes into the overrides, the limits or its caller is refused, and the next request reads them as the host gave them', async () => {
@@ -1878,6 +2193,27 @@ test('given the headers and no request, the host says only who the caller is: no
     { outcome: 'failed', failed: [{ service: 'auth' }] },
   ]);
   expect(told).toEqual(reports.map(({ id }) => id));
+});
+
+test('given the headers and a caller, the host says that caller and the adapter is not asked', async () => {
+  const tokens: string[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        tokens.push(token);
+        return { id: 'eve' };
+      },
+    },
+  });
+
+  expect(
+    await admit({
+      headers: new Headers({ authorization: 'Bearer sk-eve' }),
+      credentials: ['x-api-key', 'authorization'],
+      caller: { id: 'ada' },
+    }),
+  ).toEqual({ id: 'ada' });
+  expect(tokens).toEqual([]);
 });
 
 test('models given as a promise of the list are waited for', async () => {

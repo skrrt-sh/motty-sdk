@@ -90,7 +90,10 @@ export type HostOptions<Settings = AnyOverrides> = {
   settings?: Settings;
   // In the host's own unit. Nothing returned leaves the upstream's cost.
   price?: (model: string, usage: Readonly<Usage>) => number | undefined;
-  report?: (report: Report) => void;
+  // Ahead of every stored key, in place of the motty's name.
+  namespace?: string;
+  // A promise returned is waited for, and anything else is no work at all.
+  report?: (report: Report) => unknown;
 };
 
 type Calls = Required<Pick<Host, 'models' | 'decisions'>>;
@@ -103,6 +106,13 @@ type Signed = {
   // case and in the order they are tried.
   credentials: readonly string[];
   signal?: AbortSignal;
+  // The host knows who is asking: the auth adapter is not asked.
+  caller?: Caller;
+  // The host's own id for the request, in place of one made here.
+  id?: string;
+  // Told once per report handed to the host, of work that ends when the
+  // report's own has and never rejects.
+  delivered?: (work: Promise<void>) => void;
   // The auth adapter threw and the host was told: the id is that report's.
   reported?: (id: string) => void;
 };
@@ -340,6 +350,24 @@ function copied(overrides: AnyOverrides): AnyOverrides {
 
 const unset: AnyOverrides = Object.freeze({});
 
+// What a report throws is left to whoever asked for it, as it always was.
+// What it rejects with has nobody to reach, so the work never rejects.
+function deliver(
+  report: Report,
+  send: HostOptions['report'],
+  delivered: Signed['delivered'],
+): void {
+  let work = Promise.resolve();
+  try {
+    work = Promise.resolve(send?.(report)).then(
+      () => {},
+      () => {},
+    );
+  } finally {
+    delivered?.(work);
+  }
+}
+
 // RFC 6750 for a bearer token: the scheme in any case, then one token of its
 // alphabet and nothing else. A header sent twice arrives joined by a comma
 // and fails. Any other header's value is the key itself.
@@ -366,7 +394,7 @@ export function hosting(motty: Marked, options: HostOptions) {
   const { auth, models = [], price } = options;
   const fixed = adapted(typeof models === 'function' ? [] : models);
   // A name may hold a colon: escaped, the first colon of a key ends the name.
-  const prefix = `${description.name.replace(/[%:]/g, encodeURIComponent)}:`;
+  const prefix = `${(options.namespace ?? description.name).replace(/[%:]/g, encodeURIComponent)}:`;
   const { duration, body, ...rest } = options.limits ?? {};
   bound('limits.duration', duration);
   bound('limits.body', body, 'whole');
@@ -381,8 +409,12 @@ export function hosting(motty: Marked, options: HostOptions) {
   async function admit(
     asked: Signed & Partial<Asked>,
   ): Promise<Admitted | Caller | undefined> {
+    // The id goes into a response header and into the ids of a reply's body.
+    if (asked.id !== undefined && !/^[\w.~-]{1,128}$/.test(asked.id)) {
+      throw new Error('The request id is not one the host may give');
+    }
     const headers = new Headers(asked.headers);
-    const id = crypto.randomUUID();
+    const id = asked.id ?? crypto.randomUUID();
     let failed: Sealed[] | undefined;
     // Until the request's own signal is made, the caller's is all of it.
     let signal = asked.signal;
@@ -406,8 +438,9 @@ export function hosting(motty: Marked, options: HostOptions) {
     };
     // Every credential header goes, whatever it holds: a second one may hold
     // the token that signs the caller in, as sent or written another way.
-    // The first whose token the adapter knows says who the caller is.
-    let caller: Caller | undefined;
+    // The first whose token the adapter knows says who the caller is, unless
+    // the host has said.
+    let caller = asked.caller;
     for (const name of asked.credentials) {
       const token = tokenIn(headers, name);
       headers.delete(name);
@@ -419,7 +452,11 @@ export function hosting(motty: Marked, options: HostOptions) {
         // caller by whoever asked, of the thrown value as it is.
         const error = toFacts(seal('auth', thrown));
         if (failed !== undefined) {
-          options.report?.({ ...refused(error), id, settings, failed });
+          deliver(
+            { ...refused(error), id, settings, failed },
+            options.report,
+            asked.delivered,
+          );
           asked.reported?.(id);
         }
         throw thrown;
@@ -475,13 +512,17 @@ export function hosting(motty: Marked, options: HostOptions) {
         record: (record) => {
           asked.over?.(record);
           const warnings = asked.leftOut?.() ?? [];
-          options.report?.({
-            ...record,
-            id,
-            settings,
-            ...(warnings.length === 0 ? {} : { warnings }),
-            ...(failed === undefined ? {} : { failed }),
-          });
+          deliver(
+            {
+              ...record,
+              id,
+              settings,
+              ...(warnings.length === 0 ? {} : { warnings }),
+              ...(failed === undefined ? {} : { failed }),
+            },
+            options.report,
+            asked.delivered,
+          );
         },
         ...(options.storage === undefined
           ? {}
