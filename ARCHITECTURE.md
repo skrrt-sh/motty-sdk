@@ -115,7 +115,7 @@ export default motty({ name: "coder" })
 - **Every builder method returns a new motty,** so sharing a part never affects its other users.
 - **A part is identified by its `name` and an optional `seed`.** The same name and seed is one part,
   applied once on a path, as in Elysia; a part made by a function passes the arguments that change
-  it as the seed. `name` labels it in the report; the root's is the fallback `store` namespace.
+  it as the seed. `name` labels it in the report; the root's is the default `store` namespace.
   Two different parts grown from one `motty()` call with one name and seed fail at load. Two made
   apart cannot be told from one function called twice: the first reached is applied, and whoever
   uses the other reads the first's values. A part's name must be its own. Rejected: an error at
@@ -318,7 +318,8 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 - **Two views of usage.** `answer.usage()` is the call that answered. `calls` is on the context from
   the start and grows with every model call, cancelled and failed too: model, the token counts the
   upstream reported, cache writes included, each call's `time` in total and to its first event, what the
-  call left out as `warnings`, with the token totals summed as it goes. A count an upstream did not report is absent, never a zero. So any
+  call left out as `warnings`, the upstream's own `id` for a call that finished, with the token
+  totals summed as it goes. A count an upstream did not report is absent, never a zero. So any
   hook reads usage so far and `afterResponse` the final figure. This serves a self-host and the
   motty's own logic; the Hub counts for itself, because it provides the inference.
 - **A failed call keeps what its failure said beside its code,** in `calls` and in the record
@@ -328,6 +329,11 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   no error in its record, so an option the spoken API does not take stayed hidden behind the
   next model's answer. Rejected: an error object on the call, which would bring the stack and
   the cause into what the motty reads.
+- **A call that finished keeps the upstream's own id for the response, as `id`,** in `calls`
+  and in the record alike, where the upstream gave one. It is what a host matches a call
+  against the provider's own logs by. A call that failed or was cut short has none. Rejected
+  for now: an id on those too, which would touch all three wire formats and grow the author's
+  bundle, and is left until matching shows it is needed.
 - **A call that was stopped is counted with what its host says of it until the phase it began
   in ends.** A `race` loser or a call cut by a time limit ends in `calls` at once, as aborted,
   and the core goes on without it; the usage its host reports after that is added to its entry
@@ -618,7 +624,8 @@ How whatever runs a motty, `serve` or the Hub, calls it. Both sides are written 
   after the after-response work has finished. The record holds: the outcome; the error, when the
   request failed or was stopped; `path`; every entry that ran, reroutes included; the part that
   answered early or threw; every model call, with the code of its failure and what it said when
-  it failed or was cancelled; the usage totals; under `time`, how long the answer took and how
+  it failed or was cancelled, and the upstream's id for it when it finished; the usage totals;
+  under `time`, how long the answer took and how
   long the whole request took; and the after-response hooks that failed, and apart from each
   other those the time limit left no time for, as `skipped`, and those not run because a value
   they are typed to read was never made, as `unreached`. Cause: with one list for both, a host
@@ -698,10 +705,15 @@ core stays what every motty uses, and a plugin is proven possible by being writt
   with `get` and `set` lost additions whenever two requests of one caller ran at once, which is
   when a limit matters. Rejected: transactions or compare-and-set, a second API for the one
   thing a counter needs.
-- **Keys are namespaced per served motty,** by package id or, without a build, the root's `name`.
-  The host adds that prefix before it hands the storage over: it knows the package id, and a part
-  cannot see the root it is used under.
-- **Two served motties never share a stored key, whatever their names hold.** In the namespace a
+- **Keys are namespaced per served motty,** by the host's `namespace` option or, where the host
+  states none, the root's `name`. The host adds that prefix before it hands the storage over,
+  since a part cannot see the root it is used under. Cause: a name is the author's to choose,
+  so a host that serves two authors' motties of one name had them reading each other's keys,
+  and only the host knows the two apart.
+- **The namespace is stated per mount, never per request.** A mount serves one motty and is
+  cheap to make, so a host that keeps tenants apart makes a mount for each. Rejected: storage
+  or a prefix chosen per request, a second way to say what a mount already says.
+- **Two namespaces never share a stored key, whatever they hold.** In the namespace a
   colon and a percent sign are written percent-encoded, so the first colon of a stored key always
   ends the namespace. Every other name is stored as written, `acme/coder` too. Cause: a name is
   any string, and the motty `a` writing `b:x` reached the key `x` of the motty `a:b`. Rejected:
@@ -1032,8 +1044,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   codecs.
 - **A host's steps are one function, which every host that takes host options calls.** Given the
   motty and the options once, it checks the contract version, sends each call to its adapter and
-  puts the motty's name ahead of every storage key. Given a request, it removes the credential,
-  asks the auth adapter who the caller is, makes the stop signal from the caller's own signal and
+  puts the namespace ahead of every storage key. Given a request, it removes the credential,
+  asks the auth adapter who the caller is unless the host has said, makes the stop signal from
+  the caller's own signal and
   the duration limit, and adds the request id and the setting overrides to the report. `serve`
   keeps only the wire, and `run` only its test defaults and its result.
 - **Given a request's headers and no request, the same function says who the caller is and does
@@ -1054,7 +1067,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   with the real token in `authorization` was not signed in.
 - **A bearer token is read as RFC 6750 says,** the scheme in any case and then exactly one token,
   the way Elysia's bearer plugin reads it. A key header's value is the token as it is. With no
-  token there is no caller, and the adapter is not asked.
+  token the adapter is not asked, and there is no caller unless the host stated one.
 - **Auth is the host's own to write: the `auth` option takes any object with a `verify`
   function,** which is given the token and answers the caller or nothing, at once or later. A
   lookup in the host's own table of keys is one; `jwt` and `bearer` are two ready-made ones and
@@ -1094,7 +1107,15 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **A plain bearer secret is verified by `bearer`,** which gives the caller the id the host
   named. The secret must itself be a token a header can carry, and it is compared in a time
   that does not depend on what was sent.
-- **With no `auth` adapter there is nothing to verify against,** so `auth()` rejects the request.
+- **With no `auth` adapter there is nothing to verify against,** so `auth()` rejects the request
+  unless the host stated the caller itself.
+- **A host that authenticated the request itself states the caller as an argument, in process.**
+  The handler a mount returns takes a third argument to `fetch`, whose `caller` is who is
+  asking. The auth adapter is then not asked, and the credential headers are removed as
+  always. Cause: a host with a server of its own has already proven the caller by its own
+  means, and had to prove it a second time through an adapter. Rejected: a header the host
+  trusts, which a client forges unless every hop strips it and which the motty would read;
+  a wider auth adapter, which still starts from a token the host may not have.
 - **One storage adapter, not a driver collection.** `redis` speaks the Redis protocol, tested on
   Valkey, and is Bun's built-in client. Its server must keep a key's expiry on a plain write:
   Redis 6 or any Valkey. Rejected: an adapter per provider, redoing its client.
@@ -1131,6 +1152,21 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   host adds the request id, the setting overrides in effect, as `warnings` what the edge left
   out of the reply it wrote, and as `failed` what a service of the host threw. What an upstream
   call left out is in that call's entry.
+- **`report` may return a promise, and a record is delivered when that promise settles.** A
+  rejection is caught, since nobody is left to tell. Cause: a host that writes its records to a
+  database or a queue had no way to say when one was safely written.
+- **A mount hands the host the delivery of each record through `waitUntil`,** a field of the
+  third argument to `fetch`. It is called once for every request that was let in, before the
+  reply is returned, with work that settles when that request's record has been delivered and
+  never rejects. A request refused before it was let in has no record and hands over nothing.
+  The argument has the shape of a Workers execution context, so a mount can be a Workers
+  module's default export and its records are waited for with no code of the host's.
+  Rejected: the delivery as a second value returned from `fetch`, which breaks the plain shape
+  every runtime expects and is the promise beside the stream the contract already rejected;
+  a record fetched later by id, or sent to a webhook, the awkward part of other gateways.
+- **`close` waits for the records still being delivered, within the `drain` it already had.**
+  It is the same work `waitUntil` is handed, so there is one mechanism and not two. Cause: a
+  server that shut down after its last reply lost the records still on their way.
 - **The edge keeps the stream alive, notices a caller who left, and drains at shutdown.**
 - **A request stopped at shutdown ends with the error a new request is refused with then,**
   `Overloaded`, and the caller and the record are both told the server is shutting down. Cause:
@@ -1214,6 +1250,13 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   has no record and so no id. A request the auth adapter threw on has one where the host was
   told of it, a model list's too: what was thrown that is no SDK error is on a report, and
   the reply carries that report's id.
+- **A host may state its own id for a request, and it then stands wherever the SDK's would.**
+  It is the `id` of the third argument to `fetch`, and it is the id the motty reads on the
+  request, the one in the reply's header and in the ids of the reply's body, and the one on
+  the report. Cause: a host that already numbers its requests had two ids for each and a
+  table to join them by. It is 1 to 128 characters of letters, digits, `_`, `.`, `~` and `-`,
+  being written into a header and into ids in a body. Any other id is refused. Rejected:
+  putting a made id in its place, which breaks the host's matching with no word of it.
 - **The edge has the last boundary.** Whatever is thrown while a request is taken in is answered
   in the format of the path, and a path that cannot be read is the caller's mistake, a 400. Cause:
   such a path was answered with the server's own error page.
@@ -1674,8 +1717,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **The served motty is the default export of the file `main` names.** A named export is a part.
 - **Identity comes from `package.json`:** `@acme/coder` is `acme/coder`. A release changes one file.
 - **No manifest file.** Behind the mark is a description collected at load, never by parsing source.
-  It holds the SDK's version, the root's `name`, and the name of every part used. A host with no
-  package id uses the root's name as the `store` namespace.
+  It holds the SDK's version, the root's `name`, and the name of every part used. A host that
+  states no `namespace` uses the root's name as the `store` namespace.
 - **The description does not list models yet.** `model(name)` runs when a file loads and is not
   tied to a motty, so a list would hold the names of every motty loaded in the process. It could
   never hold a name worked out during a request. The host sees each name when it is called.
