@@ -26,6 +26,10 @@ toolkit for building motties; the Hub is a service that hosts and sells them.
   and no ORM.
 - **Not an agent framework.** No agent loop, tool runner or retrieval pipeline. A motty is plain
   code with `store`, `fetch` and the caller's identity, so retrieval is a hook, not a framework.
+- **Not an MCP server or client.** The SDK speaks no MCP. MCP gives an agent tools that it
+  chooses to call. A motty is the model the agent calls, so it sees every request. Tools that
+  come from MCP servers arrive as plain function tools, and a tool the provider runs is carried
+  whole to an upstream of the same family.
 
 ## Principles
 
