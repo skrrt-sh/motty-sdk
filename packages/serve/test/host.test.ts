@@ -215,6 +215,44 @@ test('a motty that asks for no caller is open, and never sees the credential, wi
   expect(await said(guarded)).toBe('null');
 });
 
+test('a caller the host gives reaches the motty with no credential header and no auth adapter', async () => {
+  const served = mount(whoAsked, () => ({}));
+
+  const reply = await served.fetch(ask({ 'x-trace': 'trace-7' }), undefined, {
+    caller: { id: 'ada' },
+  });
+
+  expect(reply.status).toBe(200);
+  expect(JSON.parse(await said(reply))).toEqual({
+    caller: 'ada',
+    headers: ['content-type', 'x-trace'],
+  });
+});
+
+test('a credential a client sends does not override the caller the host gives: the adapter is not asked, and the header is gone before the motty reads the rest', async () => {
+  let verified = 0;
+  const served = mount(whoAsked, () => ({
+    auth: {
+      verify: () => {
+        verified += 1;
+        return { id: 'eve' };
+      },
+    },
+  }));
+
+  const reply = await served.fetch(
+    ask({ authorization: 'Bearer sk-eve', 'x-api-key': 'sk-eve' }),
+    undefined,
+    { caller: { id: 'ada' } },
+  );
+
+  expect(JSON.parse(await said(reply))).toEqual({
+    caller: 'ada',
+    headers: ['content-type'],
+  });
+  expect(verified).toBe(0);
+});
+
 test("nothing of the caller's headers reaches a model adapter", async () => {
   const given: unknown[][] = [];
   const upstream: ModelAdapter = {
@@ -647,6 +685,51 @@ test('a request refused before the motty ran makes no report', async () => {
   expect(reports).toMatchObject([{ outcome: 'completed' }]);
 });
 
+test('a request refused before it was let in hands the host no work to wait for', async () => {
+  const works: Promise<unknown>[] = [];
+  const served = mount(whoAsked, () => ({ auth: keys }));
+  const host = { waitUntil: (work: Promise<unknown>) => works.push(work) };
+
+  const replies = [
+    await served.fetch(
+      new Request('http://motty.test/v1/chat/completions', {
+        method: 'POST',
+        body: 'not json',
+      }),
+      undefined,
+      host,
+    ),
+    await served.fetch(
+      new Request('http://motty.test/v2/chat', { method: 'POST' }),
+      undefined,
+      host,
+    ),
+    await served.fetch(
+      ask({ authorization: 'Bearer sk-forged' }),
+      undefined,
+      host,
+    ),
+    await served.fetch(
+      new Request('http://motty.test/v1/models'),
+      undefined,
+      host,
+    ),
+  ];
+  await served.close();
+  replies.push(
+    await served.fetch(
+      ask({ authorization: 'Bearer sk-ada' }),
+      undefined,
+      host,
+    ),
+  );
+
+  expect(replies.map(({ status }) => status)).toEqual([
+    400, 404, 401, 401, 503,
+  ]);
+  expect(works).toEqual([]);
+});
+
 test.each([
   ['/v1/models', {}, 401],
   ['/v1/models/coder', {}, 401],
@@ -681,6 +764,19 @@ test.each([
     }
   },
 );
+
+test('a caller the host gives opens the model list of a motty that asks for one', async () => {
+  const served = mount(whoAsked, () => ({}));
+
+  const reply = await served.fetch(
+    new Request('http://motty.test/v1/models'),
+    undefined,
+    { caller: { id: 'ada' } },
+  );
+
+  expect(reply.status).toBe(200);
+  expect(await reply.json()).toMatchObject({ data: [{ id: 'coder' }] });
+});
 
 test('the model list of a motty that asks for no caller is shown to anyone, and no caller is looked up', async () => {
   let verified = 0;
@@ -784,6 +880,144 @@ test.each([
   },
 );
 
+test.each([
+  ['/v1/chat/completions', 'x-request-id', 'chatcmpl-', { messages: [] }],
+  [
+    '/v1/responses',
+    'x-request-id',
+    'resp_',
+    { input: 'Why does this deadlock?' },
+  ],
+  [
+    '/v1/messages',
+    'request-id',
+    'msg_',
+    {
+      max_tokens: 64,
+      messages: [{ role: 'user', content: 'Why does this deadlock?' }],
+    },
+  ],
+])(
+  'an id the host gives is the one in the header the API reads, in the ids of the body, whole and streamed, and on the report: %s',
+  async (path, header, prefix, body) => {
+    const reports: Report[] = [];
+    const served = mount(
+      motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
+      () => ({ report: (report) => reports.push(report) }),
+    );
+
+    const replies = await Promise.all(
+      [
+        { id: 'host.whole~7', stream: false },
+        { id: 'host_streamed-8', stream: true },
+      ].map(async ({ id, stream }) => {
+        const reply = await served.fetch(
+          new Request(`http://motty.test${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model: 'coder', stream, ...body }),
+          }),
+          undefined,
+          { id },
+        );
+        return { reply, text: await reply.text() };
+      }),
+    );
+    await served.close();
+
+    expect(replies.map(({ reply }) => reply.headers.get(header))).toEqual([
+      'host.whole~7',
+      'host_streamed-8',
+    ]);
+    expect(replies[0]?.text).toContain(`"id":"${prefix}host.whole~7"`);
+    expect(replies[1]?.text).toContain(`"id":"${prefix}host_streamed-8"`);
+    expect(reports.map(({ id }) => id).sort()).toEqual([
+      'host.whole~7',
+      'host_streamed-8',
+    ]);
+  },
+);
+
+test('with no id given, each request the host says something else of still gets its own', async () => {
+  const served = mount(
+    motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
+    () => ({}),
+  );
+
+  const first = await served.fetch(ask(), undefined, { caller: { id: 'ada' } });
+  const second = await served.fetch(ask(), undefined, {});
+
+  expect(first.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+  expect(second.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+  expect(first.headers.get('x-request-id')).not.toBe(
+    second.headers.get('x-request-id'),
+  );
+});
+
+test('an id that could not go into a header is answered as an internal error with no id, on a chat path and on a guarded model list, and nothing runs or is reported', async () => {
+  const reports: Report[] = [];
+  const works: Promise<unknown>[] = [];
+  let ran = false;
+  const served = mount(
+    motty({ name: 'coder' })
+      .use(auth())
+      .handle(() => {
+        ran = true;
+        return answer('Use a mutex.');
+      }),
+    () => ({ report: (report) => reports.push(report) }),
+  );
+  const host = {
+    id: 'two words',
+    caller: { id: 'ada' },
+    waitUntil: (work: Promise<unknown>) => works.push(work),
+  };
+
+  const chat = await served.fetch(ask(), undefined, host);
+  const list = await served.fetch(
+    new Request('http://motty.test/v1/models'),
+    undefined,
+    host,
+  );
+  await served.close();
+
+  for (const reply of [chat, list]) {
+    expect(reply.status).toBe(500);
+    expect(reply.headers.has('x-request-id')).toBe(false);
+    expect(await reply.json()).toEqual({
+      error: {
+        message: 'Internal error',
+        type: 'server_error',
+        param: null,
+        code: 'internal',
+      },
+    });
+  }
+  expect(ran).toBe(false);
+  expect(reports).toEqual([]);
+  expect(works).toEqual([]);
+});
+
+test("serve hands what the host says of a request on to the edge: the id, the caller and where the record's delivery goes", async () => {
+  const works: Promise<unknown>[] = [];
+  const reports: Report[] = [];
+  const served = serve(whoAsked, () => ({
+    report: (report) => reports.push(report),
+  }));
+
+  const reply = await served.fetch(ask(), undefined, {
+    id: 'host-7',
+    caller: { id: 'ada' },
+    waitUntil: (work) => works.push(work),
+  });
+
+  expect(reply.headers.get('x-request-id')).toBe('host-7');
+  expect(JSON.parse(await said(reply))).toMatchObject({ caller: 'ada' });
+  expect(works).toHaveLength(1);
+  await works[0];
+  expect(reports).toMatchObject([{ id: 'host-7', outcome: 'completed' }]);
+});
+
 test('a request refused before it was let in has no record and carries no id', async () => {
   const served = serve(whoAsked, () => ({ auth: keys }));
 
@@ -842,5 +1076,54 @@ test.each([
     expect(reply.status).toBe(500);
     expect(reports).toHaveLength(1);
     expect(reply.headers.get(header)).toBe(reports[0]?.id ?? '');
+  },
+);
+
+test.each([
+  ['/v1/chat/completions', { messages: [] }],
+  ['/v1/models', undefined],
+])(
+  'the report made when the auth adapter throws is handed to the host to wait for, and its work settles once the report has: %s',
+  async (path, body) => {
+    const sent = Promise.withResolvers<void>();
+    const order: string[] = [];
+    const works: Promise<unknown>[] = [];
+    const served = mount(whoAsked, () => ({
+      auth: {
+        verify: () => {
+          throw new Error('The key set is gone');
+        },
+      },
+      report: async () => {
+        await sent.promise;
+        order.push('report');
+      },
+    }));
+
+    const reply = await served.fetch(
+      new Request(`http://motty.test${path}`, {
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer sk-ada',
+        },
+        ...(body === undefined
+          ? {}
+          : {
+              method: 'POST',
+              body: JSON.stringify({ model: 'coder', ...body }),
+            }),
+      }),
+      undefined,
+      { waitUntil: (work) => works.push(work) },
+    );
+
+    expect(reply.status).toBe(500);
+    expect(works).toHaveLength(1);
+    const settled = works[0]?.then(() => order.push('work'));
+    await Bun.sleep(10);
+    expect(order).toEqual([]);
+    sent.resolve();
+    await settled;
+    expect(order).toEqual(['report', 'work']);
   },
 );

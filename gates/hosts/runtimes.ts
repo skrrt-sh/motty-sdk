@@ -9,7 +9,7 @@ export const runtimes = {
     const answered = host(await bundled(), at);
     return {
       address: 'http://bun.test',
-      fetch: (request: Request) => answered(request, () => {}),
+      fetch: (request: Request) => answered.fetch(request),
       stop: async () => {},
     };
   },

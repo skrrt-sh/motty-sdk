@@ -12,7 +12,7 @@ import {
   mark,
   type Overrides,
 } from '@mottyjs/core/host';
-import { chat } from './chat.ts';
+import { chat, type FromHost, toldBy } from './chat.ts';
 import type { Codec } from './codec.ts';
 import { flights } from './flights.ts';
 import { messages } from './messages/index.ts';
@@ -42,6 +42,19 @@ type Undeclared<Given, Declared> = (
 type Options<Served, Given> = (
   env: typeof process.env,
 ) => HostOptions<Given & Undeclared<Given, Overrides<Served>>>;
+
+// Bun's server is the second argument only when Bun calls: on Workers it is
+// the environment, which has no idle timeout to lift.
+function unhurried(server: unknown, request: Request): void {
+  if (
+    typeof server === 'object' &&
+    server !== null &&
+    'timeout' in server &&
+    typeof server.timeout === 'function'
+  ) {
+    server.timeout(request, 0);
+  }
+}
 
 // One reason for a request refused at shutdown and for one stopped by it.
 function shuttingDown(): Overloaded {
@@ -92,11 +105,13 @@ export function mount<
     request: Request,
     format: Codec,
     model: string | undefined,
+    from: FromHost,
   ): Promise<Response> {
     if (guarded) {
       let reported: string | undefined;
       const caller = await serving
         .admit({
+          ...toldBy(from),
           headers: request.headers,
           credentials: format.credentials,
           reported: (id) => {
@@ -124,7 +139,8 @@ export function mount<
     request: Request,
     pathname: string,
     format: Codec,
-    server: Bun.Server<undefined> | undefined,
+    server: unknown,
+    from: FromHost,
   ): Response | Promise<Response> {
     const route = routed(request, pathname);
     switch (route.to) {
@@ -136,11 +152,15 @@ export function mount<
         }
         // The time limit is the host's own, and a long answer may be silent
         // for longer than the server lets a connection idle.
-        return chat(serving, route.codec, request, () =>
-          server?.timeout(request, 0),
+        return chat(
+          serving,
+          route.codec,
+          request,
+          () => unhurried(server, request),
+          from,
         );
       case 'models':
-        return listed(request, format, route.model);
+        return listed(request, format, route.model, from);
       case 'unserved':
         return failed(format, new Unsupported(route.said, { status: 404 }));
       case 'nowhere':
@@ -160,12 +180,13 @@ export function mount<
   // answered in the format of its path.
   async function fetch(
     request: Request,
-    server?: Bun.Server<undefined>,
+    server?: unknown,
+    from: FromHost = {},
   ): Promise<Response> {
     const { pathname } = new URL(request.url);
     const format = formatOf(request, pathname);
     try {
-      return await answered(request, pathname, format, server);
+      return await answered(request, pathname, format, server, from);
     } catch (thrown) {
       return failed(format, thrown);
     }
@@ -199,13 +220,14 @@ export function serve<
   function fetch(
     request: Request,
     server?: Bun.Server<undefined>,
+    from?: FromHost,
   ): Promise<Response> {
     if (server !== undefined && listening === undefined) {
       listening = server;
       process.once('SIGTERM', onSignal);
       process.once('SIGINT', onSignal);
     }
-    return mounted.fetch(request, server);
+    return mounted.fetch(request, server, from);
   }
 
   return { fetch, close };
