@@ -125,16 +125,11 @@ function entering(result: IteratorResult<unknown>): StreamEvent | string {
   );
 }
 
+// A finish is given whole: its entry takes the id and the warnings by name.
 function usageAndCode(last: Terminal) {
-  return {
-    ...last.usage,
-    ...(last.type === 'error'
-      ? { code: last.error.code, message: last.error.message }
-      : {}),
-    ...(last.type === 'finish' && last.warnings
-      ? { warnings: last.warnings }
-      : {}),
-  };
+  return last.type === 'error'
+    ? { ...last.usage, code: last.error.code, message: last.error.message }
+    : { ...last.usage, ...last };
 }
 
 export function model(name: string): NamedModel {

@@ -25,6 +25,7 @@ import type { ChatRequest } from '../../src/data/message.ts';
 import { answer } from '../../src/request/answer.ts';
 import {
   beginAfterResponse,
+  counted,
   current,
   endPhase,
   enter,
@@ -242,6 +243,133 @@ test('what a call left out is kept with the call, and a call that left nothing o
     { model: 'acme/large' },
   ]);
   expect(records[0]?.calls[1]).not.toHaveProperty('warnings');
+});
+
+test('the id the upstream gave a finished call is kept with the call', async () => {
+  const records: RequestRecord[] = [];
+  const host = stubHost(
+    {
+      'acme/small': [
+        { type: 'text', text: 'One' },
+        { type: 'finish', reason: 'stop', id: 'msg_1' },
+      ],
+    },
+    { record: (record) => records.push(record) },
+  );
+  const seen: (string | undefined)[] = [];
+  const served = motty({ name: 'coder' }).handle(async () => {
+    const last = await model('acme/small').complete({ messages: [] });
+    await last.text();
+    for (const call of current().calls.made) seen.push(call.id);
+    return last;
+  });
+
+  await told(served, host);
+  await Bun.sleep(0);
+
+  expect(seen).toEqual(['msg_1']);
+  expect(records[0]?.calls).toMatchObject([
+    { model: 'acme/small', id: 'msg_1' },
+  ]);
+});
+
+test('two calls in one request each keep the id of their own response', async () => {
+  const records: RequestRecord[] = [];
+  const host = stubHost(
+    {
+      'acme/small': [
+        { type: 'text', text: 'One' },
+        { type: 'finish', reason: 'stop', id: 'msg_1' },
+      ],
+      'acme/large': [
+        { type: 'text', text: 'Two' },
+        { type: 'finish', reason: 'stop', id: 'msg_2' },
+      ],
+    },
+    { record: (record) => records.push(record) },
+  );
+  const seen: (string | undefined)[] = [];
+  const served = motty({ name: 'coder' }).handle(async () => {
+    await (await model('acme/small').complete({ messages: [] })).text();
+    const last = await model('acme/large').complete({ messages: [] });
+    await last.text();
+    for (const call of current().calls.made) seen.push(call.id);
+    return last;
+  });
+
+  await told(served, host);
+  await Bun.sleep(0);
+
+  expect(seen).toEqual(['msg_1', 'msg_2']);
+  expect(records[0]?.calls).toMatchObject([
+    { model: 'acme/small', id: 'msg_1' },
+    { model: 'acme/large', id: 'msg_2' },
+  ]);
+});
+
+test('a finish with no id leaves the call without one', async () => {
+  const records: RequestRecord[] = [];
+  const host = stubHost(
+    {
+      'acme/small': [
+        { type: 'text', text: 'One' },
+        { type: 'finish', reason: 'stop' },
+      ],
+    },
+    { record: (record) => records.push(record) },
+  );
+  const seen: object[] = [];
+  const served = motty({ name: 'coder' }).handle(async () => {
+    const last = await model('acme/small').complete({ messages: [] });
+    await last.text();
+    seen.push(...current().calls.made);
+    return last;
+  });
+
+  await told(served, host);
+  await Bun.sleep(0);
+
+  expect(seen).toHaveLength(1);
+  expect(seen[0]).not.toHaveProperty('id');
+  expect(records[0]?.calls).toHaveLength(1);
+  expect(records[0]?.calls[0]).not.toHaveProperty('id');
+});
+
+test('a call that fails has no id', async () => {
+  const host = stubHost({
+    'acme/small': [
+      { type: 'text', text: 'Half' },
+      {
+        type: 'error',
+        error: { code: 'overloaded', status: 503, message: 'Too busy' },
+      },
+    ],
+  });
+
+  const calls = await enter(host, async () => {
+    const reply = await model('acme/small').complete({ messages: [] });
+    await expect(reply.text()).rejects.toBeInstanceOf(Overloaded);
+    return current().calls;
+  });
+
+  expect(calls.made).toMatchObject([
+    { model: 'acme/small', code: 'overloaded' },
+  ]);
+  expect(calls.made[0]).not.toHaveProperty('id');
+});
+
+test('an id that is not a string, reported for a call, is not kept', async () => {
+  const calls = await enter(stubHost(), async () => {
+    await counted(
+      'acme/tool',
+      async () => 'done',
+      () => JSON.parse('{"id":7,"input":3}'),
+    );
+    return current().calls;
+  });
+
+  expect(calls.made).toMatchObject([{ model: 'acme/tool', input: 3 }]);
+  expect(calls.made[0]).not.toHaveProperty('id');
 });
 
 test('a call nobody reads is still counted', async () => {

@@ -215,6 +215,7 @@ function count(live: Running, call: Made, reported?: Reported): void {
     // A host's facts promise no types, and the entry is plain data.
     if (typeof reported.message === 'string') call.message = reported.message;
   }
+  if (typeof reported?.id === 'string') call.id = reported.id;
   if (reported?.warnings?.length) call.warnings = reported.warnings;
   const usage = usageOf(reported);
   for (const name of counts) {
