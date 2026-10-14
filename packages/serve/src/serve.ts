@@ -6,6 +6,7 @@ import {
 } from '@mottyjs/core';
 import {
   bound,
+  givenId,
   type HostOptions,
   hosting,
   type Marked,
@@ -177,12 +178,14 @@ export function mount<
   }
 
   // The last boundary: whatever is thrown while a request is taken in is
-  // answered in the format of its path.
+  // answered in the format of its path. An id the host may not give is the
+  // host's own mistake, thrown to it before the request is looked at.
   async function fetch(
     request: Request,
     server?: unknown,
     from: FromHost = {},
   ): Promise<Response> {
+    givenId(from.id);
     const { pathname } = new URL(request.url);
     const format = formatOf(request, pathname);
     try {

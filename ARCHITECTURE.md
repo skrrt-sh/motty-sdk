@@ -1160,7 +1160,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   reply is returned, with work that settles when that request's record has been delivered and
   never rejects. A request refused before it was let in has no record and hands over nothing.
   The argument has the shape of a Workers execution context, so a mount can be a Workers
-  module's default export and its records are waited for with no code of the host's.
+  module's default export and its records are waited for with no code of the host's. A
+  `waitUntil` that throws costs the host its wait and nothing else, so the request still runs.
   Rejected: the delivery as a second value returned from `fetch`, which breaks the plain shape
   every runtime expects and is the promise beside the stream the contract already rejected;
   a record fetched later by id, or sent to a webhook, the awkward part of other gateways.
@@ -1255,8 +1256,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   request, the one in the reply's header and in the ids of the reply's body, and the one on
   the report. Cause: a host that already numbers its requests had two ids for each and a
   table to join them by. It is 1 to 128 characters of letters, digits, `_`, `.`, `~` and `-`,
-  being written into a header and into ids in a body. Any other id is refused. Rejected:
-  putting a made id in its place, which breaks the host's matching with no word of it.
+  being written into a header and into ids in a body. Any other id makes `fetch` reject before
+  the request is looked at, since it is a mistake in the host's own code and a reply would hide
+  it from the host. Rejected: putting a made id in its place, which breaks the host's matching
+  with no word of it.
 - **The edge has the last boundary.** Whatever is thrown while a request is taken in is answered
   in the format of the path, and a path that cannot be read is the caller's mistake, a 400. Cause:
   such a path was answered with the server's own error page.

@@ -378,6 +378,14 @@ function tokenIn(headers: Headers, name: string): string | undefined {
     : sent;
 }
 
+// The id goes into a response header and into the ids of a reply's body.
+export function givenId(id: string | undefined): string | undefined {
+  if (id !== undefined && !/^[\w.~-]{1,128}$/.test(id)) {
+    throw new Error('The request id is not one the host may give');
+  }
+  return id;
+}
+
 // The overrides are checked against the motty's own settings here and read
 // as plain data from here on: the motty's schemas check their values.
 export function hosting<Served extends Marked>(
@@ -409,12 +417,8 @@ export function hosting(motty: Marked, options: HostOptions) {
   async function admit(
     asked: Signed & Partial<Asked>,
   ): Promise<Admitted | Caller | undefined> {
-    // The id goes into a response header and into the ids of a reply's body.
-    if (asked.id !== undefined && !/^[\w.~-]{1,128}$/.test(asked.id)) {
-      throw new Error('The request id is not one the host may give');
-    }
+    const id = givenId(asked.id) ?? crypto.randomUUID();
     const headers = new Headers(asked.headers);
-    const id = asked.id ?? crypto.randomUUID();
     let failed: Sealed[] | undefined;
     // Until the request's own signal is made, the caller's is all of it.
     let signal = asked.signal;

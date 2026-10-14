@@ -954,45 +954,46 @@ test('with no id given, each request the host says something else of still gets 
   );
 });
 
-test('an id that could not go into a header is answered as an internal error with no id, on a chat path and on a guarded model list, and nothing runs or is reported', async () => {
+test('an id that could not go into a header is thrown to the host, on a chat path, on a guarded model list and on an unguarded one, and nothing runs or is reported', async () => {
   const reports: Report[] = [];
   const works: Promise<unknown>[] = [];
   let ran = false;
-  const served = mount(
-    motty({ name: 'coder' })
-      .use(auth())
-      .handle(() => {
-        ran = true;
-        return answer('Use a mutex.');
-      }),
+  const handled = () => {
+    ran = true;
+    return answer('Use a mutex.');
+  };
+  const guarded = mount(
+    motty({ name: 'coder' }).use(auth()).handle(handled),
     () => ({ report: (report) => reports.push(report) }),
   );
+  const open = mount(motty({ name: 'coder' }).handle(handled), () => ({
+    report: (report) => reports.push(report),
+  }));
   const host = {
     id: 'two words',
     caller: { id: 'ada' },
     waitUntil: (work: Promise<unknown>) => works.push(work),
   };
 
-  const chat = await served.fetch(ask(), undefined, host);
-  const list = await served.fetch(
-    new Request('http://motty.test/v1/models'),
-    undefined,
-    host,
+  const thrown = await Promise.all(
+    [
+      guarded.fetch(ask(), undefined, host),
+      guarded.fetch(
+        new Request('http://motty.test/v1/models'),
+        undefined,
+        host,
+      ),
+      open.fetch(new Request('http://motty.test/v1/models'), undefined, host),
+    ].map((replying) => replying.catch((error: unknown) => error)),
   );
-  await served.close();
+  await guarded.close();
+  await open.close();
 
-  for (const reply of [chat, list]) {
-    expect(reply.status).toBe(500);
-    expect(reply.headers.has('x-request-id')).toBe(false);
-    expect(await reply.json()).toEqual({
-      error: {
-        message: 'Internal error',
-        type: 'server_error',
-        param: null,
-        code: 'internal',
-      },
-    });
-  }
+  expect(thrown).toEqual([
+    new Error('The request id is not one the host may give'),
+    new Error('The request id is not one the host may give'),
+    new Error('The request id is not one the host may give'),
+  ]);
   expect(ran).toBe(false);
   expect(reports).toEqual([]);
   expect(works).toEqual([]);
@@ -1125,5 +1126,52 @@ test.each([
     sent.resolve();
     await settled;
     expect(order).toEqual(['report', 'work']);
+  },
+);
+
+test.each([
+  ['/v1/chat/completions', { messages: [] }],
+  ['/v1/models', undefined],
+])(
+  'a waitUntil that throws as the auth adapter throws changes nothing: the reply carries the id of the one report made: %s',
+  async (path, body) => {
+    const reports: Report[] = [];
+    const served = mount(whoAsked, () => ({
+      auth: {
+        verify: () => {
+          throw new Error('The key set is gone');
+        },
+      },
+      report: (report) => reports.push(report),
+    }));
+
+    const reply = await served.fetch(
+      new Request(`http://motty.test${path}`, {
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer sk-ada',
+        },
+        ...(body === undefined
+          ? {}
+          : {
+              method: 'POST',
+              body: JSON.stringify({ model: 'coder', ...body }),
+            }),
+      }),
+      undefined,
+      {
+        waitUntil: () => {
+          throw new Error('The context is gone');
+        },
+      },
+    );
+    await served.close();
+
+    expect(reply.status).toBe(500);
+    expect(await reply.json()).toMatchObject({
+      error: { message: 'Internal error' },
+    });
+    expect(reports).toHaveLength(1);
+    expect(reply.headers.get('x-request-id')).toBe(reports[0]?.id ?? '');
   },
 );

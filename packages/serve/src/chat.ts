@@ -21,14 +21,17 @@ export type FromHost = {
 };
 
 // A runtime's own context refuses its method unbound, so the work is handed
-// over on the object it came on.
+// over on the object it came on. One that throws loses the host its wait and
+// nothing else: the request runs on, and its flight lands on the delivery.
 export function toldBy(from: FromHost) {
   const { id, caller } = from;
   return {
     ...(id === undefined ? {} : { id }),
     ...(caller === undefined ? {} : { caller }),
     delivered: (work: Promise<void>): void => {
-      from.waitUntil?.(work);
+      try {
+        from.waitUntil?.(work);
+      } catch {}
     },
   };
 }

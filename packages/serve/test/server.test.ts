@@ -566,6 +566,33 @@ test('with no report the delivery still settles', async () => {
   await served.close();
 });
 
+test('a waitUntil that throws leaves the request answered as normal, and its flight still lands, so shutdown does not wait out the drain', async () => {
+  const reports: Report[] = [];
+  const served = mount(
+    coder,
+    () => ({
+      models: [fake(on(gpt, 'Use a mutex.'))],
+      report: (report) => reports.push(report),
+    }),
+    { drain: 5_000 },
+  );
+
+  const reply = await served.fetch(question(false), undefined, {
+    waitUntil: () => {
+      throw new Error('The context is gone');
+    },
+  });
+  expect(reply.status).toBe(200);
+  expect(await reply.json()).toMatchObject({
+    choices: [{ message: { content: 'Use a mutex.' } }],
+  });
+  const began = performance.now();
+  await served.close();
+
+  expect(performance.now() - began).toBeLessThan(1_000);
+  expect(reports).toMatchObject([{ outcome: 'completed' }]);
+});
+
 test('a second argument that is no server of Bun is no failure: called as a Workers module is, the edge answers and uses the context it was handed', async () => {
   const context = {
     held: new Set<Promise<unknown>>(),
