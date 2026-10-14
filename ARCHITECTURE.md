@@ -1152,13 +1152,15 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   host adds the request id, the setting overrides in effect, as `warnings` what the edge left
   out of the reply it wrote, and as `failed` what a service of the host threw. What an upstream
   call left out is in that call's entry.
-- **`report` may return a promise, and a record is delivered when that promise settles.** A
-  rejection is caught, since nobody is left to tell. Cause: a host that writes its records to a
-  database or a queue had no way to say when one was safely written.
+- **`report` may return a promise, and the SDK's part in a record ends when that promise
+  settles.** Settling says the host's report has finished with the record, not that it
+  succeeded, which only the host's own code can know and tell. A rejection is caught, since
+  nobody is left to tell. Cause: a host that writes its records to a database or a queue had no
+  way to keep its process alive until one was written.
 - **A mount hands the host the delivery of each record through `waitUntil`,** a field of the
   third argument to `fetch`. It is called once for every request that was let in, before the
-  reply is returned, with work that settles when that request's record has been delivered and
-  never rejects. A request refused before it was let in has no record and hands over nothing.
+  reply is returned, with work that settles when the host's report has finished with that
+  request's record and never rejects. A request refused before it was let in has no record and hands over nothing.
   The argument has the shape of a Workers execution context, so a mount can be a Workers
   module's default export and its records are waited for with no code of the host's. A
   `waitUntil` that throws costs the host its wait and nothing else, so the request still runs.
