@@ -4,20 +4,20 @@
 <text x="0" y="78" font-size="13" font-weight="600" fill="#f0f6fc">Cold start: import to first streamed answer</text>
 <line x1="86" x2="86" y1="89" y2="199" stroke="#3d444d" stroke-width="1"/>
 <text x="78" y="104" font-size="12" text-anchor="end" fill="#f0f6fc" font-weight="600">Motty</text>
-<path d="M86 94h25.04391328515842a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-25.04391328515842z" fill="#3987e5"/>
-<text x="122.04391328515842" y="104" font-size="12" fill="#f0f6fc" font-weight="600">27.5 ms</text>
+<path d="M86 94h17.74078091106291a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-17.74078091106291z" fill="#3987e5"/>
+<text x="114.74078091106291" y="104" font-size="12" fill="#f0f6fc" font-weight="600">21.1 ms</text>
 <text x="78" y="126" font-size="12" text-anchor="end" fill="#9198a1">AI SDK</text>
-<path d="M86 116h40.463590883824345a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-40.463590883824345z" fill="#6e7681"/>
-<text x="137.46359088382434" y="126" font-size="12" fill="#f0f6fc">42.1 ms<tspan fill="#9198a1" font-weight="400">  1.6×</tspan></text>
+<path d="M86 116h38.554229934924074a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-38.554229934924074z" fill="#6e7681"/>
+<text x="135.55422993492408" y="126" font-size="12" fill="#f0f6fc">41.3 ms<tspan fill="#9198a1" font-weight="400">  2.0×</tspan></text>
 <text x="78" y="148" font-size="12" text-anchor="end" fill="#9198a1">Mastra</text>
 <path d="M86 138h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#6e7681"/>
-<text x="283" y="148" font-size="12" fill="#f0f6fc">179.9 ms<tspan fill="#9198a1" font-weight="400">  6.6×</tspan></text>
+<text x="283" y="148" font-size="12" fill="#f0f6fc">184.4 ms<tspan fill="#9198a1" font-weight="400">  8.8×</tspan></text>
 <text x="78" y="170" font-size="12" text-anchor="end" fill="#9198a1">LangChain</text>
-<path d="M86 160h67.07837687604224a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-67.07837687604224z" fill="#6e7681"/>
-<text x="164.07837687604223" y="170" font-size="12" fill="#f0f6fc">67.3 ms<tspan fill="#9198a1" font-weight="400">  2.5×</tspan></text>
+<path d="M86 160h66.37418655097613a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-66.37418655097613z" fill="#6e7681"/>
+<text x="163.37418655097613" y="170" font-size="12" fill="#f0f6fc">68.3 ms<tspan fill="#9198a1" font-weight="400">  3.2×</tspan></text>
 <text x="78" y="192" font-size="12" text-anchor="end" fill="#9198a1">TanStack AI</text>
-<path d="M86 182h48.384658143413006a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-48.384658143413006z" fill="#6e7681"/>
-<text x="145.384658143413" y="192" font-size="12" fill="#f0f6fc">49.6 ms<tspan fill="#9198a1" font-weight="400">  1.8×</tspan></text>
+<path d="M86 182h47.62147505422993a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-47.62147505422993z" fill="#6e7681"/>
+<text x="144.62147505422993" y="192" font-size="12" fill="#f0f6fc">50.1 ms<tspan fill="#9198a1" font-weight="400">  2.4×</tspan></text>
 <text x="430" y="78" font-size="13" font-weight="600" fill="#f0f6fc">Minified program size</text>
 <line x1="516" x2="516" y1="89" y2="199" stroke="#3d444d" stroke-width="1"/>
 <text x="508" y="104" font-size="12" text-anchor="end" fill="#f0f6fc" font-weight="600">Motty</text>
