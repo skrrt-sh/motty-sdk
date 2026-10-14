@@ -1,6 +1,7 @@
-import type { Contract, hosting } from '@mottyjs/core/host';
+import type { Caller, Contract, hosting } from '@mottyjs/core/host';
 import { type Bounds, bodyOf } from './body.ts';
 import type { Codec, LeftOut } from './codec.ts';
+import type { flights } from './flights.ts';
 import { failed, refused, streamed, watched, whole } from './reply.ts';
 import { credentials } from './routes.ts';
 
@@ -9,14 +10,38 @@ type Serving = {
   run: Contract['run'];
   keepAlive: number;
   body: Bounds;
-  begin: (stop: (reason: unknown) => void) => () => void;
+  begin: ReturnType<typeof flights>['begin'];
 };
+
+// What a host with a server of its own says of one request.
+export type FromHost = {
+  id?: string;
+  caller?: Caller;
+  waitUntil?: (work: Promise<unknown>) => void;
+};
+
+// A runtime's own context refuses its method unbound, so the work is handed
+// over on the object it came on. One that throws loses the host its wait and
+// nothing else: the request runs on, and its flight lands on the delivery.
+export function toldBy(from: FromHost) {
+  const { id, caller } = from;
+  return {
+    ...(id === undefined ? {} : { id }),
+    ...(caller === undefined ? {} : { caller }),
+    delivered: (work: Promise<void>): void => {
+      try {
+        from.waitUntil?.(work);
+      } catch {}
+    },
+  };
+}
 
 async function received(
   { admit, begin, body: bounds }: Serving,
   codec: Codec,
   request: Request,
   arrived: () => void,
+  from: FromHost,
 ) {
   const body = await bodyOf(codec, request, bounds);
   if (body instanceof Response) return body;
@@ -24,22 +49,28 @@ async function received(
   const decoded = codec.decode(body, request.headers);
   const leftOut = new Map<string, LeftOut>();
   let reported: string | undefined;
+  const told = toldBy(from);
+  // A request refused here was never in flight, so a report of it is the
+  // host's to wait for. The record comes only once the motty has run, and
+  // the flight has begun by then.
+  let { delivered } = told;
   try {
-    // A request refused here was never in flight. The record comes only once
-    // the motty has run, so the flight has begun by then.
     const admitted = await admit({
+      ...told,
       request: decoded.request,
       headers: request.headers,
       credentials: codec.credentials,
       removed: credentials,
       signal: request.signal,
-      over: () => landed(),
+      delivered: (work) => delivered(work),
       leftOut: () => [...leftOut.values()],
       reported: (id) => {
         reported = id;
       },
     });
-    const landed = begin(admitted.stop);
+    const flight = begin(admitted.stop);
+    delivered = flight.land;
+    told.delivered(flight.over);
     return { decoded, leftOut, ...admitted };
   } catch (thrown) {
     return failed(codec, thrown, reported);
@@ -53,8 +84,9 @@ export async function chat(
   // Called once the body is here whole: the server's idle timeout holds a
   // body that stalls, and must not hold an answer that takes long.
   arrived: () => void,
+  from: FromHost,
 ): Promise<Response> {
-  const asked = await received(serving, codec, request, arrived).catch(
+  const asked = await received(serving, codec, request, arrived, from).catch(
     (thrown: unknown) => failed(codec, thrown),
   );
   if (asked instanceof Response) return asked;

@@ -29,6 +29,18 @@ function ask(
   });
 }
 
+function question(stream: boolean): Request {
+  return new Request('http://motty.test/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'coder',
+      stream,
+      messages: [{ role: 'user', content: 'Why does this deadlock?' }],
+    }),
+  });
+}
+
 // Says the first words, then nothing until it is let go or stopped.
 function halting(release: Promise<void>, stopped?: () => void): ModelAdapter {
   return {
@@ -407,6 +419,205 @@ test('shutdown is bounded: what outlasts the wait is stopped, and its record say
       message: 'The server is shutting down',
     },
   });
+});
+
+test('shutdown waits for a record that is still being delivered', async () => {
+  const order: string[] = [];
+  const served = mount(coder, () => ({
+    models: [fake(on(gpt, 'Use a mutex.'))],
+    report: async () => {
+      await Bun.sleep(40);
+      order.push('delivered');
+    },
+  }));
+
+  await (await served.fetch(question(false))).text();
+  await served.close();
+  order.push('stopped');
+
+  expect(order).toEqual(['delivered', 'stopped']);
+});
+
+test('shutdown gives up on a record whose delivery outlasts the wait', async () => {
+  const served = mount(
+    coder,
+    () => ({
+      models: [fake(on(gpt, 'Use a mutex.'))],
+      report: () => Promise.withResolvers<void>().promise,
+    }),
+    { drain: 40 },
+  );
+
+  await (await served.fetch(question(false))).text();
+  const began = performance.now();
+  await served.close();
+
+  expect(performance.now() - began).toBeGreaterThanOrEqual(40);
+  expect(performance.now() - began).toBeLessThan(2_000);
+});
+
+test("the host is handed the delivery of a request's record, which settles only once an async report has", async () => {
+  const sent = Promise.withResolvers<void>();
+  const order: string[] = [];
+  const works: Promise<unknown>[] = [];
+  const served = mount(coder, () => ({
+    models: [fake(on(gpt, 'Use a mutex.'))],
+    report: async () => {
+      await sent.promise;
+      order.push('report');
+    },
+  }));
+
+  const reply = await served.fetch(question(false), undefined, {
+    waitUntil: (work) => works.push(work),
+  });
+  await reply.text();
+  const settled = works[0]?.then(() => order.push('work'));
+  await Bun.sleep(20);
+  expect(order).toEqual([]);
+
+  sent.resolve();
+  await settled;
+  expect(order).toEqual(['report', 'work']);
+  await served.close();
+});
+
+test.each([true, false])(
+  'the delivery is handed over while the request is taken in, before there is a reply: stream %p',
+  async (stream) => {
+    const release = Promise.withResolvers<void>();
+    const works: Promise<unknown>[] = [];
+    const served = mount(
+      motty({ name: 'coder' }).handle(async () => {
+        await release.promise;
+        return answer('Use a mutex.');
+      }),
+      () => ({}),
+    );
+    let replied = false;
+
+    const replying = served
+      .fetch(question(stream), undefined, {
+        waitUntil: (work) => works.push(work),
+      })
+      .finally(() => {
+        replied = true;
+      });
+    await Bun.sleep(20);
+    expect(works).toHaveLength(1);
+    expect(replied).toBe(false);
+
+    release.resolve();
+    expect(await (await replying).text()).toContain('Use a mutex.');
+    await works[0];
+    await served.close();
+  },
+);
+
+test('each admitted request hands over one delivery of its own', async () => {
+  const works: Promise<unknown>[] = [];
+  const served = mount(coder, () => ({
+    models: [fake(on(gpt, 'Use a mutex.'))],
+    report: () => Bun.sleep(5),
+  }));
+
+  for (const stream of [false, true, false]) {
+    const reply = await served.fetch(question(stream), undefined, {
+      waitUntil: (work) => works.push(work),
+    });
+    await reply.text();
+  }
+  await served.close();
+
+  expect(works).toHaveLength(3);
+  expect(new Set(works).size).toBe(3);
+});
+
+test('a report that rejects still settles the delivery, which never rejects', async () => {
+  const works: Promise<unknown>[] = [];
+  const served = mount(coder, () => ({
+    models: [fake(on(gpt, 'Use a mutex.'))],
+    report: () => Promise.reject(new Error('The sink is gone')),
+  }));
+
+  const reply = await served.fetch(question(false), undefined, {
+    waitUntil: (work) => works.push(work),
+  });
+
+  expect(reply.status).toBe(200);
+  expect(works).toHaveLength(1);
+  expect(await works[0]).toBeUndefined();
+  await served.close();
+});
+
+test('with no report the delivery still settles', async () => {
+  const works: Promise<unknown>[] = [];
+  const served = mount(coder, () => ({
+    models: [fake(on(gpt, 'Use a mutex.'))],
+  }));
+
+  const reply = await served.fetch(question(true), undefined, {
+    waitUntil: (work) => works.push(work),
+  });
+  await reply.text();
+
+  expect(works).toHaveLength(1);
+  expect(await works[0]).toBeUndefined();
+  await served.close();
+});
+
+test('a waitUntil that throws leaves the request answered as normal, and its flight still lands, so shutdown does not wait out the drain', async () => {
+  const reports: Report[] = [];
+  const served = mount(
+    coder,
+    () => ({
+      models: [fake(on(gpt, 'Use a mutex.'))],
+      report: (report) => reports.push(report),
+    }),
+    { drain: 5_000 },
+  );
+
+  const reply = await served.fetch(question(false), undefined, {
+    waitUntil: () => {
+      throw new Error('The context is gone');
+    },
+  });
+  expect(reply.status).toBe(200);
+  expect(await reply.json()).toMatchObject({
+    choices: [{ message: { content: 'Use a mutex.' } }],
+  });
+  const began = performance.now();
+  await served.close();
+
+  expect(performance.now() - began).toBeLessThan(1_000);
+  expect(reports).toMatchObject([{ outcome: 'completed' }]);
+});
+
+test('a second argument that is no server of Bun is no failure: called as a Workers module is, the edge answers and uses the context it was handed', async () => {
+  const context = {
+    held: new Set<Promise<unknown>>(),
+    // As a runtime's own context does, it refuses to be called unbound.
+    waitUntil(work: Promise<unknown>) {
+      this.held.add(work);
+    },
+    passThroughOnException() {},
+  };
+  const served = mount(coder, () => ({
+    models: [fake(on(gpt, 'Use a mutex.'))],
+  }));
+
+  const reply = await served.fetch(
+    question(false),
+    { UPSTREAM: 'https://upstream.test', timeout: 30 },
+    context,
+  );
+
+  expect(reply.status).toBe(200);
+  expect(await reply.json()).toMatchObject({
+    choices: [{ message: { content: 'Use a mutex.' } }],
+  });
+  expect(context.held.size).toBe(1);
+  await served.close();
 });
 
 test('a mounted motty leaves the process and the server to their host', async () => {

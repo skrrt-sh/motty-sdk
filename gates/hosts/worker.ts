@@ -19,12 +19,6 @@ if (UPSTREAM === undefined || RECORDS === undefined) {
   throw new Error('The worker has no UPSTREAM or no RECORDS');
 }
 
-const answered = host(loaded.default, { upstream: UPSTREAM, records: RECORDS });
-
-export default {
-  fetch: (
-    request: Request,
-    _env: unknown,
-    context: { waitUntil: (work: Promise<unknown>) => void },
-  ): Promise<Response> => answered(request, (work) => context.waitUntil(work)),
-};
+// The runtime calls the edge as it is: a record is delivered after the
+// response ends, and the context it hands over keeps the work alive.
+export default host(loaded.default, { upstream: UPSTREAM, records: RECORDS });

@@ -57,6 +57,7 @@ export type {
 export {
   type AuthAdapter,
   adapted,
+  givenId,
   type HostOptions,
   hosting,
   type ModelAdapter,

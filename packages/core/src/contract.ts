@@ -101,6 +101,8 @@ export type RequestRecord = {
     code?: ErrorFacts['code'];
     // What the failure said, so one a fallback recovered from is still told.
     message?: string;
+    // The upstream's own id for the response, to match a call against its logs.
+    id?: string;
     warnings?: NonNullable<Finish['warnings']>;
   })[];
   usage: Usage;

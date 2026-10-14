@@ -148,8 +148,10 @@ function percentile(sorted: number[], share: number) {
 async function report() {
   const chunksPerSample = 20_000;
   const rounds = 15;
+  // First and from a lean process: a start of a few milliseconds is the one
+  // most moved by a parent that holds every SDK and has just timed them all.
+  const cold = coldStart(21);
   const timed = await timePerCall(chunksPerSample, rounds);
-  const cold = coldStart(9);
   const size = await bundleSize();
 
   console.log(

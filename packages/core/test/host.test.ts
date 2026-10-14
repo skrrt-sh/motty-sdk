@@ -11,6 +11,7 @@ test('the host entry exports exactly the held values', () => {
     'disclosed',
     'forwarded',
     'fromFacts',
+    'givenId',
     'hosted',
     'hosting',
     'isMarked',

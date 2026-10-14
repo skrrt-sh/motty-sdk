@@ -1,18 +1,25 @@
-// A request is in flight until its record arrives: that is after the work
-// done once the response has ended, which the response does not wait for.
+// A request is in flight until its record has been delivered: that is after
+// the work done once the response has ended, which the response does not
+// wait for.
 export function flights() {
   const open = new Set<{
     over: Promise<void>;
     stop: (reason: unknown) => void;
   }>();
 
-  function begin(stop: (reason: unknown) => void): () => void {
+  function begin(stop: (reason: unknown) => void) {
     const landing = Promise.withResolvers<void>();
     const flight = { over: landing.promise, stop };
     open.add(flight);
-    return () => {
-      open.delete(flight);
-      landing.resolve();
+    return {
+      over: landing.promise,
+      // The work is the delivery of the record, and never rejects.
+      land: (work: Promise<void>): void => {
+        work.then(() => {
+          open.delete(flight);
+          landing.resolve();
+        });
+      },
     };
   }
 
