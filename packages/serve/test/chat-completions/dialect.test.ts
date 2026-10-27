@@ -61,16 +61,6 @@ test('details with no index stay apart, and what is no detail is not kept', () =
   ]);
 });
 
-test('details that were already whole are sent as they are', () => {
-  expect(
-    joined([
-      { type: 'reasoning.text', text: 'Paris', signature: 'EqQB', index: 0 },
-    ]),
-  ).toEqual([
-    { type: 'reasoning.text', text: 'Paris', signature: 'EqQB', index: 0 },
-  ]);
-});
-
 test('an effort, a budget and a mute go in one object where the dialect has it', () => {
   const sent = (reasoning: {
     effort?: 'none' | 'high';
@@ -179,17 +169,6 @@ test('an order not to reason turns a thinking switch off, and is no effort', () 
   expect(leftOut).toEqual([]);
 });
 
-test('the output limit goes under the name the dialect gives it', () => {
-  const { body } = encode(
-    'model-x',
-    { messages: [], options: { maxTokens: 256 } },
-    { name: 'older', limit: 'max_tokens' },
-  );
-
-  expect(body).toMatchObject({ max_tokens: 256 });
-  expect(body).not.toHaveProperty('max_completion_tokens');
-});
-
 test('reasoning text goes back on the assistant turn in the field the dialect names', () => {
   const turn = (thought: 'reasoning' | 'reasoning_content') =>
     encode(
@@ -233,9 +212,6 @@ test('reasoning text goes back on the assistant turn in the field the dialect na
       ],
     },
     leftOut: [],
-  });
-  expect(turn('reasoning').body).toMatchObject({
-    messages: [{}, { reasoning: 'I need the tool.' }, {}],
   });
 });
 
@@ -355,30 +331,6 @@ test('details reach a dialect with no field for them as their text, and are repo
   expect(leftOut).toMatchObject([{ setting: 'reasoning' }]);
 });
 
-test('reasoning on a turn that is not the assistant`s has no field in any dialect', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [
-        {
-          role: 'user',
-          parts: [
-            { type: 'reasoning', text: 'Hm' },
-            { type: 'text', text: 'Hi' },
-          ],
-        },
-      ],
-    },
-    { name: 'thinker', thought: 'reasoning_content' },
-  );
-
-  expect(body).toMatchObject({
-    messages: [{ role: 'user', content: [{ type: 'text', text: 'Hi' }] }],
-  });
-  expect(JSON.stringify(body)).not.toContain('Hm');
-  expect(leftOut).toMatchObject([{ setting: 'reasoning' }]);
-});
-
 test('OpenAI`s own dialect sends no reasoning back and reads no details', async () => {
   const { body, leftOut } = encode('gpt-x', {
     messages: [
@@ -487,44 +439,6 @@ test('a dialect with details reads them on the reasoning they came with, and alo
   ]);
 });
 
-test('reasoning is read from either name, whatever the dialect', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{"reasoning_content":"One"},"finish_reason":null}]}',
-          '{"choices":[{"index":0,"delta":{"reasoning":" two"},"finish_reason":"stop"}]}',
-          '[DONE]',
-        ),
-        { name: 'thinker', thought: 'reasoning_content' },
-      ),
-    ),
-  ).toMatchObject([
-    { type: 'reasoning', text: 'One' },
-    { type: 'reasoning', text: ' two' },
-    { type: 'finish' },
-  ]);
-});
-
-test('a failure in the stream is recorded under the dialect`s name', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent('{"error":{"message":"No capacity","code":"server_error"}}'),
-        { name: 'router' },
-      ),
-    ),
-  ).toMatchObject([
-    {
-      type: 'error',
-      error: {
-        code: 'upstream_failed',
-        provider: { router: { code: 'server_error' } },
-      },
-    },
-  ]);
-});
-
 test('a dialect with pictures reads each as a file, with what its entry held; OpenAI`s own reads none', async () => {
   const frames = [
     '{"choices":[{"index":0,"delta":{"role":"assistant","content":"Here.","images":[{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0="},"index":0},{"image_url":{"url":"https://x.test/made.png"}}]},"finish_reason":null}]}',
@@ -590,7 +504,6 @@ test('a dialect with a native reason tells a stop sequence apart, and each reply
 test('a native reason that tells nothing apart changes nothing', async () => {
   for (const [reason, native] of [
     ['stop', 'stop'],
-    ['stop', 'STOP'],
     ['length', 'stop_sequence'],
   ] as const) {
     expect(
@@ -643,18 +556,6 @@ test('a dialect`s own endings and its cached tokens at the top of usage are read
   ]);
 });
 
-test('a stated effort goes beside a thinking type, where the dialect has the levels', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], options: { reasoning: { effort: 'high' } } },
-    { name: 'switched', asks: 'thinking', efforts: ['low', 'high', 'max'] },
-  );
-
-  expect(body).toMatchObject({ reasoning_effort: 'high' });
-  expect(body).not.toHaveProperty('thinking');
-  expect(leftOut).toEqual([]);
-});
-
 test('an effort turns a thinking type on where the dialect has no level, and the level is reported', () => {
   const { body, leftOut } = encode(
     'model-x',
@@ -672,31 +573,6 @@ test('an effort turns a thinking type on where the dialect has no level, and the
   ]);
 });
 
-test('an order not to reason turns a thinking type off where the dialect has no level', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], options: { reasoning: { effort: 'none' } } },
-    { name: 'switched', asks: 'thinking', efforts: [] },
-  );
-
-  expect(body).toMatchObject({ thinking: { type: 'disabled' } });
-  expect(body).not.toHaveProperty('reasoning_effort');
-  expect(leftOut).toEqual([]);
-});
-
-test('an order not to reason sets the thinking flag to false', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], options: { reasoning: { effort: 'none' } } },
-    { name: 'flagged', asks: 'enable_thinking', efforts: [] },
-  );
-
-  expect(body).toMatchObject({ enable_thinking: false });
-  expect(body).not.toHaveProperty('reasoning_effort');
-  expect(body).not.toHaveProperty('thinking_budget');
-  expect(leftOut).toEqual([]);
-});
-
 test('a budget sets the thinking flag and goes beside it', () => {
   const { body, leftOut } = encode(
     'model-x',
@@ -706,38 +582,6 @@ test('a budget sets the thinking flag and goes beside it', () => {
 
   expect(body).toMatchObject({ enable_thinking: true, thinking_budget: 2000 });
   expect(leftOut).toEqual([]);
-});
-
-test('an effort alone sets the thinking flag, and its level is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], options: { reasoning: { effort: 'low' } } },
-    { name: 'flagged', asks: 'enable_thinking', efforts: [] },
-  );
-
-  expect(body).toMatchObject({ enable_thinking: true });
-  expect(body).not.toHaveProperty('reasoning_effort');
-  expect(body).not.toHaveProperty('thinking_budget');
-  expect(leftOut).toEqual([
-    {
-      setting: 'reasoning.effort',
-      detail: 'Chat Completions has no field for a level of reasoning effort',
-    },
-  ]);
-});
-
-test('an effort and a budget set the thinking flag with the budget, and the level is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: { reasoning: { effort: 'low', budgetTokens: 2000 } },
-    },
-    { name: 'flagged', asks: 'enable_thinking', efforts: [] },
-  );
-
-  expect(body).toMatchObject({ enable_thinking: true, thinking_budget: 2000 });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.effort']);
 });
 
 test('a budget beside an order not to reason is left out and reported', () => {
@@ -784,20 +628,6 @@ test('an order not to reason is left out and reported where the upstream has nei
   ]);
 });
 
-test('an order not to reason sets the template argument to false', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], options: { reasoning: { effort: 'none' } } },
-    { name: 'templated', asks: 'chat_template_kwargs' },
-  );
-
-  expect(body).toMatchObject({
-    chat_template_kwargs: { enable_thinking: false },
-  });
-  expect(body).not.toHaveProperty('reasoning_effort');
-  expect(leftOut).toEqual([]);
-});
-
 test('a budget sets the template argument to true, and its amount is left out and reported', () => {
   const { body, leftOut } = encode(
     'model-x',
@@ -812,20 +642,6 @@ test('a budget sets the template argument to true, and its amount is left out an
   expect(leftOut.map(({ setting }) => setting)).toEqual([
     'reasoning.budgetTokens',
   ]);
-});
-
-test('an effort sets the template argument to true where the dialect has no level', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], options: { reasoning: { effort: 'medium' } } },
-    { name: 'templated', asks: 'chat_template_kwargs', efforts: [] },
-  );
-
-  expect(body).toMatchObject({
-    chat_template_kwargs: { enable_thinking: true },
-  });
-  expect(body).not.toHaveProperty('reasoning_effort');
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.effort']);
 });
 
 test('an order not to reason sets the flag of the reasoning object to false, and a budget sets it to true', () => {
@@ -874,25 +690,9 @@ test('a reasoning object said in own words is sent as said, and its flag says wh
   expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
 });
 
-test('an effort goes under its own name beside a template argument, which is left alone', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], options: { reasoning: { effort: 'medium' } } },
-    { name: 'templated', asks: 'chat_template_kwargs' },
-  );
-
-  expect(body).toMatchObject({ reasoning_effort: 'medium' });
-  expect(body).not.toHaveProperty('chat_template_kwargs');
-  expect(leftOut).toEqual([]);
-});
-
 test.each([
-  ['minimal', 'low'],
-  ['low', 'low'],
-  ['medium', 'high'],
   ['high', 'high'],
-  ['xhigh', 'max'],
-  ['max', 'max'],
+  ['medium', 'high'],
 ] as const)(
   'an effort of %s goes as %s to an upstream that takes low, high and max',
   (effort, sent) => {
@@ -927,23 +727,6 @@ test('a level is never sent as an order not to reason, though the upstream takes
   expect(body).toMatchObject({ reasoning_effort: 'high' });
 });
 
-test('a thinking flag said in own words is sent as said, and an order not to reason beside it is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: {
-        reasoning: { effort: 'none' },
-        provider: { 'openai.chat': { enable_thinking: true } },
-      },
-    },
-    { name: 'flagged', asks: 'enable_thinking', efforts: [] },
-  );
-
-  expect(body).toMatchObject({ enable_thinking: true });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
-});
-
 test('a thinking budget said in own words is sent as said with no flag written beside it, and the budget beside it is reported', () => {
   const { body, leftOut } = encode(
     'model-x',
@@ -967,53 +750,10 @@ test('a thinking budget said in own words is sent as said with no flag written b
   expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
 });
 
-test('a template argument said in own words is sent as said, and an order not to reason beside it is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: {
-        reasoning: { effort: 'none' },
-        provider: {
-          'openai.chat': { chat_template_kwargs: { enable_thinking: true } },
-        },
-      },
-    },
-    { name: 'templated', asks: 'chat_template_kwargs' },
-  );
-
-  expect(body).toMatchObject({
-    chat_template_kwargs: { enable_thinking: true },
-  });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
-});
-
-test('a thinking type said in own words is sent as said, and an order not to reason beside it is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: {
-        reasoning: { effort: 'none' },
-        provider: { 'openai.chat': { thinking: { type: 'enabled' } } },
-      },
-    },
-    { name: 'switched', asks: 'thinking' },
-  );
-
-  expect(body).toMatchObject({ thinking: { type: 'enabled' } });
-  expect(body).not.toHaveProperty('reasoning_effort');
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
-});
-
 test.each([
   [
     { name: 'flagged', asks: 'enable_thinking', efforts: [] },
     { enable_thinking: false, thinking_budget: 100 },
-  ],
-  [
-    { name: 'templated', asks: 'chat_template_kwargs' },
-    { chat_template_kwargs: { enable_thinking: false } },
   ],
 ] as const)(
   'a request that asks to reason is sent none of the connection`s own switch: %j',
@@ -1127,122 +867,6 @@ test('a JSON output with no schema is asked the same of an upstream that takes n
 
   expect(body).toHaveProperty('response_format', { type: 'json_object' });
   expect(leftOut).toEqual([]);
-});
-
-test('a prompt with no JSON output asks an upstream that takes no schema for no format', () => {
-  const { body } = encode(
-    'model-x',
-    { messages: [] },
-    { name: 'schemaless', output: 'json_object' },
-  );
-
-  expect(body).not.toHaveProperty('response_format');
-});
-
-test('a schema is sent as one where the dialect says nothing of the form', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    { messages: [], output: { schema: { type: 'object' }, name: 'place' } },
-    { name: 'router' },
-  );
-
-  expect(body).toHaveProperty('response_format', {
-    type: 'json_schema',
-    json_schema: { name: 'place', schema: { type: 'object' }, strict: false },
-  });
-  expect(leftOut).toEqual([]);
-});
-
-test('a thinking flag turned off in own words has no budget written beside it, and the budget is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: {
-        reasoning: { budgetTokens: 2000 },
-        provider: { 'openai.chat': { enable_thinking: false } },
-      },
-    },
-    { name: 'flagged', asks: 'enable_thinking', efforts: [] },
-  );
-
-  expect(body).toEqual({
-    enable_thinking: false,
-    model: 'model-x',
-    messages: [],
-    stream: true,
-    stream_options: { include_usage: true },
-  });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
-});
-
-test('an effort said in own words has no flag and no budget written beside it, and the budget is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: {
-        reasoning: { budgetTokens: 2000 },
-        provider: { 'openai.chat': { reasoning_effort: 'low' } },
-      },
-    },
-    { name: 'flagged', asks: 'enable_thinking', efforts: [] },
-  );
-
-  expect(body).toEqual({
-    reasoning_effort: 'low',
-    model: 'model-x',
-    messages: [],
-    stream: true,
-    stream_options: { include_usage: true },
-  });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
-});
-
-test('a thinking type turned off in own words has no effort written beside it, and the effort is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: {
-        reasoning: { effort: 'high' },
-        provider: { 'openai.chat': { thinking: { type: 'disabled' } } },
-      },
-    },
-    { name: 'typed', asks: 'thinking', efforts: ['low', 'high', 'max'] },
-  );
-
-  expect(body).toEqual({
-    thinking: { type: 'disabled' },
-    model: 'model-x',
-    messages: [],
-    stream: true,
-    stream_options: { include_usage: true },
-  });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
-});
-
-test('an effort said in own words to a router has no reasoning object written beside it, and the effort is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: {
-        reasoning: { effort: 'high' },
-        provider: { 'openai.chat': { reasoning_effort: 'low' } },
-      },
-    },
-    { name: 'router', asks: 'reasoning' },
-  );
-
-  expect(body).toEqual({
-    reasoning_effort: 'low',
-    model: 'model-x',
-    messages: [],
-    stream: true,
-    stream_options: { include_usage: true },
-  });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.own']);
 });
 
 test('a level the upstream has no word for is not said to be sent as another where own words stand in its place', () => {

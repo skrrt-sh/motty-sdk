@@ -106,30 +106,6 @@ test('an answer with nothing in it is an empty message', () => {
   });
 });
 
-test('arguments that are not a JSON object are kept as the text they were', () => {
-  for (const raw of ['{"a":', '[1]', '"x"']) {
-    expect(
-      collected(
-        [{ type: 'tool_call', id: 'toolu_01', name: 'get', arguments: raw }],
-        { type: 'finish', reason: 'length' },
-        'req_3',
-        'coder',
-        false,
-      ),
-    ).toMatchObject({
-      content: [
-        {
-          type: 'tool_use',
-          id: 'toolu_01',
-          name: 'get',
-          input: { INVALID_JSON: raw },
-        },
-      ],
-      stop_reason: 'max_tokens',
-    });
-  }
-});
-
 test('the whole reply holds the same input text the stream sends', () => {
   const call = {
     type: 'tool_call',

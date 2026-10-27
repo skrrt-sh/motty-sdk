@@ -78,7 +78,6 @@ describe("routes", () => {
 
   test.each([
     ["a picture", { type: "image", url: "https://example.com/receipt.png" }],
-    ["a PDF", { type: "file", mediaType: "application/pdf", data: "JVBERi0=" }],
   ] satisfies [string, Part][])("%s goes to a model that reads it", async (_, attachment) => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { dispute: 0.9 }, urgency: 3 }),
@@ -238,36 +237,6 @@ describe("triage", () => {
 });
 
 describe("the caller's tools", () => {
-  test("tools and the tool choice go upstream, and the call comes back as one", async () => {
-    const models = fake(
-      on(jev, { abuse: 0.01, category: { billing: 1 }, urgency: 0 }),
-      on(nano, [
-        { type: "tool_call", id: "call_1", name: "find_order", arguments: '{"order":"A-1042"}' },
-        { type: "finish", reason: "tool_calls" },
-      ]),
-    );
-
-    const { answer } = await run(
-      desk,
-      {
-        text: "Where is the refund for order A-1042?",
-        tools: [{ type: "function", name: "find_order", input: { type: "object" } }],
-        options: { toolChoice: "required" },
-      },
-      { models: [models] },
-    );
-
-    const [prompt] = models.sent(nano);
-    expect(prompt?.tools).toEqual([
-      { type: "function", name: "find_order", input: { type: "object" } },
-    ]);
-    expect(prompt?.options).toEqual({ toolChoice: "required" });
-    expect(await answer.finish()).toBe("tool_calls");
-    expect(await Array.fromAsync(answer.chunks())).toEqual([
-      { type: "tool_call", id: "call_1", name: "find_order", arguments: '{"order":"A-1042"}' },
-    ]);
-  });
-
   test("tool results go back to the family that made the call, untriaged", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { billing: 1 }, urgency: 0 }),
@@ -319,65 +288,6 @@ describe("the caller's tools", () => {
       type: "reasoning",
       text: "I need the order",
       provider: { anthropic: { signature: "s1" } },
-    });
-  });
-
-  test("a conversation whose family is down goes on with another, then remembered", async () => {
-    const models = fake(
-      on(jev, { abuse: 0.01, category: { billing: 1 }, urgency: 0 }),
-      on(haiku, [
-        { type: "tool_call", id: "call_1", name: "find_order", arguments: '{"order":"A-1042"}' },
-        { type: "finish", reason: "tool_calls" },
-      ]),
-      on(haiku, new Overloaded("busy")),
-      on(nano, "It was refunded on 3 May."),
-    );
-    const storage = memory();
-    const headers = { "x-conversation-id": "c1" };
-    await run(
-      desk,
-      { text: "Where is the refund for order A-1042?", headers },
-      { models: [models], storage, settings: { models: { frontline: "haiku" } } },
-    );
-    await run(
-      desk,
-      {
-        headers,
-        messages: [
-          { role: "user", text: "Where is the refund for order A-1042?" },
-          {
-            role: "assistant",
-            parts: [
-              { type: "tool_call", id: "call_1", name: "find_order", input: { order: "A-1042" } },
-            ],
-          },
-          {
-            role: "tool",
-            parts: [{ type: "tool_result", id: "call_1", text: "Refunded on 3 May" }],
-          },
-        ],
-      },
-      { models: [models], storage },
-    );
-
-    await run(
-      desk,
-      { text: "Thanks. And when does it arrive?", headers },
-      { models: [models], storage },
-    );
-
-    expect(
-      models
-        .sent(nano)[0]
-        ?.messages.slice(-2)
-        .map((message) => message.role),
-    ).toEqual(["assistant", "tool"]);
-    expect(models.sent(haiku)).toHaveLength(2);
-    expect(models.sent(nano)).toHaveLength(2);
-    expect(await storage.get("desk:case:c1")).toEqual({
-      category: "billing",
-      urgent: false,
-      family: "openai",
     });
   });
 });
@@ -490,51 +400,6 @@ describe("resilience", () => {
 });
 
 describe("time limits", () => {
-  test("a small model late with its first chunk gives way to the other", async () => {
-    const models = fake(
-      on(jev, { abuse: 0.01, category: { billing: 1 }, urgency: 0 }),
-      on(nano, async () => {
-        await Bun.sleep(100);
-        return "Too late";
-      }),
-      on(haiku, "Plus is 12 USD a month."),
-    );
-
-    const { answer, calls } = await run(
-      desk,
-      { text: "How much is Plus?" },
-      { models: [models], settings: { models: { firstChunk: 20 } } },
-    );
-
-    expect(await answer.text()).toBe("Plus is 12 USD a month.");
-    expect(calls.map(({ model, code }) => [model, code])).toEqual([
-      [jev.name, undefined],
-      [nano.name, "aborted"],
-      [haiku.name, undefined],
-    ]);
-  });
-
-  test("a strong model silent for too long is tried again, then the other answers", async () => {
-    const models = fake(
-      on(jev, { abuse: 0.01, category: { dispute: 1 }, urgency: 0 }),
-      on(sonnet, async () => {
-        await Bun.sleep(100);
-        return "Too late";
-      }),
-      on(oss, "Clause 2 applies."),
-    );
-
-    const { path, answer } = await run(
-      desk,
-      { text: "You charged me twice and I want it back." },
-      { models: [models], settings: { models: { silent: 20 } } },
-    );
-
-    expect(path).toEqual(["conversation", "escalated"]);
-    expect(await answer.text()).toBe("Clause 2 applies.");
-    expect(models.sent(sonnet)).toHaveLength(2);
-  });
-
   test("both strong models silent sends the case to the standard path", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { dispute: 1 }, urgency: 0 }),

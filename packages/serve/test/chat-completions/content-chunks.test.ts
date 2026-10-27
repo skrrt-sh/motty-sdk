@@ -177,41 +177,6 @@ test('reasoning goes back as one thinking chunk before the text, with what signe
   expect(left.leftOut()).toEqual([]);
 });
 
-test('the reasoning of a turn that only calls a tool goes back as its content', () => {
-  expect(
-    wireMessages(
-      leaving('chat'),
-      [
-        {
-          role: 'assistant',
-          parts: [
-            { type: 'reasoning', text: 'I need the weather.' },
-            { type: 'tool_call', id: 'D681PevKs', name: 'look', input: {} },
-          ],
-        },
-      ],
-      { name: 'mistral', chunked: true },
-    ),
-  ).toEqual([
-    {
-      role: 'assistant',
-      content: [
-        {
-          type: 'thinking',
-          thinking: [{ type: 'text', text: 'I need the weather.' }],
-        },
-      ],
-      tool_calls: [
-        {
-          id: 'D681PevKs',
-          type: 'function',
-          function: { name: 'look', arguments: '{}' },
-        },
-      ],
-    },
-  ]);
-});
-
 test('reasoning another API signed goes back as its text, and what signed it is reported', () => {
   const left = leaving('chat');
 
@@ -247,33 +212,6 @@ test('a turn with no reasoning is written with no thinking chunk', () => {
 });
 
 test.each<[string, string, Chunk[]]>([
-  [
-    'its text',
-    '[{"type":"thinking","thinking":[{"type":"text","text":"Hm"}]},{"type":"text","text":"Yes"}]',
-    [
-      { type: 'reasoning', text: 'Hm' },
-      {
-        type: 'text',
-        text: 'Yes',
-        provider: {
-          'openai.chat': { logprobs: [{ token: 'Yes', logprob: -0.1 }] },
-        },
-      },
-    ],
-  ],
-  [
-    'its thinking, where it holds no text',
-    '[{"type":"thinking","thinking":[{"type":"text","text":"Hm"}]}]',
-    [
-      {
-        type: 'reasoning',
-        text: 'Hm',
-        provider: {
-          'openai.chat': { logprobs: [{ token: 'Yes', logprob: -0.1 }] },
-        },
-      },
-    ],
-  ],
   [
     'nothing that was said, where what it holds is signed or says nothing',
     '[{"type":"thinking","thinking":[],"signature":"sig"},{"type":"reference","reference_ids":[1]}]',

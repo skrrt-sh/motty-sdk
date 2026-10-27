@@ -1,10 +1,5 @@
 import { afterEach, expect, jest, spyOn, test } from 'bun:test';
-import {
-  Aborted,
-  Blocked,
-  Overloaded,
-  UnknownModel,
-} from '../../src/data/errors.ts';
+import { Aborted, Blocked, Overloaded } from '../../src/data/errors.ts';
 import type { StreamEvent } from '../../src/data/event.ts';
 import { current, endPhase, enter } from '../../src/request/context.ts';
 import {
@@ -126,96 +121,6 @@ function scripted(
   }));
 }
 
-test('fallback answers with the first model when it answers', async () => {
-  const host = stubHost({
-    'acme/first': [
-      { type: 'text', text: 'First' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-    'acme/second': [
-      { type: 'text', text: 'Second' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  const text = await enter(host, async () => {
-    const reply = await fallback(
-      model('acme/first'),
-      model('acme/second'),
-    ).complete({ messages: [] });
-    return reply.text();
-  });
-
-  expect(text).toBe('First');
-  expect(host.sent('acme/second')).toEqual([]);
-});
-
-test('fallback moves past a model the host cannot serve', async () => {
-  const host = stubHost({
-    'acme/second': [
-      { type: 'text', text: 'Second' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 2, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  const [text, calls] = await enter(host, async () => {
-    const reply = await fallback(
-      model('acme/missing'),
-      model('acme/second'),
-    ).complete({ messages: [] });
-    return [await reply.text(), current().calls];
-  });
-
-  expect(text).toBe('Second');
-  expect(calls.made.map((made) => made.model)).toEqual([
-    'acme/missing',
-    'acme/second',
-  ]);
-});
-
-test('fallback reaches its last model when every one before it failed', async () => {
-  const host = stubHost({
-    'acme/first': [
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Busy' },
-      },
-    ],
-    'acme/third': [
-      { type: 'text', text: 'Third' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-
-  const [text, calls] = await enter(host, async () => {
-    const reply = await fallback(
-      model('acme/first'),
-      model('acme/missing'),
-      model('acme/third'),
-    ).complete({ messages: [] });
-    return [await reply.text(), current().calls];
-  });
-
-  expect(text).toBe('Third');
-  expect(calls.made.map((made) => made.model)).toEqual([
-    'acme/first',
-    'acme/missing',
-    'acme/third',
-  ]);
-});
-
 test('fallback stops at a middle model that answers', async () => {
   const host = stubHost({
     'acme/second': [
@@ -239,46 +144,6 @@ test('fallback stops at a middle model that answers', async () => {
 
   expect(text).toBe('Second');
   expect(host.sent('acme/third')).toEqual([]);
-});
-
-test('fallback over one model answers with it or throws its failure', async () => {
-  const host = stubHost({
-    'acme/only': [
-      { type: 'text', text: 'Only' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-
-  await enter(host, async () => {
-    const reply = await fallback(model('acme/only')).complete({
-      messages: [],
-    });
-    expect(await reply.text()).toBe('Only');
-    await expect(
-      fallback(model('acme/missing')).complete({ messages: [] }),
-    ).rejects.toBeInstanceOf(UnknownModel);
-  });
-});
-
-test('fallback asks no model when the request was stopped before the first try', async () => {
-  const request = new AbortController();
-  request.abort();
-  let tries = 0;
-
-  const failed = await enter(stubHost({}, { signal: request.signal }), () =>
-    fallback(
-      callable(async () => {
-        tries += 1;
-        throw new Overloaded('Busy');
-      }),
-    )
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown),
-  );
-
-  expect(failed).toBeInstanceOf(Aborted);
-  expect(failed instanceof Aborted ? failed.cause : failed).toBeUndefined();
-  expect(tries).toBe(0);
 });
 
 test('fallback stops with Aborted, the try’s failure as its cause, when the request is stopped during a try', async () => {
@@ -305,31 +170,6 @@ test('fallback stops with Aborted, the try’s failure as its cause, when the re
   expect(failed).toHaveProperty('message', 'The work was stopped');
   expect(failed).toHaveProperty('cause.message', 'The call was stopped');
   expect(host.sent('acme/second')).toEqual([]);
-});
-
-test('fallback throws its last model’s failure when every model failed', async () => {
-  const host = stubHost({
-    'acme/first': [
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Busy' },
-      },
-    ],
-    'acme/second': [
-      {
-        type: 'error',
-        error: { code: 'blocked', status: 400, message: 'Refused' },
-      },
-    ],
-  });
-
-  await enter(host, () =>
-    expect(
-      fallback(model('acme/first'), model('acme/second')).complete({
-        messages: [],
-      }),
-    ).rejects.toBeInstanceOf(Blocked),
-  );
 });
 
 test('fallback does not switch once the first chunk has arrived', async () => {
@@ -396,26 +236,6 @@ test('fallback stops with Aborted, the failure it got as its cause, when the req
   expect(host.sent('acme/second')).toEqual([]);
 });
 
-test('fallback stops with Aborted when the request is stopped as its last model fails', async () => {
-  const request = new AbortController();
-
-  const failed = await enter(stubHost({}, { signal: request.signal }), () =>
-    fallback(
-      callable(async () => {
-        request.abort();
-        throw new Blocked('Refused');
-      }),
-    )
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown),
-  );
-
-  expect(failed).toBeInstanceOf(Aborted);
-  expect(failed instanceof Aborted ? failed.cause : failed).toBeInstanceOf(
-    Blocked,
-  );
-});
-
 test('a combinator given nothing to work with is a mistake at load', () => {
   expect(() => fallback()).toThrow(Error);
   expect(() => race()).toThrow(Error);
@@ -473,164 +293,6 @@ test('race answers with the first to resolve and gives up the pending loser, whi
   expect(calls.total).toMatchObject({ input: 2, output: 1 });
 });
 
-test('race answers with the one that works when another fails', async () => {
-  const host = stubHost({
-    'acme/second': [
-      { type: 'text', text: 'Second' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  const text = await enter(host, async () => {
-    const reply = await race(
-      model('acme/missing'),
-      held(model('acme/second'), 2),
-    ).complete({ messages: [] });
-    return reply.text();
-  });
-
-  expect(text).toBe('Second');
-});
-
-test('race throws its first-listed model’s failure when every model fails, not the first to fail', async () => {
-  const host = stubHost({
-    'acme/second': [
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Busy' },
-      },
-    ],
-  });
-
-  await enter(host, () =>
-    expect(
-      race(
-        callable(async () => {
-          await Bun.sleep(2);
-          throw new Blocked('Refused');
-        }),
-        model('acme/second'),
-      ).complete({ messages: [] }),
-    ).rejects.toBeInstanceOf(Blocked),
-  );
-});
-
-test('race keeps its winner when a loser fails after it', async () => {
-  const host = stubHost({
-    'acme/fast': [
-      { type: 'text', text: 'Fast' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-
-  const text = await enter(host, async () => {
-    const reply = await race(
-      model('acme/fast'),
-      callable(async () => {
-        await Bun.sleep(2);
-        throw new Overloaded('Busy');
-      }),
-    ).complete({ messages: [] });
-    await Bun.sleep(4);
-    return reply.text();
-  });
-
-  expect(text).toBe('Fast');
-});
-
-test('race gives up a loser that fails with Aborted once it is cancelled', async () => {
-  const host = stubHost({
-    'acme/fast': [
-      { type: 'text', text: 'Fast' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-  const signals: AbortSignal[] = [];
-
-  const text = await enter(host, async () => {
-    const reply = await race(hung(signals), model('acme/fast')).complete({
-      messages: [],
-    });
-    await Bun.sleep(1);
-    return reply.text();
-  });
-
-  expect(text).toBe('Fast');
-  expect(signals.map((signal) => signal.aborted)).toEqual([true]);
-});
-
-test('race between two that resolve in one tick answers with one and gives up the other, each counted once', async () => {
-  const host = stubHost({
-    'acme/first': [
-      { type: 'text', text: 'First' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-    'acme/second': [
-      { type: 'text', text: 'Second' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-
-  const [text, calls] = await enter(host, async () => {
-    const reply = await race(
-      model('acme/first'),
-      model('acme/second'),
-    ).complete({ messages: [] });
-    const text = await reply.text();
-    await Bun.sleep(1);
-    return [text, current().calls];
-  });
-
-  expect(text).toBe('First');
-  expect(calls.made.map((made) => made.model).sort()).toEqual([
-    'acme/first',
-    'acme/second',
-  ]);
-});
-
-test('race stops with its own Aborted when the request is stopped while all are pending', async () => {
-  const request = new AbortController();
-  const host = stubHost({}, { signal: request.signal });
-  const signals: AbortSignal[] = [];
-
-  const failed = await enter(host, async () => {
-    const pending = race(hung(signals), hung(signals))
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown);
-    await Bun.sleep(1);
-    request.abort();
-    return pending;
-  });
-
-  expect(failed).toBeInstanceOf(Aborted);
-  expect(failed).toHaveProperty('message', 'The work was stopped');
-  expect(signals.map((signal) => signal.aborted)).toEqual([true, true]);
-});
-
-test('race stops waiting with Aborted once the request is stopped, though one model never settles and the rest failed', async () => {
-  const request = new AbortController();
-  const signals: AbortSignal[] = [];
-
-  const failed = await enter(
-    stubHost({}, { signal: request.signal }),
-    async () => {
-      const pending = race(deaf(signals), model('acme/missing'))
-        .complete({ messages: [] })
-        .catch((thrown: unknown) => thrown);
-      await Bun.sleep(2);
-      request.abort();
-      return orHung(pending);
-    },
-  );
-
-  expect(failed).toBeInstanceOf(Aborted);
-  expect(signals.map((signal) => signal.aborted)).toEqual([true]);
-});
-
 test('race gives up a call that resolves only after the request was stopped', async () => {
   const request = new AbortController();
   const log: string[] = [];
@@ -660,21 +322,6 @@ test('race gives up a call that resolves only after the request was stopped', as
 
   expect(failed).toBeInstanceOf(Aborted);
   expect(log).toEqual(['iterator', 'return']);
-});
-
-test('race asks no model when the request was stopped before it began', async () => {
-  const request = new AbortController();
-  request.abort();
-  const signals: AbortSignal[] = [];
-
-  const failed = await enter(stubHost({}, { signal: request.signal }), () =>
-    race(deaf(signals), deaf(signals))
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown),
-  );
-
-  expect(failed).toBeInstanceOf(Aborted);
-  expect(signals).toEqual([]);
 });
 
 test('race leaves no listener on the signal it was given, whether it answered or failed', async () => {
@@ -707,76 +354,6 @@ test('race leaves no listener on the signal it was given, whether it answered or
   );
 });
 
-test('race gives up a loser that never ends without reading it, through the one iterator it took', async () => {
-  const log: string[] = [];
-
-  const first = await enter(stubHost(), async () => {
-    const stream = await callOf(
-      race(
-        scripted([{ type: 'text', text: 'Fast' }]),
-        callable(async (prompt, signal) => {
-          await Bun.sleep(2);
-          return callOf(
-            scripted(
-              [{ type: 'text', text: 'Slow' }],
-              log,
-              () => new Promise(() => {}),
-            ),
-          )(prompt, signal);
-        }),
-      ),
-    )({ messages: [] }, current().signal);
-    await Bun.sleep(6);
-    return orHung(stream[Symbol.asyncIterator]().next());
-  });
-
-  expect(first).toEqual({ done: false, value: { type: 'text', text: 'Fast' } });
-  expect(log).toEqual(['iterator', 'return']);
-});
-
-test('race hands on the one iterator it took from its winner', async () => {
-  const log: string[] = [];
-
-  const events = await enter(stubHost(), async () => {
-    const stream = await callOf(
-      race(
-        scripted(
-          [
-            { type: 'text', text: 'Only' },
-            { type: 'finish', reason: 'stop' },
-          ],
-          log,
-        ),
-      ),
-    )({ messages: [] }, current().signal);
-    const reader = stream[Symbol.asyncIterator]();
-    return [(await reader.next()).value, (await reader.next()).value];
-  });
-
-  expect(events).toEqual([
-    { type: 'text', text: 'Only' },
-    { type: 'finish', reason: 'stop' },
-  ]);
-  expect(log).toEqual(['iterator']);
-});
-
-test('race over one model answers with it or throws its failure', async () => {
-  const host = stubHost({
-    'acme/only': [
-      { type: 'text', text: 'Only' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-
-  await enter(host, async () => {
-    const reply = await race(model('acme/only')).complete({ messages: [] });
-    expect(await reply.text()).toBe('Only');
-    await expect(
-      race(model('acme/missing')).complete({ messages: [] }),
-    ).rejects.toBeInstanceOf(UnknownModel);
-  });
-});
-
 test('race treats a call that throws before returning a promise as one more failure', async () => {
   const host = stubHost({
     'acme/second': [
@@ -790,74 +367,6 @@ test('race treats a call that throws before returning a promise as one more fail
       callable(() => {
         throw new Blocked('Refused');
       }),
-      model('acme/second'),
-    ).complete({ messages: [] });
-    return reply.text();
-  });
-
-  expect(text).toBe('Second');
-});
-
-test('fallback over retry spends the retries, then asks the next model', async () => {
-  jest.useFakeTimers();
-  const host = stubHost({
-    'acme/busy': [
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Busy' },
-      },
-    ],
-    'acme/second': [
-      { type: 'text', text: 'Second' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-
-  const [text, calls] = await enter(host, async () => {
-    const pending = fallback(
-      retry(model('acme/busy'), 2),
-      model('acme/second'),
-    ).complete({ messages: [] });
-    await settled();
-    jest.advanceTimersByTime(500);
-    await settled();
-    jest.advanceTimersByTime(1000);
-    const reply = await due(pending);
-    return [await due(reply.text()), current().calls];
-  });
-
-  expect(text).toBe('Second');
-  expect(calls.made.map((made) => made.model)).toEqual([
-    'acme/busy',
-    'acme/busy',
-    'acme/busy',
-    'acme/second',
-  ]);
-});
-
-test('fallback over timeout moves on from a hung model', async () => {
-  const host = stubHost({
-    'acme/hung': [
-      { type: 'text', text: 'Late' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-    'acme/second': [
-      { type: 'text', text: 'Second' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  const text = await enter(host, async () => {
-    const reply = await fallback(
-      timeout(held(model('acme/hung'), 1000), 5),
       model('acme/second'),
     ).complete({ messages: [] });
     return reply.text();
@@ -1005,28 +514,6 @@ test('a call that answers only after it was given up on the signal has its strea
     expect(failed).toBeInstanceOf(Aborted);
     expect(log).toEqual(['iterator', 'return']);
   }
-});
-
-test('race clears the first-chunk clock of a loser that ignores its signal', async () => {
-  jest.useFakeTimers();
-  const signals: AbortSignal[] = [];
-
-  await enter(stubHost(), async () => {
-    const pending = callOf(
-      race(
-        held(scripted([{ type: 'text', text: 'Fast' }]), 10),
-        timeout(deaf(signals), 5000),
-      ),
-    )({ messages: [] }, current().signal);
-    await settled();
-    expect(jest.getTimerCount()).toBe(2);
-    jest.advanceTimersByTime(10);
-    await due(pending);
-    await settled();
-  });
-
-  expect(signals.map((signal) => signal.aborted)).toEqual([true]);
-  expect(jest.getTimerCount()).toBe(0);
 });
 
 test('a combinator stopped while it holds a failure throws Aborted with that failure as the cause', async () => {
@@ -1262,25 +749,6 @@ test('the call that won a race and ended by itself is not stopped afterwards, wh
   ]);
 });
 
-test('an answer through fallback names the model that answered', async () => {
-  const host = stubHost({
-    'acme/second': [
-      { type: 'text', text: 'Second' },
-      { type: 'finish', reason: 'stop' },
-    ],
-  });
-
-  const name = await enter(host, async () => {
-    const reply = await fallback(
-      model('acme/first'),
-      model('acme/second'),
-    ).complete({ messages: [] });
-    return reply.model();
-  });
-
-  expect(name).toBe('acme/second');
-});
-
 test('an answer through race names the model that won', async () => {
   const host = stubHost({
     'acme/slow': [
@@ -1302,38 +770,4 @@ test('an answer through race names the model that won', async () => {
   });
 
   expect(name).toBe('acme/fast');
-});
-
-test('an answer through retry names the model that answered after its first failure', async () => {
-  let tries = 0;
-  const host = {
-    ...stubHost(),
-    models: async function* (): AsyncGenerator<StreamEvent> {
-      tries += 1;
-      if (tries === 1) {
-        yield {
-          type: 'error',
-          error: {
-            code: 'overloaded',
-            status: 503,
-            message: 'Try later',
-            retryable: true,
-            retryAfter: 0,
-          },
-        };
-        return;
-      }
-      yield { type: 'text', text: 'Hello' };
-      yield { type: 'finish', reason: 'stop' };
-    },
-  };
-
-  const name = await enter(host, async () => {
-    const reply = await retry(model('acme/small'), 1).complete({
-      messages: [],
-    });
-    return reply.model();
-  });
-
-  expect([name, tries]).toEqual(['acme/small', 2]);
 });

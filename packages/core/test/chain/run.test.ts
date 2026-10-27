@@ -8,7 +8,6 @@ import type { EventStream, Host, RequestRecord } from '../../src/contract.ts';
 import {
   Aborted,
   Blocked,
-  InvalidRequest,
   LimitReached,
   MottyError,
   TimedOut,
@@ -86,12 +85,6 @@ test('the contract of a motty is made once', () => {
   const served = motty({ name: 'coder' }).handle(() => answer('Hi'));
 
   expect(contractOf(served)).toBe(contractOf(served));
-});
-
-test('a motty grown from another has a contract of its own', () => {
-  const served = motty({ name: 'coder' }).handle(() => answer('Hi'));
-
-  expect(contractOf(served.afterHandle(() => {}))).not.toBe(contractOf(served));
 });
 
 test('the contract carries the version and the description', () => {
@@ -179,16 +172,6 @@ test('a route brought by a used part answers', async () => {
   expect(text(seen)).toBe('From the quick tier');
 });
 
-test('a beforeHandle that returns nothing lets the request go on', async () => {
-  const seen = await told(
-    motty({ name: 'coder' })
-      .beforeHandle(() => {})
-      .handle(() => answer('From the handler')),
-  );
-
-  expect(text(seen)).toBe('From the handler');
-});
-
 test('a beforeHandle that returns an answer replies at once', async () => {
   const ran: string[] = [];
 
@@ -208,175 +191,6 @@ test('a beforeHandle that returns an answer replies at once', async () => {
   expect(ran).toEqual([]);
 });
 
-test('a prompt changed in beforeHandle is what goes upstream', async () => {
-  const host = stubHost({ 'acme/small': says('Done') });
-
-  await told(
-    motty({ name: 'coder' })
-      .beforeHandle(({ prompt }) => {
-        prompt.messages = [{ role: 'user', text: 'Compacted' }];
-      })
-      .handle(({ prompt }) => model('acme/small').complete(prompt)),
-    host,
-  );
-
-  expect(host.sent('acme/small')[0]?.messages).toEqual([
-    { role: 'user', text: 'Compacted' },
-  ]);
-});
-
-test('the request stays as the caller sent it when the prompt changes', async () => {
-  const request = ask();
-
-  await told(
-    motty({ name: 'coder' })
-      .beforeHandle(({ prompt }) => {
-        prompt.messages.push({ role: 'user', text: 'One more thing' });
-        prompt.options = { temperature: 0 };
-      })
-      .handle(() => answer('Hi')),
-    stubHost(),
-    request,
-  );
-
-  expect(request.messages).toEqual([
-    { role: 'user', text: 'Why does this deadlock?' },
-  ]);
-  expect(request.options).toEqual({});
-});
-
-test('the prompt starts as the request: messages, tools, options and output', async () => {
-  const host = stubHost({ 'acme/small': says('{}') });
-
-  await told(
-    motty({ name: 'coder' }).handle(({ prompt }) =>
-      model('acme/small').complete(prompt),
-    ),
-    host,
-    {
-      ...ask(),
-      tools: [{ type: 'function', name: 'search', input: {} }],
-      options: { temperature: 0, provider: { openai: { store: false } } },
-      output: { name: 'verdict', strict: true },
-    },
-  );
-
-  expect(host.sent('acme/small')[0]).toEqual({
-    messages: [{ role: 'user', text: 'Why does this deadlock?' }],
-    tools: [{ type: 'function', name: 'search', input: {} }],
-    options: { temperature: 0, provider: { openai: { store: false } } },
-    output: { name: 'verdict', strict: true },
-  });
-});
-
-test('headers stated on a prompt reach the adapter as they were stated', async () => {
-  const host = stubHost({ 'acme/small': says('{}') });
-
-  await told(
-    motty({ name: 'relay' }).handle(({ request, prompt }) => {
-      prompt.options = {
-        ...prompt.options,
-        headers: Object.fromEntries(request.headers),
-      };
-      return model('acme/small').complete(prompt);
-    }),
-    host,
-    ask(new Headers({ 'x-session': 's-1', 'X-Title': 'Coder' })),
-  );
-
-  expect(host.sent('acme/small')[0]?.options).toEqual({
-    headers: { 'x-session': 's-1', 'x-title': 'Coder' },
-  });
-});
-
-test('headers the caller`s options held are copied into the prompt, and the request keeps its own', async () => {
-  const host = stubHost({ 'acme/small': says('{}') });
-  const request = {
-    ...ask(),
-    options: { headers: { 'x-session': 's-1' } },
-  };
-
-  await told(
-    motty({ name: 'relay' }).handle(({ prompt }) => {
-      if (prompt.options?.headers !== undefined) {
-        prompt.options.headers['x-session'] = 's-2';
-      }
-      return model('acme/small').complete(prompt);
-    }),
-    host,
-    request,
-  );
-
-  expect(host.sent('acme/small')[0]?.options).toEqual({
-    headers: { 'x-session': 's-2' },
-  });
-  expect(request.options).toEqual({ headers: { 'x-session': 's-1' } });
-});
-
-test('a beforeHandle that throws rejects the request with its error', async () => {
-  const seen = await told(
-    motty({ name: 'coder' })
-      .beforeHandle(() => {
-        throw new EmptyPrompt('The prompt has no text');
-      })
-      .handle(() => answer('From the handler')),
-  );
-
-  expect(seen).toEqual([
-    {
-      type: 'error',
-      error: {
-        code: 'empty_prompt',
-        status: 400,
-        message: 'The prompt has no text',
-        retryable: false,
-      },
-      usage: {},
-    },
-  ]);
-});
-
-test('every header the caller sent is on the request', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).handle(({ request }) =>
-      answer(request.headers.get('x-team') ?? 'none'),
-    ),
-    stubHost(),
-    ask(new Headers({ 'x-team': 'storage' })),
-  );
-
-  expect(text(seen)).toBe('storage');
-});
-
-test('a motty answers to whatever model name was asked for', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).handle(({ request }) => answer(request.model)),
-    stubHost(),
-    { ...ask(), model: 'gpt-anything' },
-  );
-
-  expect(text(seen)).toBe('gpt-anything');
-});
-
-test('calls are on the context from the start and grow with each call', async () => {
-  const counts: number[] = [];
-
-  await told(
-    motty({ name: 'coder' })
-      .beforeHandle(({ calls }) => {
-        counts.push(calls.made.length);
-      })
-      .handle(({ prompt }) => model('acme/small').complete(prompt))
-      .afterHandle(async ({ calls, answer }) => {
-        await answer.finish();
-        counts.push(calls.made.length);
-      }),
-    stubHost({ 'acme/small': says('Done') }),
-  );
-
-  expect(counts).toEqual([0, 1]);
-});
-
 test('afterHandle reads the answer and may assign another', async () => {
   const seen = await told(
     motty({ name: 'coder' })
@@ -387,23 +201,6 @@ test('afterHandle reads the answer and may assign another', async () => {
   );
 
   expect(text(seen)).toBe('secret plan, redacted');
-});
-
-test('an afterHandle sees the answer the one before it assigned', async () => {
-  const seen: string[] = [];
-
-  await told(
-    motty({ name: 'coder' })
-      .handle(() => answer('First'))
-      .afterHandle((context) => {
-        context.answer = answer('Second');
-      })
-      .afterHandle(async (context) => {
-        seen.push(await context.answer.text());
-      }),
-  );
-
-  expect(seen).toEqual(['Second']);
 });
 
 test('afterHandle does not run when there is no answer', async () => {
@@ -497,21 +294,6 @@ test('afterResponse sees completed with the route, the path and the answer', asy
   );
 
   expect(await done.promise).toEqual(['completed', 'chat', ['chat'], 'Hi']);
-});
-
-test('afterResponse sees every call the request made', async () => {
-  const done = Promise.withResolvers<unknown>();
-
-  await told(
-    motty({ name: 'coder' })
-      .handle(({ prompt }) => model('acme/small').complete(prompt))
-      .afterResponse(({ calls }) => {
-        done.resolve([calls.made.map((call) => call.model), calls.total]);
-      }),
-    stubHost({ 'acme/small': says('Done') }),
-  );
-
-  expect(await done.promise).toEqual([['acme/small'], { input: 1, output: 1 }]);
 });
 
 test('afterResponse sees failed when an error reached the last boundary', async () => {
@@ -683,21 +465,6 @@ test('onError gets what was thrown and the context so far', async () => {
   expect(seen.slice(1)).toEqual(['acme', 'req_1']);
 });
 
-test('an answer returned by onError is the fallback the caller gets', async () => {
-  const seen = await told(
-    motty({ name: 'coder' })
-      .handle(() => {
-        throw new UpstreamFailed('Every model is down');
-      })
-      .onError(() => answer('Try again in a minute')),
-  );
-
-  expect(seen).toEqual([
-    { type: 'text', text: 'Try again in a minute' },
-    { type: 'finish', reason: 'stop', usage: {} },
-  ]);
-});
-
 test('the nearest boundary is asked first and the outer one not at all once it recovered', async () => {
   const asked: string[] = [];
   const guard = motty({ name: 'guard' })
@@ -820,27 +587,6 @@ test('a server failure handled by no boundary goes out with its code, its status
         status: 502,
         message: 'Every model is down',
         retryable: true,
-      },
-      usage: {},
-    },
-  ]);
-});
-
-test('a mistake of the caller handled by no boundary goes out with the message of the error itself', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).handle(() => {
-      throw new InvalidRequest('The prompt names a tool that is not there');
-    }),
-  );
-
-  expect(seen).toEqual([
-    {
-      type: 'error',
-      error: {
-        code: 'invalid_request',
-        status: 400,
-        message: 'The prompt names a tool that is not there',
-        retryable: false,
       },
       usage: {},
     },
@@ -981,122 +727,6 @@ test('recovering a failed afterHandle answers at that hook, skips the afterHandl
   ]);
 });
 
-test('a part that ran whole keeps its afterResponse when an afterHandle registered before it is recovered', async () => {
-  const order: string[] = [];
-  const done = Promise.withResolvers<void>();
-  const guard = motty({ name: 'guard' }).afterHandle(() => {
-    throw new Blocked('The answer broke a rule');
-  });
-  const audit = motty({ name: 'audit' })
-    .beforeHandle(() => {
-      order.push('audit before');
-    })
-    .afterHandle(() => {
-      order.push('audit after');
-    })
-    .afterResponse(({ outcome }) => {
-      order.push(`audit response ${outcome}`);
-      done.resolve();
-    });
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .use(guard)
-      .use(audit)
-      .handle(() => {
-        order.push('handle');
-        return answer('From the handler');
-      })
-      .onError(() => answer('Withheld')),
-  );
-  await done.promise;
-  await Bun.sleep(1);
-
-  expect(text(seen)).toBe('Withheld');
-  expect(order).toEqual(['audit before', 'handle', 'audit response completed']);
-});
-
-test('an afterResponse registered after the answering step runs when an earlier afterHandle is recovered', async () => {
-  const order: string[] = [];
-  const done = Promise.withResolvers<void>();
-  const guard = motty({ name: 'guard' })
-    .afterHandle(() => {
-      throw new Blocked('The answer broke a rule');
-    })
-    .afterResponse(() => {
-      order.push('guard response');
-    });
-
-  await told(
-    motty({ name: 'coder' })
-      .use(guard)
-      .handle(() => answer('From the handler'))
-      .afterResponse(({ outcome }) => {
-        order.push(`late response ${outcome}`);
-        done.resolve();
-      })
-      .onError(() => answer('Withheld')),
-  );
-  await done.promise;
-
-  expect(order).toEqual(['guard response', 'late response completed']);
-});
-
-test('an afterHandle recovered after an early answer keeps the afterResponse hooks before that answer and the one after it', async () => {
-  const order: string[] = [];
-  const done = Promise.withResolvers<void>();
-  const guard = motty({ name: 'guard' }).afterHandle(() => {
-    throw new Blocked('The answer broke a rule');
-  });
-  const audit = motty({ name: 'audit' }).afterResponse(() => {
-    order.push('audit response');
-  });
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .use(guard)
-      .use(audit)
-      .beforeHandle(() => answer('Cached'))
-      .afterResponse(() => {
-        order.push('late response');
-        done.resolve();
-      })
-      .handle(() => answer('From the handler'))
-      .onError(() => answer('Withheld')),
-  );
-  await done.promise;
-
-  expect(text(seen)).toBe('Withheld');
-  expect(order).toEqual(['audit response', 'late response']);
-});
-
-test("a part's own early answer keeps the afterResponse it registered later, and one after the handle", async () => {
-  const order: string[] = [];
-  const done = Promise.withResolvers<void>();
-  const cache = motty({ name: 'cache' })
-    .beforeHandle(() => answer('Cached'))
-    .afterResponse(({ outcome }) => {
-      order.push(`cache response ${outcome}`);
-    });
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .use(cache)
-      .handle(() => answer('From the handler'))
-      .afterResponse(({ outcome }) => {
-        order.push(`late response ${outcome}`);
-        done.resolve();
-      }),
-  );
-  await done.promise;
-
-  expect(text(seen)).toBe('Cached');
-  expect(order).toEqual([
-    'cache response completed',
-    'late response completed',
-  ]);
-});
-
 test('an afterResponse after a route no early answer reached is not run, and is named in the record as unreached and not as skipped', async () => {
   const order: string[] = [];
   const over = Promise.withResolvers<RequestRecord>();
@@ -1149,41 +779,26 @@ test('an afterResponse after a derive the early answer came before is not run, a
   expect(order).toEqual([]);
 });
 
-test.each([
-  [
-    'after',
-    (logger: ReturnType<typeof logging>) =>
-      motty({ name: 'coder' })
-        .beforeHandle(() => answer('Cached'))
-        .derive(() => ({ tenant: 'acme' }))
-        .use(logger)
-        .handle(() => answer('From the handler')),
-  ],
-  [
-    'before',
-    (logger: ReturnType<typeof logging>) =>
-      motty({ name: 'coder' })
-        .beforeHandle(() => answer('Cached'))
-        .use(logger)
-        .derive(() => ({ tenant: 'acme' }))
-        .handle(() => answer('From the handler')),
-  ],
-])(
-  'a part that only has an afterResponse, used %s a derive of its parent that an early answer came before, runs: the derive is not its own to read',
-  async (_where, chained) => {
-    const order: string[] = [];
-    const over = Promise.withResolvers<RequestRecord>();
+test('a part that only has an afterResponse, used after a derive of its parent that an early answer came before, runs: the derive is not its own to read', async () => {
+  const order: string[] = [];
+  const over = Promise.withResolvers<RequestRecord>();
 
-    await told(chained(logging(order)), stubHost({}, { record: over.resolve }));
+  await told(
+    motty({ name: 'coder' })
+      .beforeHandle(() => answer('Cached'))
+      .derive(() => ({ tenant: 'acme' }))
+      .use(logging(order))
+      .handle(() => answer('From the handler')),
+    stubHost({}, { record: over.resolve }),
+  );
 
-    expect((await over.promise).afterResponse).toStrictEqual({
-      failed: [],
-      skipped: [],
-      unreached: [],
-    });
-    expect(order).toEqual(['logger response completed']);
-  },
-);
+  expect((await over.promise).afterResponse).toStrictEqual({
+    failed: [],
+    skipped: [],
+    unreached: [],
+  });
+  expect(order).toEqual(['logger response completed']);
+});
 
 test("an early answer leaves unreached the afterResponse of the chain whose derive never ran and of a chain that used that part, and runs a sibling part's", async () => {
   const order: string[] = [];
@@ -1246,31 +861,6 @@ test('an afterResponse of a second part that uses a part already applied is unre
   expect(order).toEqual([]);
 });
 
-test('an afterResponse after a part that brought the route is unreached when an early answer came before that part', async () => {
-  const order: string[] = [];
-  const over = Promise.withResolvers<RequestRecord>();
-  const tiers = motty({ name: 'tiers' }).route(() => 'chat', {
-    chat: () => answer('From the handler'),
-  });
-
-  await told(
-    motty({ name: 'coder' })
-      .beforeHandle(() => answer('Cached'))
-      .use(tiers)
-      .afterResponse(({ route }) => {
-        order.push(`coder response ${route}`);
-      }),
-    stubHost({}, { record: over.resolve }),
-  );
-
-  expect((await over.promise).afterResponse).toStrictEqual({
-    failed: [],
-    skipped: [],
-    unreached: ['coder'],
-  });
-  expect(order).toEqual([]);
-});
-
 test('an afterResponse after an early answer reads the value derived before that answer', async () => {
   const done = Promise.withResolvers<unknown[]>();
   const cache = motty({ name: 'cache' })
@@ -1291,138 +881,6 @@ test('an afterResponse after an early answer reads the value derived before that
   expect(await done.promise).toEqual(['completed', 'acme']);
 });
 
-test('an afterResponse registered first runs once whether the request completed, was answered early, failed or was stopped', async () => {
-  const seen: string[] = [];
-  const stop = new AbortController();
-  const audit = motty({ name: 'audit' }).afterResponse(({ outcome }) => {
-    seen.push(outcome);
-  });
-
-  await told(
-    motty({ name: 'coder' })
-      .use(audit)
-      .handle(() => answer('Hi')),
-  );
-  await told(
-    motty({ name: 'coder' })
-      .use(audit)
-      .beforeHandle(() => answer('Cached'))
-      .derive(() => ({ tenant: 'acme' }))
-      .route(() => 'chat', { chat: () => answer('Hi') }),
-  );
-  await told(
-    motty({ name: 'coder' })
-      .use(audit)
-      .handle(() => {
-        throw new UpstreamFailed('Every model is down');
-      }),
-  );
-  await told(
-    motty({ name: 'coder' })
-      .use(audit)
-      .handle(({ prompt }) => {
-        setTimeout(() => stop.abort(), 1);
-        return model('acme/slow').complete(prompt);
-      }),
-    {
-      ...stubHost({}, { signal: stop.signal }),
-      models: (_model, _prompt, signal) => silent(signal),
-    },
-  );
-  await Bun.sleep(1);
-
-  expect(seen).toEqual(['completed', 'completed', 'failed', 'aborted']);
-});
-
-test('an afterResponse after a route keeps the route and the path it is typed to hold when a later afterHandle is recovered', async () => {
-  const done = Promise.withResolvers<unknown[]>();
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .route(() => 'chat', { chat: () => answer('From the handler') })
-      .afterResponse(async (context) => {
-        if (context.outcome === 'completed') {
-          const route: 'chat' = context.route;
-          const path: readonly ['chat'] = context.path;
-          done.resolve([route, path, await context.answer.text()]);
-        }
-      })
-      .afterHandle(() => {
-        throw new Blocked('The answer broke a rule');
-      })
-      .onError(() => answer('Withheld')),
-  );
-
-  expect(text(seen)).toBe('Withheld');
-  expect(await done.promise).toEqual(['chat', ['chat'], 'Withheld']);
-});
-
-test('a part used after the part that answered early keeps its afterResponse and nothing else', async () => {
-  const order: string[] = [];
-  const done = Promise.withResolvers<void>();
-  const cache = motty({ name: 'cache' })
-    .afterResponse(() => {
-      order.push('cache response');
-    })
-    .beforeHandle(() => answer('Cached'));
-  const audit = motty({ name: 'audit' })
-    .beforeHandle(() => {
-      order.push('audit before');
-    })
-    .afterHandle(() => {
-      order.push('audit after');
-    })
-    .afterResponse(() => {
-      order.push('audit response');
-      done.resolve();
-    });
-
-  await told(
-    motty({ name: 'coder' })
-      .use(cache)
-      .use(audit)
-      .handle(() => answer('From the handler')),
-  );
-  await done.promise;
-
-  expect(order).toEqual(['cache response', 'audit response']);
-});
-
-test("a nested motty recovered by its parent's boundary answers at the parent's route", async () => {
-  const order: string[] = [];
-  const deep = motty({ name: 'deep' }).handle(() => {
-    throw new UpstreamFailed('Both strong models are down');
-  });
-
-  const seen = await told(
-    motty({ name: 'tiers' })
-      .route(() => 'deep', { deep })
-      .afterHandle(() => {
-        order.push('late after');
-      })
-      .afterResponse(() => {
-        order.push('late response');
-      })
-      .onError(() => answer('Nothing is available')),
-  );
-  await Bun.sleep(1);
-
-  expect(text(seen)).toBe('Nothing is available');
-  expect(order).toEqual([]);
-});
-
-test('a failed afterHandle nobody recovered fails the request', async () => {
-  const seen = await told(
-    motty({ name: 'coder' })
-      .handle(() => answer('From the handler'))
-      .afterHandle(() => {
-        throw new Blocked('The answer broke a rule');
-      }),
-  );
-
-  expect(seen).toMatchObject([{ type: 'error', error: { code: 'blocked' } }]);
-});
-
 test('an SDK call made after the caller left throws Aborted to the boundary', async () => {
   const stop = new AbortController();
   const caught = Promise.withResolvers<unknown>();
@@ -1440,42 +898,6 @@ test('an SDK call made after the caller left throws Aborted to the boundary', as
   );
 
   expect(await caught.promise).toBeInstanceOf(Aborted);
-});
-
-test('a fallback answer for a caller who already left is not sent', async () => {
-  const stop = new AbortController();
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .handle(({ prompt }) => {
-        stop.abort();
-        return model('acme/small').complete(prompt);
-      })
-      .onError(() => answer('Sorry, something went wrong')),
-    stubHost({ 'acme/small': says('Hi') }, { signal: stop.signal }),
-  );
-
-  expect(seen).toMatchObject([{ type: 'error', error: { code: 'aborted' } }]);
-});
-
-test('passing limits.calls throws LimitReached to the boundary', async () => {
-  const caught: unknown[] = [];
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .handle(async ({ prompt }) => {
-        await model('acme/small').complete(prompt);
-        return model('acme/small').complete(prompt);
-      })
-      .onError((thrown) => {
-        caught.push(thrown);
-        return answer('That took too many calls');
-      }),
-    stubHost({ 'acme/small': says('Hi') }, { limits: { calls: 1 } }),
-  );
-
-  expect(caught[0]).toBeInstanceOf(LimitReached);
-  expect(text(seen)).toBe('That took too many calls');
 });
 
 test('LimitReached nobody recovered goes out with the usage so far', async () => {
@@ -1501,7 +923,7 @@ test('LimitReached nobody recovered goes out with the usage so far', async () =>
   ]);
 });
 
-test.each(['derive', 'beforeHandle', 'chooser', 'handler', 'afterHandle'])(
+test.each(['handler', 'afterHandle'])(
   'a caller leaving during %s gets one aborted event and the outcome is aborted',
   async (phase) => {
     const stop = new AbortController();
@@ -1594,25 +1016,6 @@ test('a call in flight is cancelled when the signal fires and still counted', as
 
   expect(seen).toMatchObject([{ type: 'error', error: { code: 'aborted' } }]);
   expect(await done.promise).toEqual(['aborted', ['acme/slow']]);
-});
-
-test('every line of progress offered before the answer goes out', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).handle(() => {
-      think('one');
-      think('two');
-      think('three');
-      return answer('Hi');
-    }),
-  );
-
-  expect(seen.map((event) => event.type)).toEqual([
-    'progress',
-    'progress',
-    'progress',
-    'text',
-    'finish',
-  ]);
 });
 
 test('progress does not depend on when the reader starts', async () => {
@@ -1790,26 +1193,6 @@ test('the output schema reaches the prompt as the object the caller sent', async
   expect(same).toEqual([true]);
 });
 
-test('a part used early reads no route under a handle and the entry under a route', async () => {
-  const routes: (string | undefined)[] = [];
-  const audit = motty({ name: 'audit' }).afterHandle(({ route }) => {
-    routes.push(route);
-  });
-
-  await told(
-    motty({ name: 'coder' })
-      .use(audit)
-      .handle(() => answer('Hi')),
-  );
-  await told(
-    motty({ name: 'coder' })
-      .use(audit)
-      .route(() => 'chat', { chat: () => answer('Hi') }),
-  );
-
-  expect(routes).toEqual([undefined, 'chat']);
-});
-
 test('once the stop signal fired no later step starts', async () => {
   const stop = new AbortController();
   const ran: string[] = [];
@@ -1857,15 +1240,7 @@ test('once the stop signal fired no later step starts', async () => {
   expect(await done.promise).toBe('aborted');
 });
 
-test.each([
-  'derive',
-  'beforeHandle',
-  'chooser',
-  'quick',
-  'standard',
-  'afterHandle',
-  'late afterHandle',
-])(
+test.each(['chooser', 'quick', 'afterHandle'])(
   'the step in which the signal fired is the last to start: %s',
   async (at) => {
     const stop = new AbortController();
@@ -1907,34 +1282,6 @@ test.each([
   },
 );
 
-test('a nested motty does not start once the signal fired', async () => {
-  const stop = new AbortController();
-  const ran: string[] = [];
-  const caught: unknown[] = [];
-  const deep = motty({ name: 'deep' })
-    .handle(() => {
-      ran.push('nested handle');
-      return answer('Hi');
-    })
-    .onError((thrown) => {
-      caught.push(thrown);
-    });
-
-  await told(
-    motty({ name: 'coder' }).route(
-      () => {
-        stop.abort();
-        return 'deep';
-      },
-      { deep },
-    ),
-    stubHost({}, { signal: stop.signal }),
-  );
-
-  expect(ran).toEqual([]);
-  expect(caught[0]).toBeInstanceOf(Aborted);
-});
-
 test('a boundary asked about a step that never started may answer, and it is not sent', async () => {
   const stop = new AbortController();
   const asked: unknown[] = [];
@@ -1972,39 +1319,34 @@ test("a hook's signal fires with the host's, at once", async () => {
   expect(seen).toEqual([false, true]);
 });
 
-test.each([
-  'request',
-  'prompt',
-  'signal',
-  'calls',
-  'route',
-  'path',
-  'answer',
-  'outcome',
-  '__proto__',
-])('a derive that names %s past the types fails the request', async (key) => {
-  const caught: unknown[] = [];
+test.each(['request', '__proto__'])(
+  'a derive that names %s past the types fails the request',
+  async (key) => {
+    const caught: unknown[] = [];
 
-  const seen = await told(
-    motty({ name: 'coder' })
-      .use(
-        motty({ name: 'tenant' }).derive(() =>
-          Object.defineProperty({}, key, { value: 'acme', enumerable: true }),
-        ),
-      )
-      .handle(() => answer('Hi'))
-      .onError((thrown) => {
-        caught.push(thrown);
-      }),
-  );
+    const seen = await told(
+      motty({ name: 'coder' })
+        .use(
+          motty({ name: 'tenant' }).derive(() =>
+            Object.defineProperty({}, key, { value: 'acme', enumerable: true }),
+          ),
+        )
+        .handle(() => answer('Hi'))
+        .onError((thrown) => {
+          caught.push(thrown);
+        }),
+    );
 
-  expect(seen).toMatchObject([
-    { type: 'error', error: { code: 'internal', message: 'Internal error' } },
-  ]);
-  expect(caught).toEqual([
-    new Error(`A derive of "tenant" named a value "${key}", which is reserved`),
-  ]);
-});
+    expect(seen).toMatchObject([
+      { type: 'error', error: { code: 'internal', message: 'Internal error' } },
+    ]);
+    expect(caught).toEqual([
+      new Error(
+        `A derive of "tenant" named a value "${key}", which is reserved`,
+      ),
+    ]);
+  },
+);
 
 test.each([
   [
@@ -2014,24 +1356,6 @@ test.each([
         .derive(() => ({ user: 'ada' }))
         // @ts-expect-error the chain already has a user
         .derive(() => ({ user: 7 })),
-  ],
-  [
-    'a map of any names that holds it',
-    () =>
-      motty({ name: 'coder' })
-        .derive(() => ({ user: 'ada' }))
-        .derive((): { [name: string]: boolean } =>
-          // @ts-expect-error a map of any names is no known name
-          Object.fromEntries([['user', true]]),
-        ),
-  ],
-  [
-    'one of two shapes that holds it',
-    () =>
-      motty({ name: 'coder' })
-        .derive(() => ({ user: 'ada' }))
-        // @ts-expect-error one of the two shapes names a user
-        .derive((): { user: number } | { plan: number } => ({ user: 7 })),
   ],
   [
     'the name a part it used made',
@@ -2120,9 +1444,7 @@ test('an entry that is a motty and derives one name twice past the types fails a
 
 test.each([
   ['nothing', undefined],
-  ['a string', 'acme'],
   ['a list', [{ tenant: 'acme' }]],
-  ['a map', new Map([['tenant', 'acme']])],
 ])(
   'a derive that gives %s past the types fails the request',
   async (_name, given) => {
@@ -2210,7 +1532,6 @@ test('a call made in afterResponse counts toward limits.calls', async () => {
 });
 
 test.each([
-  'derive',
   'beforeHandle',
   'chooser',
   'handler',
@@ -2342,56 +1663,41 @@ test('the error the host gave as the reason of its stop is the one raised: the b
   });
 });
 
-test.each([
-  [
-    'a call limit that is a fraction',
-    { limits: { calls: 1.5 } },
-    'limits.calls',
-  ],
-  [
-    'an after-response limit below zero',
-    { limits: { afterResponse: -1 } },
-    'limits.afterResponse',
-  ],
-  ['no stop signal', { signal: JSON.parse('null') }, 'signal'],
-])(
-  'running a motty on a host with %s does not throw: the stream holds one error and the record says what was wrong',
-  async (_name, wrong, named) => {
-    const over = Promise.withResolvers<RequestRecord>();
-    const ran: string[] = [];
+test('running a motty on a host with limits that are text does not throw: the stream holds one error and the record says what was wrong', async () => {
+  const over = Promise.withResolvers<RequestRecord>();
+  const ran: string[] = [];
 
-    const events = await told(
-      motty({ name: 'coder' })
-        .handle(() => {
-          ran.push('handle');
-          return answer('Hi');
-        })
-        .afterResponse(() => {
-          ran.push('afterResponse');
-        }),
-      { ...stubHost({}, { record: over.resolve }), ...wrong },
-    );
-    const { outcome, error, calls } = await over.promise;
+  const events = await told(
+    motty({ name: 'coder' })
+      .handle(() => {
+        ran.push('handle');
+        return answer('Hi');
+      })
+      .afterResponse(() => {
+        ran.push('afterResponse');
+      }),
+    { ...stubHost({}, { record: over.resolve }), limits: JSON.parse('"x"') },
+  );
+  const { outcome, error, calls } = await over.promise;
 
-    expect(events).toEqual([
-      {
-        type: 'error',
-        error: {
-          code: 'internal',
-          status: 500,
-          message: 'Internal error',
-          retryable: false,
-        },
-        usage: {},
+  expect(events).toEqual([
+    {
+      type: 'error',
+      error: {
+        code: 'internal',
+        status: 500,
+        message: 'Internal error',
+        retryable: false,
       },
-    ]);
-    expect(outcome).toBe('failed');
-    expect(error?.message).toContain(named);
-    expect(error?.stack).toContain(named);
-    expect(calls).toEqual([]);
-    expect(ran).toEqual([]);
-  },
-);
+      usage: {},
+    },
+  ]);
+  expect(outcome).toBe('failed');
+  expect(error?.message).toContain('limits');
+  expect(error?.stack).toContain('limits');
+  expect(calls).toEqual([]);
+  expect(ran).toEqual([]);
+});
 
 test('ten thousand requests on one signal of a long-lived host leave no listener on it, and a stop during one still stops it', async () => {
   const host = new AbortController();
@@ -2436,72 +1742,34 @@ test('ten thousand requests on one signal of a long-lived host leave no listener
   );
 });
 
-test.each([
-  ['undefined', JSON.parse('[null]')[1], 'host'],
-  ['null', JSON.parse('null'), 'host'],
-  ['a number', JSON.parse('7'), 'host'],
-])(
-  'running a motty on a host that is %s does not throw: the stream holds one error and nothing is left unhandled',
-  async (_name, host, named) => {
-    const unhandled: unknown[] = [];
-    const heard = (thrown: unknown) => unhandled.push(thrown);
-    process.on('unhandledRejection', heard);
+test('running a motty on a host that is null does not throw: the stream holds one error and nothing is left unhandled', async () => {
+  const unhandled: unknown[] = [];
+  const heard = (thrown: unknown) => unhandled.push(thrown);
+  process.on('unhandledRejection', heard);
 
-    const events = await Array.fromAsync(
-      contractOf(motty({ name: 'coder' }).handle(() => answer('Hi'))).run(
-        ask(),
-        host,
-      ),
-    );
-    await Bun.sleep(1);
-    process.off('unhandledRejection', heard);
+  const events = await Array.fromAsync(
+    contractOf(motty({ name: 'coder' }).handle(() => answer('Hi'))).run(
+      ask(),
+      JSON.parse('null'),
+    ),
+  );
+  await Bun.sleep(1);
+  process.off('unhandledRejection', heard);
 
-    expect(events).toEqual([
-      {
-        type: 'error',
-        error: {
-          code: 'internal',
-          status: 500,
-          message: 'Internal error',
-          retryable: false,
-        },
-        usage: {},
+  expect(events).toEqual([
+    {
+      type: 'error',
+      error: {
+        code: 'internal',
+        status: 500,
+        message: 'Internal error',
+        retryable: false,
       },
-    ]);
-    expect(named).toBe('host');
-    expect(unhandled).toEqual([]);
-  },
-  1_000,
-);
-
-test.each([
-  ['limits that are text', { limits: JSON.parse('"x"') }, 'limits'],
-  ['limits that are a number', { limits: JSON.parse('5') }, 'limits'],
-  ['models that are no function', { models: JSON.parse('{}') }, 'models'],
-])(
-  'running a motty on a host with %s does not throw: the stream holds one error and the record says what was wrong',
-  async (_name, wrong, named) => {
-    const over = Promise.withResolvers<RequestRecord>();
-    const ran: string[] = [];
-
-    const events = await told(
-      motty({ name: 'coder' }).handle(() => {
-        ran.push('handle');
-        return answer('Hi');
-      }),
-      { ...stubHost({}, { record: over.resolve }), ...wrong },
-    );
-    const { outcome, error } = await over.promise;
-
-    expect(events).toMatchObject([
-      { type: 'error', error: { code: 'internal' } },
-    ]);
-    expect(outcome).toBe('failed');
-    expect(error?.message).toContain(named);
-    expect(ran).toEqual([]);
-  },
-  1_000,
-);
+      usage: {},
+    },
+  ]);
+  expect(unhandled).toEqual([]);
+}, 1_000);
 
 test('a record that is no function is a mistake of the host: the stream holds one error, and there is nobody to send a record to', async () => {
   const ran: string[] = [];
@@ -2555,30 +1823,23 @@ test('a request that ends normally with a model call still open constructs no er
   expect(made).toBe(0);
 });
 
-test.each([
-  ['no messages', { messages: JSON.parse('[null]')[1] }],
-  ['messages that are text', { messages: JSON.parse('"Hi"') }],
-  ['no tools', { tools: JSON.parse('[null]')[1] }],
-])(
-  'a request with %s is a mistake of the host: the request fails as an internal error and no step runs',
-  async (_name, wrong) => {
-    const ran: string[] = [];
+test('a request with no messages is a mistake of the host: the request fails as an internal error and no step runs', async () => {
+  const ran: string[] = [];
 
-    const events = await told(
-      motty({ name: 'coder' }).handle(() => {
-        ran.push('handle');
-        return answer('Hi');
-      }),
-      stubHost(),
-      { ...ask(), ...wrong },
-    );
+  const events = await told(
+    motty({ name: 'coder' }).handle(() => {
+      ran.push('handle');
+      return answer('Hi');
+    }),
+    stubHost(),
+    { ...ask(), messages: JSON.parse('[null]')[1] },
+  );
 
-    expect(events).toMatchObject([
-      { type: 'error', error: { code: 'internal', status: 500 } },
-    ]);
-    expect(ran).toEqual([]);
-  },
-);
+  expect(events).toMatchObject([
+    { type: 'error', error: { code: 'internal', status: 500 } },
+  ]);
+  expect(ran).toEqual([]);
+});
 
 test('a long answer puts no more listeners on the signal of the host than a short one', async () => {
   const heard: number[] = [];

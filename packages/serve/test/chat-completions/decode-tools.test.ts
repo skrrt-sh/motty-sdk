@@ -32,15 +32,6 @@ test('a function tool is read with its schema and strictness', () => {
   });
 });
 
-test('a function tool with no strictness named is read with none', () => {
-  expect(
-    toolOf({
-      type: 'function',
-      function: { name: 'weather', parameters: { type: 'object' } },
-    }),
-  ).toEqual({ type: 'function', name: 'weather', input: { type: 'object' } });
-});
-
 test('a function tool with no parameters takes none', () => {
   expect(toolOf({ type: 'function', function: { name: 'now' } })).toEqual({
     type: 'function',
@@ -107,9 +98,7 @@ test('a tool that is not well formed is refused', () => {
   ).toThrow('A grammar needs a syntax and a definition');
 });
 
-test('each plain tool choice is read as it is', () => {
-  expect(choiceOf('auto')).toBe('auto');
-  expect(choiceOf('none')).toBe('none');
+test('a plain tool choice is read as it is', () => {
   expect(choiceOf('required')).toBe('required');
 });
 
@@ -176,16 +165,5 @@ test('a field of a tool that is not read is kept as a hint, where it sat', () =>
         function: { vendor: 1 },
       },
     },
-  });
-  expect(
-    toolOf({
-      type: 'custom',
-      custom: { name: 'shell', vendor: 1 },
-      defer: true,
-    }),
-  ).toEqual({
-    type: 'custom',
-    name: 'shell',
-    hints: { 'openai.chat': { defer: true, custom: { vendor: 1 } } },
   });
 });

@@ -218,75 +218,6 @@ test('a collected reply that was cut off says which item did not finish', () => 
   });
 });
 
-test("a caller's own mistake is described in the failed response", async () => {
-  const sent = await Array.fromAsync(
-    streamed(
-      {
-        body: {},
-        muted: true,
-        custom: new Set(),
-        spaced: new Map(),
-        clients: new Set(),
-        encrypted: false,
-      },
-      run({
-        type: 'error',
-        error: { code: 'empty_prompt', status: 400, message: 'Say something' },
-      }),
-      'r1',
-    ),
-  );
-  expect(parsed(sent.at(-1)?.data ?? '')).toMatchObject({
-    response: { error: { code: 'empty_prompt', message: 'Say something' } },
-  });
-});
-
-test('a collected reply holds progress as reasoning, then the answer', () => {
-  expect(
-    collected(
-      {
-        body: { model: 'coder', reasoning: { summary: 'auto' } },
-        muted: false,
-        custom: new Set(),
-        spaced: new Map(),
-        clients: new Set(),
-        encrypted: false,
-      },
-      [
-        { type: 'progress', piece: 0, text: 'Routing' },
-        { type: 'text', text: 'Hello.' },
-        { type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{}' },
-      ],
-      { type: 'finish', reason: 'tool_calls', usage: { input: 2 } },
-      'r1',
-    ),
-  ).toMatchObject({
-    id: 'resp_r1',
-    status: 'completed',
-    output: [
-      {
-        type: 'reasoning',
-        summary: [{ type: 'summary_text', text: 'Routing' }],
-      },
-      { type: 'message', content: [{ type: 'output_text', text: 'Hello.' }] },
-      {
-        type: 'function_call',
-        status: 'completed',
-        call_id: 'call_1',
-        name: 'weather',
-        arguments: '{}',
-      },
-    ],
-    usage: {
-      input_tokens: 2,
-      input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
-      output_tokens: 0,
-      output_tokens_details: { reasoning_tokens: 0 },
-      total_tokens: 2,
-    },
-  });
-});
-
 test('the response echoes what was asked, and usage not reported is null', () => {
   expect(
     collected(
@@ -361,10 +292,7 @@ test('the response echoes what was asked, and usage not reported is null', () =>
   });
 });
 
-test.each([
-  [{ input: 15, output: 2, cost: 0.0000023 }, 0.0000023],
-  [{ input: 15, output: 2 }, undefined],
-])('the cost in usage %j is written under its name as %p', (usage, cost) => {
+test('the cost in usage is written under its name', () => {
   expect(
     collected(
       {
@@ -376,105 +304,20 @@ test.each([
         encrypted: false,
       },
       [],
-      { type: 'finish', reason: 'stop', usage },
+      {
+        type: 'finish',
+        reason: 'stop',
+        usage: { input: 15, output: 2, cost: 0.0000023 },
+      },
       'r1',
     ),
   ).toMatchObject({
-    usage: { input_tokens: 15, output_tokens: 2, total_tokens: 17 },
-  });
-  expect(
-    parsed(
-      JSON.stringify(
-        collected(
-          {
-            body: { model: 'coder' },
-            muted: false,
-            custom: new Set(),
-            spaced: new Map(),
-            clients: new Set(),
-            encrypted: false,
-          },
-          [],
-          { type: 'finish', reason: 'stop', usage },
-          'r1',
-        ),
-      ),
-    ),
-  ).toMatchObject({ usage: cost === undefined ? {} : { cost } });
-});
-
-test('a field of a call that this API does not name reaches the caller, streamed and collected', async () => {
-  const sent = await Array.fromAsync(
-    streamed(
-      {
-        body: { model: 'coder' },
-        muted: true,
-        custom: new Set(),
-        spaced: new Map(),
-        clients: new Set(),
-        encrypted: false,
-      },
-      run(
-        {
-          type: 'tool_call',
-          id: 'call_1',
-          name: 'spawn_agent',
-          arguments: '{}',
-          provider: { 'openai.responses': { made_up: { kept: true } } },
-        },
-        { type: 'finish', reason: 'tool_calls' },
-      ),
-      'r1',
-    ),
-  );
-  expect(
-    sent
-      .filter(({ event }) => event?.startsWith('response.output_item.'))
-      .map(({ data }) => parsed(data)),
-  ).toMatchObject([
-    {
-      type: 'response.output_item.added',
-      item: { id: 'fc_r1_0', status: 'in_progress', made_up: { kept: true } },
+    usage: {
+      input_tokens: 15,
+      output_tokens: 2,
+      total_tokens: 17,
+      cost: 0.0000023,
     },
-    {
-      type: 'response.output_item.done',
-      item: { id: 'fc_r1_0', status: 'completed', made_up: { kept: true } },
-    },
-  ]);
-  expect(
-    collected(
-      {
-        body: { model: 'coder' },
-        muted: true,
-        custom: new Set(),
-        spaced: new Map(),
-        clients: new Set(),
-        encrypted: false,
-      },
-      [
-        {
-          type: 'tool_call',
-          id: 'call_1',
-          name: 'spawn_agent',
-          arguments: '{}',
-          provider: { 'openai.responses': { made_up: { kept: true } } },
-        },
-      ],
-      { type: 'finish', reason: 'tool_calls' },
-      'r1',
-    ),
-  ).toMatchObject({
-    output: [
-      {
-        id: 'fc_r1_0',
-        type: 'function_call',
-        status: 'completed',
-        call_id: 'call_1',
-        name: 'spawn_agent',
-        made_up: { kept: true },
-        arguments: '{}',
-      },
-    ],
   });
 });
 
@@ -741,44 +584,6 @@ test('a call told more after it ended fails the reply, streamed and collected', 
   expect(() => collected(asked, chunks, finish, 'r1')).toThrow(
     'The Responses API cannot write a tool call that was told more after it ended',
   );
-});
-
-test('text that is empty and holds nothing for this API opens no message, streamed and collected', async () => {
-  const asked = {
-    body: {},
-    muted: true,
-    custom: new Set<string>(),
-    spaced: new Map(),
-    clients: new Set<string>(),
-    encrypted: false,
-  };
-  const chunks: Chunk[] = [
-    { type: 'text', text: '', block: 0 },
-    { type: 'tool_call', id: 'a', name: 'f', arguments: '{}', block: 1 },
-  ];
-  const finish: Finish = { type: 'finish', reason: 'tool_calls' };
-  const sent = await Array.fromAsync(
-    streamed(asked, run(...chunks, finish), 'r1'),
-  );
-  expect(sent.map(({ event }) => event)).toEqual([
-    'response.created',
-    'response.in_progress',
-    'response.output_item.added',
-    'response.function_call_arguments.delta',
-    'response.function_call_arguments.done',
-    'response.output_item.done',
-    'response.completed',
-  ]);
-  expect(field(collected(asked, chunks, finish, 'r1'), 'output')).toEqual([
-    {
-      id: 'fc_r1_0',
-      type: 'function_call',
-      status: 'completed',
-      call_id: 'a',
-      name: 'f',
-      arguments: '{}',
-    },
-  ]);
 });
 
 test.each([

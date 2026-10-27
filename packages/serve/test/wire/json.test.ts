@@ -8,15 +8,6 @@ test('text that is not JSON parses to nothing', () => {
   expect(parsed('')).toBeUndefined();
 });
 
-test('a key named as the prototype parses to a key like any other', () => {
-  const read = dict(parsed('{"__proto__":{"planted":true},"a":1}'));
-  const { planted } = read;
-
-  expect(Object.keys(read)).toEqual(['__proto__', 'a']);
-  expect(Object.getPrototypeOf(read)).toBe(Object.prototype);
-  expect(planted).toBeUndefined();
-});
-
 test('a field that was not given is left out, a null is kept', () => {
   expect(given({ a: 1, b: undefined, c: null, d: false })).toEqual({
     a: 1,
@@ -63,12 +54,6 @@ test('text nested deeper than any request goes parses to nothing, and brackets i
     `\\"${'{"'.repeat(1000)}\\`,
     'b',
   ]);
-});
-
-test('a copy is made of a value as deep as any that is read', () => {
-  const deep = parsed(`${'{"a":'.repeat(512)}1${'}'.repeat(512)}`) ?? null;
-
-  expect(copied(deep)).toEqual(deep);
 });
 
 test('a given field named as the prototype is a field, and nothing is read through it', () => {

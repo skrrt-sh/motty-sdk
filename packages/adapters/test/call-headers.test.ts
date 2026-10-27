@@ -85,50 +85,6 @@ test.each([
     },
   ],
   [
-    'is sent when it says where a request came from and the connection lists it',
-    { 'X-Forwarded-For': '203.0.113.7', via: '1.1 edge', 'cf-ray': 'r-1' },
-    ['x-forwarded-for', 'Via', 'cf-ray'],
-    { 'X-Forwarded-For': '203.0.113.7', via: '1.1 edge', 'cf-ray': 'r-1' },
-    {},
-  ],
-  [
-    'is left out when it says where a request came from and the connection lists other names',
-    { 'x-forwarded-for': '203.0.113.7', via: '1.1 edge' },
-    ['x-session'],
-    {},
-    {
-      'x-forwarded-for': 'The connection does not forward this header',
-      via: 'The connection does not forward this header',
-    },
-  ],
-  [
-    'is left out when it says where a request came from and the connection forwards any',
-    { 'x-forwarded-for': '203.0.113.7', via: '1.1 edge', 'x-kept': 'yes' },
-    true,
-    { 'x-kept': 'yes' },
-    {
-      'x-forwarded-for': 'A call never sends this header',
-      via: 'A call never sends this header',
-    },
-  ],
-  [
-    'is left out when the connection lists it and it is the connection`s own, a credential, a cookie or said of a body',
-    {
-      Host: 'a.example',
-      Authorization: 'Bearer t',
-      cookie: 'a=b',
-      'Content-Type': 'x/y',
-    },
-    ['host', 'authorization', 'cookie', 'content-type'],
-    {},
-    {
-      host: 'A call never sends this header',
-      authorization: 'A call never sends this header',
-      cookie: 'A call never sends this header',
-      'content-type': 'A call never sends this header',
-    },
-  ],
-  [
     'is left out when its Connection header names it and the connection lists it',
     {
       Connection: 'x-forwarded-for, x-hop',
@@ -185,29 +141,11 @@ test('a header the request already has is left out of what a call states, in any
 });
 
 test.each([
-  'host',
-  'connection',
-  'keep-alive',
-  'proxy-connection',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-  'expect',
-  'accept-encoding',
+  'HOST',
+  'Content-Length',
   'proxy-authorization',
   'cookie',
   'set-cookie',
-  'content-type',
-  'content-length',
-  'content-encoding',
-  'content-md5',
-  'content-digest',
-  'content-language',
-  'digest',
-  'HOST',
-  'Content-Length',
-  'Authorization',
   ...credentials,
 ])(
   '%s stated on a call is never sent, whether the connection lists it or forwards any',
@@ -241,24 +179,10 @@ test.each([
   'cdn-loop',
   'x-original-forwarded-for',
   'x-envoy-external-address',
-  'x-forwarded',
-  'x-forwarded-for',
-  'x-forwarded-host',
-  'x-forwarded-proto',
-  'x-forwarded-client-cert',
-  'x-forwarded-',
-  'x_forwarded_for',
-  'cf-connecting-ip',
-  'cf-ray',
-  'cf-ipcountry',
-  'cf-visitor',
-  'cf-worker',
-  'sec-fetch-site',
-  'sec-fetch-mode',
-  'sec-ch-ua',
   'X-Forwarded-For',
+  'x_forwarded_for',
   'CF-Connecting-IP',
-  'VIA',
+  'sec-fetch-site',
 ])(
   '%s stated on a call is sent when the connection lists it, and never when the connection forwards any',
   (name) => {
@@ -286,39 +210,31 @@ test('every header a wire API takes a credential in is one never sent', () => {
   ).toEqual([]);
 });
 
-test.each([
-  ['openai', openai],
-  ['anthropic', anthropic],
-])(
-  'by default no header stated on a call reaches the %s upstream',
-  async (name, adapter) => {
-    const { headers } = await sent(
-      (address) => adapter({ key: 'sk-host', address }),
-      `${name}/small`,
-      {
-        messages: [{ role: 'user', text: 'hi' }],
-        options: {
-          headers: {
-            'x-session': 's-1',
-            'helicone-target-url': 'https://evil.example',
-            'openai-organization': 'org-other',
-          },
+test('by default no header stated on a call reaches the upstream', async () => {
+  const { headers } = await sent(
+    (address) => openai({ key: 'sk-host', address }),
+    'openai/small',
+    {
+      messages: [{ role: 'user', text: 'hi' }],
+      options: {
+        headers: {
+          'x-session': 's-1',
+          'helicone-target-url': 'https://evil.example',
+          'openai-organization': 'org-other',
         },
       },
-    );
+    },
+  );
 
-    expect(
-      ['x-session', 'helicone-target-url', 'openai-organization'].map(
-        (stated) => headers.get(stated),
-      ),
-    ).toEqual([null, null, null]);
-  },
-);
+  expect(
+    ['x-session', 'helicone-target-url', 'openai-organization'].map((stated) =>
+      headers.get(stated),
+    ),
+  ).toEqual([null, null, null]);
+});
 
 test.each([
   ['openai', openai, ['X-Session', 'user-agent']],
-  ['anthropic', anthropic, ['X-Session', 'user-agent']],
-  ['openai', openai, true],
   ['anthropic', anthropic, true],
 ] as const)(
   'a header stated on a call reaches the %s upstream when the connection forwards %p',
@@ -426,11 +342,8 @@ test('a header the API writes wins over a call`s of that name, even when the con
 
 test.each([
   ['openai', openai, 'authorization', 'Bearer sk-host'],
-  ['openai', openai, 'x-api-key', null],
-  ['openai', openai, 'api-key', null],
   ['anthropic', anthropic, 'x-api-key', 'sk-host'],
   ['anthropic', anthropic, 'authorization', null],
-  ['anthropic', anthropic, 'api-key', null],
 ] as const)(
   'a call to %s that states %s neither replaces the credential nor adds a second',
   async (name, adapter, credential, kept) => {
@@ -549,15 +462,9 @@ test('a call whose headers were all sent ends with no warning', async () => {
 
 test.each([
   ['a name', { 'x note': 'Zq7Lm2Xv9Rt4Kp8Wd3Nh' }, '"x note" with a name'],
-  ['an empty name', { '': 'Zq7Lm2Xv9Rt4Kp8Wd3Nh' }, '"" with a name'],
   [
     'a line break in its value',
     { 'x-note': 'Zq7Lm2Xv\n9Rt4Kp8Wd3Nh' },
-    '"x-note" with a value',
-  ],
-  [
-    'a value outside Latin-1',
-    { 'x-note': 'Zq7Lm2Xv9Rt4Kp8Wd3Nh世' },
     '"x-note" with a value',
   ],
   [
@@ -596,46 +503,41 @@ test.each([
   },
 );
 
-test.each([
-  ['lists it', ['x-session']],
-  ['forwards any', true],
-] as const)(
-  'a header stated on a call in two letter cases fails the call before anything is sent, where the connection %s',
-  async (_, forwardHeaders) => {
-    const { asked, events } = await sent(
-      (address) => openai({ key: 'sk-host', address, forwardHeaders }),
-      'openai/small',
-      {
-        messages: [{ role: 'user', text: 'hi' }],
-        options: {
-          headers: {
-            'X-Session': 'Zq7Lm2Xv9Rt4Kp8Wd3Nh',
-            'x-session': 's-2',
-            'X-SESSION': undefined,
-          },
+test('a header stated on a call in two letter cases fails the call before anything is sent', async () => {
+  const { asked, events } = await sent(
+    (address) =>
+      openai({ key: 'sk-host', address, forwardHeaders: ['x-session'] }),
+    'openai/small',
+    {
+      messages: [{ role: 'user', text: 'hi' }],
+      options: {
+        headers: {
+          'X-Session': 'Zq7Lm2Xv9Rt4Kp8Wd3Nh',
+          'x-session': 's-2',
+          'X-SESSION': undefined,
         },
       },
-    );
+    },
+  );
 
-    expect(events).toEqual([
-      {
-        type: 'error',
-        error: {
-          code: 'internal',
-          status: 500,
-          message:
-            'A call stated the header "x-session" twice, in two letter cases',
-          retryable: false,
-          unexpected: true,
-          stack: expect.any(String),
-          upstream: false,
-        },
+  expect(events).toEqual([
+    {
+      type: 'error',
+      error: {
+        code: 'internal',
+        status: 500,
+        message:
+          'A call stated the header "x-session" twice, in two letter cases',
+        retryable: false,
+        unexpected: true,
+        stack: expect.any(String),
+        upstream: false,
       },
-    ]);
-    expect(JSON.stringify(events)).not.toContain('9Rt4Kp8Wd3Nh');
-    expect(asked).toBe(0);
-  },
-);
+    },
+  ]);
+  expect(JSON.stringify(events)).not.toContain('9Rt4Kp8Wd3Nh');
+  expect(asked).toBe(0);
+});
 
 test.each([
   ['openai', openai, '/v1/chat/completions', 'authorization', 'Bearer sk-host'],

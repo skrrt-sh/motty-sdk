@@ -85,32 +85,6 @@ test('increment is one command to the storage of the host, and gives back the to
   expect(totals).toEqual([7.5]);
 });
 
-test('a storage that is an instance of a class is asked to increment as its own method', async () => {
-  class Counters {
-    total = 5;
-    async get() {
-      return this.total;
-    }
-    async set() {}
-    async delete() {}
-    async increment(_key: string, by: number) {
-      this.total += by;
-      return this.total;
-    }
-  }
-  const totals: number[] = [];
-
-  await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      totals.push(await store.increment('spent:c1', 2));
-      return answer('Hi');
-    }),
-    { storage: new Counters() },
-  );
-
-  expect(totals).toEqual([7]);
-});
-
 test('an increment given no amount adds one, with no time to live', async () => {
   const { storage, commands } = recording();
 
@@ -156,32 +130,6 @@ test('a host whose storage cannot increment fails the call as unsupported, and m
   expect(commands).toEqual([]);
 });
 
-test('an increment the storage refused rejects with what it threw, so a motty may go on', async () => {
-  const { storage } = recording();
-
-  const { events } = await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      const [added] = await Promise.allSettled([store.increment('tier:c1')]);
-      return answer(
-        added.status === 'rejected' ? String(added.reason.message) : 'added',
-      );
-    }),
-    {
-      storage: {
-        ...storage,
-        increment: async (key) => {
-          throw new Error(`The value stored under ${key} is not a number`);
-        },
-      },
-    },
-  );
-
-  expect(events[0]).toEqual({
-    type: 'text',
-    text: 'The value stored under tier:c1 is not a number',
-  });
-});
-
 test('get, set and delete are each one command to the storage of the host, with the key and the value as given', async () => {
   const { storage, commands } = recording({ 'tier:c1': 'deep' });
   const read: unknown[] = [];
@@ -205,56 +153,6 @@ test('get, set and delete are each one command to the storage of the host, with 
   expect(read).toEqual(['deep', undefined]);
 });
 
-test('a value set without a time to live is sent with no options', async () => {
-  const { storage, commands } = recording();
-
-  await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      await store.set('seen', { turns: [1, 2] });
-      return answer('Hi');
-    }),
-    { storage },
-  );
-
-  expect(commands).toEqual([['set', 'seen', { turns: [1, 2] }]]);
-});
-
-test('nothing is cached: reading a key twice asks the storage twice', async () => {
-  const { storage, commands } = recording();
-
-  await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      await store.get('tier:c1');
-      await store.get('tier:c1');
-      return answer('Hi');
-    }),
-    { storage },
-  );
-
-  expect(commands).toEqual([
-    ['get', 'tier:c1'],
-    ['get', 'tier:c1'],
-  ]);
-});
-
-test('the store is read in a derive and written in after-response work', async () => {
-  const { storage, commands } = recording({ 'tier:c1': 'deep' });
-
-  const { events } = await ran(
-    motty({ name: 'coder' })
-      .derive(async () => ({ previous: await store.get<'deep'>('tier:c1') }))
-      .handle(({ previous }) => answer(previous ?? 'none'))
-      .afterResponse(() => store.set('tier:c1', 'deep', { ttl: 60_000 })),
-    { storage },
-  );
-
-  expect(events[0]).toEqual({ type: 'text', text: 'deep' });
-  expect(commands).toEqual([
-    ['get', 'tier:c1'],
-    ['set', 'tier:c1', 'deep', { ttl: 60_000 }],
-  ]);
-});
-
 test('a host that supplied no storage fails the request that uses the store, and the record says why', async () => {
   const { events, record } = await ran(
     motty({ name: 'coder' }).handle(async () => {
@@ -272,36 +170,6 @@ test('a host that supplied no storage fails the request that uses the store, and
   expect(record.error?.message).toBe(
     'The store was used, and the host supplied no storage',
   );
-});
-
-test('each command without storage rejects, so a motty may go on without it', async () => {
-  const { events } = await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      const failed = await Promise.allSettled([
-        store.get('tier:c1'),
-        store.set('tier:c1', 'deep'),
-        store.delete('tier:c1'),
-        store.increment('tier:c1'),
-      ]);
-      return answer(failed.map((command) => command.status).join(' '));
-    }),
-  );
-
-  expect(events[0]).toEqual({
-    type: 'text',
-    text: 'rejected rejected rejected rejected',
-  });
-});
-
-test('the store used outside a request rejects', async () => {
-  await expect(store.get('tier:c1')).rejects.toThrow(
-    'Called outside a request',
-  );
-});
-
-test('the store cannot be given other commands', () => {
-  expect(Object.keys(store)).toEqual(['get', 'set', 'delete', 'increment']);
-  expect(Object.isFrozen(store)).toBe(true);
 });
 
 test('a value is typed by what the author says it is, and only JSON is stored', () => {

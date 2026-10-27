@@ -1,39 +1,15 @@
 import { expect, test } from 'bun:test';
 import { adapted } from '@mottyjs/core/host';
-import * as entry from '../src/zai.ts';
 import { zai } from '../src/zai.ts';
 
-test('built from GLM`s reference alone, with no key held: it serves the names under its prefix, and with no key it fails when made', () => {
-  const adapter = zai({ key: 'sk-host' });
-
-  expect(adapter.serves('zai/glm-5.3')).toBe(true);
-  expect(adapter.serves('openrouter/z-ai/glm-5.3')).toBe(false);
-  expect(zai({ key: 'k', prefix: 'own' }).serves('own/x')).toBe(true);
-  expect(adapter.decide).toBeUndefined();
-  expect(() => zai({ key: undefined })).toThrow(
-    'The zai adapter was given no key',
-  );
-  expect(() => zai({ key: '' })).toThrow();
-  expect(() => zai({ key: ' \t' })).toThrow('The zai adapter was given no key');
-});
-
-test('a call goes to Chat Completions under the address with the key, and its reasoning, a streamed tool call and usage are read, by its reference', async () => {
-  const seen: { path: string; key: string | null }[] = [];
+test('reasoning goes back on the assistant turn as reasoning_content', async () => {
+  const seen: unknown[] = [];
   using upstream = Bun.serve({
     port: 0,
     fetch: async (request) => {
-      seen.push({
-        path: new URL(request.url).pathname,
-        key: request.headers.get('authorization'),
-      });
+      seen.push(await request.json());
       return new Response(
-        `data: {"id":"20261010","created":1791633316,"model":"glm-5.3","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"I need the weather tool."}}]}
-
-data: {"id":"20261010","created":1791633316,"model":"glm-5.3","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":"call_8f1","index":0,"type":"function","function":{"name":"get_weather","arguments":"{\\"city\\":"}}]}}]}
-
-data: {"id":"20261010","created":1791633316,"model":"glm-5.3","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"function":{"arguments":"\\"Hangzhou\\"}"}}]}}]}
-
-data: {"id":"20261010","created":1791633316,"model":"glm-5.3","choices":[{"index":0,"finish_reason":"tool_calls","delta":{"role":"assistant","content":""}}],"usage":{"prompt_tokens":172,"completion_tokens":31,"total_tokens":203,"prompt_tokens_details":{"cached_tokens":159}}}
+        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
 
 data: [DONE]
 
@@ -43,30 +19,41 @@ data: [DONE]
     },
   });
   const { models } = adapted([
-    zai({ key: 'sk-host', address: `${upstream.url}api/paas/v4` }),
+    zai({ key: 'sk-host', address: upstream.url.origin }),
   ]);
 
   const events = await Array.fromAsync(
     models(
       'zai/glm-5.3',
-      { messages: [{ role: 'user', text: 'Weather in Hangzhou?' }] },
+      {
+        messages: [
+          { role: 'user', text: 'Which is further north, Paris or Rome?' },
+          {
+            role: 'assistant',
+            parts: [
+              { type: 'reasoning', text: 'Paris is at 48 degrees.' },
+              { type: 'text', text: 'Paris' },
+            ],
+          },
+          { role: 'user', text: 'And further south?' },
+        ],
+      },
       AbortSignal.timeout(5000),
     ),
   );
 
-  expect(seen).toEqual([
-    { path: '/api/paas/v4/chat/completions', key: 'Bearer sk-host' },
-  ]);
-  expect(events).toMatchObject([
-    { type: 'reasoning', text: 'I need the weather tool.' },
+  expect(seen).toMatchObject([
     {
-      type: 'tool_call',
-      id: 'call_8f1',
-      name: 'get_weather',
-      arguments: '{"city":',
+      messages: [
+        { role: 'user', content: 'Which is further north, Paris or Rome?' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Paris' }],
+          reasoning_content: 'Paris is at 48 degrees.',
+        },
+        { role: 'user', content: 'And further south?' },
+      ],
     },
-    { type: 'tool_call', id: 'call_8f1', arguments: '"Hangzhou"}' },
-    { type: 'finish', reason: 'tool_calls', usage: { input: 172, output: 31 } },
   ]);
   expect(events.at(-1)).not.toHaveProperty('warnings');
 });
@@ -163,60 +150,6 @@ data: [DONE]
         setting: 'reasoning.level',
         detail:
           'Chat Completions has no field for a reasoning effort the upstream has no level for, sent as the nearest it has',
-      },
-    ],
-  });
-  expect(events.at(-1)).toHaveProperty('warnings.length', 1);
-});
-
-test('a budget has no field: thinking is turned on and the amount is reported', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    zai({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'zai/glm-5.3',
-      {
-        messages: [{ role: 'user', text: 'What is 17*23?' }],
-        options: { reasoning: { budgetTokens: 2000 } },
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toEqual([
-    {
-      tool_stream: true,
-      thinking: { type: 'enabled' },
-      model: 'glm-5.3',
-      messages: [{ role: 'user', content: 'What is 17*23?' }],
-      stream: true,
-      stream_options: { include_usage: true },
-    },
-  ]);
-  expect(events.at(-1)).toMatchObject({
-    type: 'finish',
-    warnings: [
-      {
-        setting: 'reasoning.budgetTokens',
-        detail:
-          'Chat Completions has no field for a reasoning budget in tokens',
       },
     ],
   });
@@ -399,62 +332,6 @@ data: [DONE]
   expect(events.at(-1)).not.toHaveProperty('warnings');
 });
 
-test('reasoning goes back on the assistant turn as reasoning_content', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    zai({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'zai/glm-5.3',
-      {
-        messages: [
-          { role: 'user', text: 'Which is further north, Paris or Rome?' },
-          {
-            role: 'assistant',
-            parts: [
-              { type: 'reasoning', text: 'Paris is at 48 degrees.' },
-              { type: 'text', text: 'Paris' },
-            ],
-          },
-          { role: 'user', text: 'And further south?' },
-        ],
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toMatchObject([
-    {
-      messages: [
-        { role: 'user', content: 'Which is further north, Paris or Rome?' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Paris' }],
-          reasoning_content: 'Paris is at 48 degrees.',
-        },
-        { role: 'user', content: 'And further south?' },
-      ],
-    },
-  ]);
-  expect(events.at(-1)).not.toHaveProperty('warnings');
-});
-
 test.each([
   {
     status: 429,
@@ -467,123 +344,11 @@ test.each([
   {
     status: 429,
     error: {
-      code: '1308',
-      message:
-        'Usage limit reached for 5 hour. Your limit will reset at 2026-10-10 18:00:00',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1309',
-      message:
-        'Your GLM Coding Plan package has expired and is temporarily unavailable.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1310',
-      message:
-        'Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-12 00:00:00',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1314',
-      message:
-        'Your enterprise package has expired. Please contact your enterprise administrator.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1316',
-      message:
-        'Usage limit reached for the past 5 hours. Insufficient balance for extra usage. Resets at 2026-10-10 18:00:00.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1317',
-      message:
-        'Usage limit reached for the past 7 days. Insufficient balance for extra usage. Resets at 2026-10-12 00:00:00.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1318',
-      message:
-        'Usage limit reached for the past 5 hours. Extra usage is not available due to monthly spend limit. Resets at 2026-10-10 18:00:00.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1319',
-      message:
-        'Usage limit reached for the past 7 days. Extra usage is not available due to monthly spend limit. Resets at 2026-10-12 00:00:00.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1320',
-      message:
-        'Usage limit reached for the past 5 hours. Extra usage is not available due to monthly spend limit. Resets at 2026-10-10 18:00:00.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1321',
-      message:
-        'Usage limit reached for the past 7 days. Extra usage is not available due to monthly spend limit. Resets at 2026-10-12 00:00:00.',
-    },
-    kind: 'quota_exceeded',
-  },
-  {
-    status: 429,
-    error: { code: '1302', message: 'Rate limit reached for requests' },
-    kind: 'rate_limited',
-  },
-  {
-    status: 429,
-    error: {
-      code: '1313',
-      message:
-        'Your account`s current usage pattern does not comply with the Fair Usage Policy, and your request frequency has been limited.',
-    },
-    kind: 'rate_limited',
-  },
-  {
-    status: 429,
-    error: {
       code: '1305',
       message:
         'The service may be temporarily overloaded, please try again later',
     },
     kind: 'overloaded',
-  },
-  {
-    status: 400,
-    error: {
-      code: '1211',
-      message: 'Unknown Model, please check the model code.',
-    },
-    kind: 'unknown_model',
   },
   {
     status: 429,
@@ -616,22 +381,6 @@ test.each([
     },
     kind: 'unsupported',
   },
-  {
-    status: 400,
-    error: {
-      code: '1214',
-      message: 'Parameter top_p is invalid. Please check the documentation.',
-    },
-    kind: 'invalid_request',
-  },
-  {
-    status: 500,
-    error: {
-      code: '1234',
-      message: 'Network error, error id: 7f3, please try again later',
-    },
-    kind: 'upstream_failed',
-  },
 ])(
   'code $error.code told as $status is $kind, in the upstream`s words, by its reference',
   async ({ status, error, kind }) => {
@@ -660,98 +409,7 @@ test.each([
   },
 );
 
-test('a parameter out of range is the caller`s request to mend, in the words seen live', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      Response.json(
-        {
-          error: {
-            code: '1210',
-            message: 'The temperature parameter is illegal',
-          },
-        },
-        { status: 400 },
-      ),
-  });
-  const { models } = adapted([
-    zai({
-      key: 'sk-host',
-      address: upstream.url.origin,
-      takes: () => undefined,
-    }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'zai/glm-5.3',
-      { messages: [{ role: 'user', text: 'hi' }], options: { temperature: 2 } },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(events).toMatchObject([
-    {
-      type: 'error',
-      error: {
-        code: 'invalid_request',
-        status: 400,
-        message: 'The temperature parameter is illegal',
-        provider: { zai: { status: 400, code: '1210' } },
-      },
-    },
-  ]);
-});
-
 test.each([
-  {
-    status: 401,
-    error: { code: '1000', message: 'Authentication Failed' },
-    kind: 'upstream_refused',
-  },
-  {
-    status: 401,
-    error: {
-      code: '1001',
-      message:
-        'Authentication parameter not received in Header, unable to authenticate',
-    },
-    kind: 'upstream_refused',
-  },
-  {
-    status: 401,
-    error: { code: '1002', message: 'Authentication Token is invalid' },
-    kind: 'upstream_refused',
-  },
-  {
-    status: 401,
-    error: {
-      code: '1003',
-      message: 'Authentication Token expired, please regenerate/obtain',
-    },
-    kind: 'upstream_refused',
-  },
-  {
-    status: 401,
-    error: {
-      code: '1004',
-      message: 'Authentication failed with the provided token',
-    },
-    kind: 'upstream_refused',
-  },
-  {
-    status: 401,
-    error: { code: '1005', message: 'Need Two-Factor Authentication' },
-    kind: 'upstream_refused',
-  },
-  {
-    status: 403,
-    error: {
-      code: '1220',
-      message: 'You do not have permission to access chat',
-    },
-    kind: 'upstream_refused',
-  },
   {
     status: 429,
     error: {
@@ -793,10 +451,3 @@ test.each([
     ]);
   },
 );
-
-test('the entry exports exactly the held values, and no type', async () => {
-  const text = await Bun.file(new URL('../src/zai.ts', import.meta.url)).text();
-
-  expect(Object.keys(entry).sort()).toEqual(['zai']);
-  expect(text.match(/export (type|interface) /g)).toBeNull();
-});

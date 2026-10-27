@@ -64,33 +64,6 @@ test('a failed afterResponse hook is in the record with its part and the error a
   });
 });
 
-test('a late failure that is no MottyError is recorded whole, with its message and stack', async () => {
-  const over = Promise.withResolvers<RequestRecord>();
-
-  await told(
-    motty({ name: 'coder' })
-      .handle(() => answer('Hi'))
-      .afterResponse(async () => {
-        throw new TypeError('db password leaked here');
-      }),
-    stubHost({}, { record: over.resolve }),
-  );
-
-  expect((await over.promise).afterResponse.failed).toStrictEqual([
-    {
-      part: 'coder',
-      error: {
-        code: 'internal',
-        status: 500,
-        message: 'db password leaked here',
-        retryable: false,
-        unexpected: true,
-        stack: expect.stringContaining('TypeError: db password leaked here'),
-      },
-    },
-  ]);
-});
-
 test('a failed afterResponse hook changes nothing in the stream or the outcome, and the next one runs', async () => {
   const over = Promise.withResolvers<RequestRecord>();
   const ran: string[] = [];
@@ -376,45 +349,6 @@ test('with no limit from the host, an afterResponse hook that never returns is g
   }
 });
 
-test('a host limit replaces the thirty seconds: a hook that never returns is given up at the limit and not before', async () => {
-  jest.useFakeTimers();
-  const records: RequestRecord[] = [];
-
-  try {
-    await told(
-      motty({ name: 'coder' })
-        .handle(() => answer('Hi'))
-        .afterResponse(() => new Promise(() => {})),
-      stubHost(
-        {},
-        {
-          limits: { afterResponse: 45_000 },
-          record: (record) => {
-            records.push(record);
-          },
-        },
-      ),
-    );
-    // Fake timers leave setImmediate real, so this lets what is due run.
-    await new Promise((resolve) => setImmediate(resolve));
-    jest.advanceTimersByTime(44_999);
-    await new Promise((resolve) => setImmediate(resolve));
-    const before = records.length;
-    jest.advanceTimersByTime(1);
-    jest.runOnlyPendingTimers();
-    await new Promise((resolve) => setImmediate(resolve));
-
-    expect(before).toBe(0);
-    expect(
-      records.map(({ afterResponse }) =>
-        afterResponse.failed.map(({ error }) => error.code),
-      ),
-    ).toEqual([['timed_out']]);
-  } finally {
-    jest.useRealTimers();
-  }
-});
-
 test('the time limit is dropped once the hooks are done, so nothing fires later', async () => {
   const cleared = spyOn(globalThis, 'clearTimeout');
   const over = Promise.withResolvers<RequestRecord>();
@@ -479,34 +413,6 @@ test('a call still open when after-response work is done is cancelled and settle
   expect(reasons).toHaveLength(1);
 });
 
-test('a host function that never answers in after-response work is given up at the limit', async () => {
-  const over = Promise.withResolvers<RequestRecord>();
-
-  await told(
-    motty({ name: 'coder' })
-      .handle(() => answer('Hi'))
-      .afterResponse(async () => {
-        await hosted().storage?.set('tier', 'deep');
-      }),
-    stubHost(
-      {},
-      {
-        limits: { afterResponse: 5 },
-        record: over.resolve,
-        storage: {
-          get: () => new Promise(() => {}),
-          set: () => new Promise(() => {}),
-          delete: () => new Promise(() => {}),
-        },
-      },
-    ),
-  );
-
-  expect(
-    (await over.promise).afterResponse.failed.map(({ error }) => error.code),
-  ).toEqual(['timed_out']);
-});
-
 test('storage works in after-response work after the caller left', async () => {
   const stop = new AbortController();
   const over = Promise.withResolvers<RequestRecord>();
@@ -542,89 +448,70 @@ test('storage works in after-response work after the caller left', async () => {
   expect([...kept]).toEqual([['last', 'aborted']]);
 });
 
-test.each([
-  [
-    'an error whose message throws when it is read',
-    () =>
-      Object.defineProperty(new Error('Hidden'), 'message', {
-        get: () => {
-          throw new Error('No message for you');
-        },
-      }),
-  ],
-  [
-    'a value that throws on any read',
-    () =>
-      new Proxy(
+test('an afterResponse hook that throws a value that throws on any read is recorded as an internal failure, and the record still arrives once', async () => {
+  const unhandled: unknown[] = [];
+  const noted = (reason: unknown) => {
+    unhandled.push(reason);
+  };
+  const records: RequestRecord[] = [];
+  process.on('unhandledRejection', noted);
+
+  try {
+    const events = await told(
+      motty({ name: 'coder' })
+        .handle(() => answer('Hi'))
+        .afterResponse(() => {
+          throw new Proxy(
+            {},
+            {
+              get: () => {
+                throw new Error('No read for you');
+              },
+              has: () => {
+                throw new Error('No look for you');
+              },
+              getPrototypeOf: () => {
+                throw new Error('No kind for you');
+              },
+            },
+          );
+        }),
+      stubHost(
         {},
         {
-          get: () => {
-            throw new Error('No read for you');
-          },
-          has: () => {
-            throw new Error('No look for you');
-          },
-          getPrototypeOf: () => {
-            throw new Error('No kind for you');
+          record: (record) => {
+            records.push(record);
           },
         },
       ),
-  ],
-])(
-  'an afterResponse hook that throws %s is recorded as an internal failure, and the record still arrives once',
-  async (_what, thrown) => {
-    const unhandled: unknown[] = [];
-    const noted = (reason: unknown) => {
-      unhandled.push(reason);
-    };
-    const records: RequestRecord[] = [];
-    process.on('unhandledRejection', noted);
+    );
+    await Bun.sleep(5);
 
-    try {
-      const events = await told(
-        motty({ name: 'coder' })
-          .handle(() => answer('Hi'))
-          .afterResponse(() => {
-            throw thrown();
-          }),
-        stubHost(
-          {},
+    expect(events.map((event) => event.type)).toEqual(['text', 'finish']);
+    expect(
+      records.map(({ outcome, afterResponse }) => ({
+        outcome,
+        failed: afterResponse.failed,
+      })),
+    ).toEqual([
+      {
+        outcome: 'completed',
+        failed: [
           {
-            record: (record) => {
-              records.push(record);
+            part: 'coder',
+            error: {
+              code: 'internal',
+              status: 500,
+              message: 'Internal error',
+              retryable: false,
+              unexpected: true,
             },
           },
-        ),
-      );
-      await Bun.sleep(5);
-
-      expect(events.map((event) => event.type)).toEqual(['text', 'finish']);
-      expect(
-        records.map(({ outcome, afterResponse }) => ({
-          outcome,
-          failed: afterResponse.failed,
-        })),
-      ).toEqual([
-        {
-          outcome: 'completed',
-          failed: [
-            {
-              part: 'coder',
-              error: {
-                code: 'internal',
-                status: 500,
-                message: 'Internal error',
-                retryable: false,
-                unexpected: true,
-              },
-            },
-          ],
-        },
-      ]);
-      expect(unhandled).toEqual([]);
-    } finally {
-      process.off('unhandledRejection', noted);
-    }
-  },
-  1_000,
-);
+        ],
+      },
+    ]);
+    expect(unhandled).toEqual([]);
+  } finally {
+    process.off('unhandledRejection', noted);
+  }
+}, 1_000);

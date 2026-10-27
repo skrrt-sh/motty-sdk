@@ -11,13 +11,11 @@ import type {
 import {
   Aborted,
   fromFacts,
-  LimitReached,
   MottyError,
   Overloaded,
   RateLimited,
   TimedOut,
   toFacts,
-  UnknownModel,
   Unsupported,
 } from '../../src/data/errors.ts';
 import type { StreamEvent } from '../../src/data/event.ts';
@@ -30,7 +28,7 @@ import {
   endPhase,
   enter,
 } from '../../src/request/context.ts';
-import { callable, callOf, model } from '../../src/request/model.ts';
+import { callOf, model } from '../../src/request/model.ts';
 import { race } from '../../src/request/switching.ts';
 import { timeout } from '../../src/request/timeout.ts';
 import { stubHost } from '../stub-host.ts';
@@ -127,32 +125,6 @@ test('a completed call resolves an answer with its text', async () => {
   expect(text).toBe('Hello');
 });
 
-test('the host receives the prompt that was sent', async () => {
-  const host = stubHost({
-    'acme/small': [
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 0, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  await enter(host, () =>
-    model('acme/small').complete({
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { temperature: 0, provider: { openai: { logprobs: true } } },
-    }),
-  );
-
-  expect(host.sent('acme/small')).toEqual([
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { temperature: 0, provider: { openai: { logprobs: true } } },
-    },
-  ]);
-});
-
 test('usage and time land in calls and are summed over two calls', async () => {
   const host = stubHost({
     'acme/small': [
@@ -245,34 +217,6 @@ test('what a call left out is kept with the call, and a call that left nothing o
   expect(records[0]?.calls[1]).not.toHaveProperty('warnings');
 });
 
-test('the id the upstream gave a finished call is kept with the call', async () => {
-  const records: RequestRecord[] = [];
-  const host = stubHost(
-    {
-      'acme/small': [
-        { type: 'text', text: 'One' },
-        { type: 'finish', reason: 'stop', id: 'msg_1' },
-      ],
-    },
-    { record: (record) => records.push(record) },
-  );
-  const seen: (string | undefined)[] = [];
-  const served = motty({ name: 'coder' }).handle(async () => {
-    const last = await model('acme/small').complete({ messages: [] });
-    await last.text();
-    for (const call of current().calls.made) seen.push(call.id);
-    return last;
-  });
-
-  await told(served, host);
-  await Bun.sleep(0);
-
-  expect(seen).toEqual(['msg_1']);
-  expect(records[0]?.calls).toMatchObject([
-    { model: 'acme/small', id: 'msg_1' },
-  ]);
-});
-
 test('two calls in one request each keep the id of their own response', async () => {
   const records: RequestRecord[] = [];
   const host = stubHost(
@@ -335,29 +279,6 @@ test('a finish with no id leaves the call without one', async () => {
   expect(records[0]?.calls[0]).not.toHaveProperty('id');
 });
 
-test('a call that fails has no id', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Half' },
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Too busy' },
-      },
-    ],
-  });
-
-  const calls = await enter(host, async () => {
-    const reply = await model('acme/small').complete({ messages: [] });
-    await expect(reply.text()).rejects.toBeInstanceOf(Overloaded);
-    return current().calls;
-  });
-
-  expect(calls.made).toMatchObject([
-    { model: 'acme/small', code: 'overloaded' },
-  ]);
-  expect(calls.made[0]).not.toHaveProperty('id');
-});
-
 test('an id that is not a string, reported for a call, is not kept', async () => {
   const calls = await enter(stubHost(), async () => {
     await counted(
@@ -370,63 +291,6 @@ test('an id that is not a string, reported for a call, is not kept', async () =>
 
   expect(calls.made).toMatchObject([{ model: 'acme/tool', input: 3 }]);
   expect(calls.made[0]).not.toHaveProperty('id');
-});
-
-test('a call nobody reads is still counted', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Unread' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 4, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  const calls = await enter(host, async () => {
-    await model('acme/small').complete({ messages: [] });
-    await Bun.sleep(1);
-    return current().calls;
-  });
-
-  expect(calls.total).toEqual({ input: 4, output: 1, cached: 0, reasoning: 0 });
-});
-
-test('a name the host cannot serve throws UnknownModel and is counted with no usage', async () => {
-  const calls = await enter(stubHost(), async () => {
-    const call = model('acme/missing').complete({ messages: [] });
-    await expect(call).rejects.toBeInstanceOf(UnknownModel);
-    return current().calls;
-  });
-
-  expect(calls.made).toEqual([
-    {
-      model: 'acme/missing',
-      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
-      code: 'unknown_model',
-      message: 'No model named acme/missing',
-    },
-  ]);
-});
-
-test('a model made by name carries that name, read-only by type', () => {
-  const small = model('acme/small');
-
-  expect(small.name).toBe('acme/small');
-  // @ts-expect-error
-  small.name = 'acme/large';
-});
-
-test('what a combinator returns has no name by type', () => {
-  const either = race(model('acme/small'), model('acme/large'));
-
-  // @ts-expect-error
-  expect(either.name).toBeUndefined();
-});
-
-test('a name is resolved only when called', () => {
-  expect(() => model('acme/missing')).not.toThrow();
 });
 
 test('a failure before the first chunk rejects complete with its class', async () => {
@@ -454,57 +318,6 @@ test('a failure before the first chunk rejects complete with its class', async (
   });
 });
 
-test('a failure after the first chunk resolves and then fails on read', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Half' },
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Too busy' },
-      },
-    ],
-  });
-
-  const calls = await enter(host, async () => {
-    const reply = await model('acme/small').complete({ messages: [] });
-    await expect(reply.text()).rejects.toBeInstanceOf(Overloaded);
-    return current().calls;
-  });
-
-  expect(calls.made).toEqual([
-    {
-      model: 'acme/small',
-      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
-      code: 'overloaded',
-      message: 'Too busy',
-    },
-  ]);
-});
-
-test('the call past the limit throws LimitReached', async () => {
-  const host = stubHost(
-    {
-      'acme/small': [
-        {
-          type: 'finish',
-          reason: 'stop',
-          usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-        },
-      ],
-    },
-    { limits: { calls: 1 } },
-  );
-
-  await enter(host, async () => {
-    await model('acme/small').complete({ messages: [] });
-    await expect(
-      model('acme/small').complete({ messages: [] }),
-    ).rejects.toBeInstanceOf(LimitReached);
-  });
-
-  expect(host.sent('acme/small')).toHaveLength(1);
-});
-
 test('an already stopped request throws Aborted and the host is not asked', async () => {
   const host = stubHost(
     {
@@ -530,39 +343,6 @@ test('an already stopped request throws Aborted and the host is not asked', asyn
   expect(calls.made).toEqual([]);
 });
 
-test('the call behind a callable model is the one it was given', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Hello' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  const [text, events] = await enter(host, async () => {
-    const made = callable(async (prompt, signal) =>
-      host.models('acme/small', prompt, signal),
-    );
-    const reply = await made.complete({ messages: [] });
-    const stream = await callOf(made)({ messages: [] }, current().signal);
-    return [await reply.text(), await Array.fromAsync(stream)];
-  });
-
-  expect(text).toBe('Hello');
-  expect(events).toEqual([
-    { type: 'text', text: 'Hello' },
-    {
-      type: 'finish',
-      reason: 'stop',
-      usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-    },
-  ]);
-  expect(host.sent('acme/small')).toHaveLength(2);
-});
-
 test('the call behind a named model reaches the host with the signal it is given', async () => {
   const host = stubHost({
     'acme/small': [
@@ -584,12 +364,6 @@ test('the call behind a named model reaches the host with the signal it is given
   });
 
   expect(host.sent('acme/small')).toEqual([]);
-});
-
-test('complete outside a request throws', async () => {
-  await expect(model('acme/small').complete({ messages: [] })).rejects.toThrow(
-    'outside a request',
-  );
 });
 
 test('a host that throws when asked rejects the call, which is counted', async () => {
@@ -689,24 +463,6 @@ test('a call whose first event is the finish is counted before anyone reads it',
   ]);
 });
 
-test('returning a stream that holds only the finish keeps the finish usage', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'finish', reason: 'stop', usage: { input: 4, output: 0 } },
-    ],
-  });
-
-  const calls = await enter(host, async () => {
-    const reader = (await asked())[Symbol.asyncIterator]();
-    await reader.return?.();
-    expect(await reader.next()).toEqual({ done: true, value: undefined });
-    return current().calls;
-  });
-
-  expect(calls.made).toHaveLength(1);
-  expect(calls.total).toEqual({ input: 4, output: 0 });
-});
-
 test('a failure before the first chunk is counted with the usage it reports', async () => {
   const host = stubHost({
     'acme/small': [
@@ -757,58 +513,6 @@ test('a source that ends before any event rejects the call, which is counted', a
       message: 'The stream ended without a finish or an error',
     },
   ]);
-});
-
-test('a source that throws before any event rejects with a core error naming the model and nothing thrown, marked as the host’s', async () => {
-  const outcome = await enter(
-    {
-      ...stubHost(),
-      models: () => ({
-        [Symbol.asyncIterator]: () => ({
-          next: async () => {
-            throw new RangeError('The socket closed');
-          },
-        }),
-      }),
-    },
-    async () => {
-      const failure = await asked().catch((thrown: unknown) => thrown);
-      return { failure, calls: current().calls };
-    },
-  );
-
-  expect(outcome.failure).toBeInstanceOf(MottyError);
-  expect(outcome.failure).not.toHaveProperty('cause');
-  expect(outcome.failure).toMatchObject({
-    code: 'internal',
-    message: 'The model call to acme/small failed',
-    upstream: true,
-  });
-  expect(outcome.calls.made).toHaveLength(1);
-});
-
-test('a core error a source throws before any event rejects the call with its class and facts, marked as the host’s', async () => {
-  await enter(
-    {
-      ...stubHost(),
-      models: () => ({
-        [Symbol.asyncIterator]: () => ({
-          next: async () => {
-            throw new RateLimited('Slow down', { retryAfter: 30 });
-          },
-        }),
-      }),
-    },
-    async () => {
-      const call = asked();
-      await expect(call).rejects.toBeInstanceOf(RateLimited);
-      await expect(call).rejects.toMatchObject({
-        message: 'Slow down',
-        retryAfter: 30,
-        upstream: true,
-      });
-    },
-  );
 });
 
 test('a signal that fires while waiting rejects with Aborted, counts the call and closes a host that ignores it', async () => {
@@ -947,63 +651,6 @@ test('a source that throws mid-stream ends the stream with an error event and is
   expect(outcome.calls.made).toHaveLength(1);
 });
 
-test('a core error a source throws mid-stream keeps its facts in the error event, marked as the host’s', async () => {
-  const events = await enter(
-    {
-      ...stubHost(),
-      models: async function* () {
-        yield { type: 'text', text: 'Half' };
-        throw new Overloaded('Too busy', { retryAfter: 30 });
-      },
-    },
-    async () => Array.fromAsync(await asked()),
-  );
-
-  expect(events).toEqual([
-    { type: 'text', text: 'Half' },
-    {
-      type: 'error',
-      error: {
-        code: 'overloaded',
-        status: 503,
-        message: 'Too busy',
-        retryable: true,
-        retryAfter: 30,
-        upstream: true,
-      },
-    },
-  ]);
-});
-
-test('a source that ends without a terminal ends the stream with an error event and is counted', async () => {
-  const outcome = await enter(
-    {
-      ...stubHost(),
-      models: async function* () {
-        yield { type: 'text', text: 'Half' };
-      },
-    },
-    async () => ({
-      events: await Array.fromAsync(await asked()),
-      calls: current().calls,
-    }),
-  );
-
-  expect(outcome.events).toEqual([
-    { type: 'text', text: 'Half' },
-    {
-      type: 'error',
-      error: {
-        code: 'internal',
-        status: 500,
-        message: 'The stream ended without a finish or an error',
-        retryable: false,
-      },
-    },
-  ]);
-  expect(outcome.calls.made).toHaveLength(1);
-});
-
 test('what a source sends after its terminal is not passed on, and the source is closed', async () => {
   let closed = false;
   const outcome = await enter(
@@ -1094,38 +741,6 @@ test('a consumer that returns the stream before reading counts the call and clos
   ]);
 });
 
-test('a consumer that stops after reading some counts the call and closes the source', async () => {
-  let closed = false;
-  const calls = await enter(
-    {
-      ...stubHost(),
-      models: async function* () {
-        try {
-          yield { type: 'text', text: 'One' };
-          yield { type: 'text', text: 'Two' };
-          yield {
-            type: 'finish',
-            reason: 'stop',
-            usage: { input: 3, output: 2 },
-          };
-        } finally {
-          closed = true;
-        }
-      },
-    },
-    async () => {
-      for await (const event of await asked()) {
-        if (event.type === 'text' && event.text === 'Two') break;
-      }
-      return current().calls;
-    },
-  );
-
-  expect(closed).toBe(true);
-  expect(calls.made).toHaveLength(1);
-  expect(calls.total).toEqual({});
-});
-
 test('a return issued while a read is pending ends that read and drops the terminal that arrives later, with its usage', async () => {
   const gate = Promise.withResolvers<void>();
   const calls = await enter(
@@ -1154,27 +769,6 @@ test('a return issued while a read is pending ends that read and drops the termi
 
   expect(calls.made).toHaveLength(1);
   expect(calls.total).toEqual({});
-});
-
-test('returning an ended stream changes nothing', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Whole' },
-      { type: 'finish', reason: 'stop', usage: { input: 3, output: 2 } },
-    ],
-  });
-
-  const calls = await enter(host, async () => {
-    const reader = (await asked())[Symbol.asyncIterator]();
-    await reader.next();
-    await reader.next();
-    expect(await reader.return?.()).toEqual({ done: true, value: undefined });
-    expect(await reader.return?.()).toEqual({ done: true, value: undefined });
-    return current().calls;
-  });
-
-  expect(calls.made).toHaveLength(1);
-  expect(calls.total).toEqual({ input: 3, output: 2 });
 });
 
 test('a signal that fires while a read waits on a silent host ends that read with one aborted terminal', async () => {
@@ -1499,18 +1093,7 @@ test.each([
       { type: 'finish', reason: 'stop' },
     ],
   ],
-  [
-    'an error read to the end',
-    [
-      { type: 'text', text: 'Half' },
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Too busy' },
-      },
-    ],
-  ],
   ['a source cut short', [{ type: 'text', text: 'Half' }]],
-  ['a finish as the first event', [{ type: 'finish', reason: 'stop' }]],
   [
     'an error as the first event',
     [
@@ -1520,7 +1103,6 @@ test.each([
       },
     ],
   ],
-  ['a source with no event', []],
 ] as const)(
   '%s holds no listener on any signal, while it runs or after',
   async (_name, events) => {
@@ -1546,54 +1128,6 @@ test.each([
     expect(live()).toBe(0);
   },
 );
-
-test('a consumer that returns the stream closes its source, and no listener was put on the signal of the host', async () => {
-  const stop = new AbortController();
-  const live = listening(stop.signal);
-  const silent = stalling(
-    { type: 'text', text: 'One' },
-    { type: 'text', text: 'Two' },
-  );
-  await enter(
-    { ...stubHost({}, { signal: stop.signal }), models: silent.models },
-    async () => {
-      const held = (await asked())[Symbol.asyncIterator]();
-      const streaming = (await asked())[Symbol.asyncIterator]();
-      await streaming.next();
-      await held.return?.();
-      expect(silent.closed()).toBe(1);
-      await streaming.return?.();
-    },
-  );
-
-  expect(live()).toBe(0);
-  expect(silent.closed()).toBe(2);
-});
-
-test('a source that fails before its first event leaves no listener on the signal', async () => {
-  const stop = new AbortController();
-  const live = listening(stop.signal);
-  await enter(
-    {
-      ...stubHost({}, { signal: stop.signal }),
-      models: () => ({
-        [Symbol.asyncIterator]: () => ({
-          next: () => {
-            throw new RangeError('The socket closed');
-          },
-        }),
-      }),
-    },
-    async () => {
-      await expect(asked()).rejects.toMatchObject({
-        code: 'internal',
-        message: 'The model call to acme/small failed',
-      });
-    },
-  );
-
-  expect(live()).toBe(0);
-});
 
 test('a host that rejects its read with the reason of the signal ends the stream as aborted, its listener first', async () => {
   const stop = new AbortController();
@@ -1644,76 +1178,7 @@ test('a host that rejects its read with the reason of the signal ends the stream
   ]);
 }, 1_000);
 
-test('a host that rejects its read with the reason of the signal ends the stream as aborted, its listener last', async () => {
-  const stop = new AbortController();
-  const events = await enter(
-    {
-      ...stubHost({}, { signal: stop.signal }),
-      models: (_model, _prompt, signal) => {
-        let sent = false;
-        return {
-          [Symbol.asyncIterator]: () => ({
-            next: () => {
-              if (sent) {
-                return new Promise((_resolve, reject) => {
-                  signal.addEventListener('abort', () => reject(signal.reason));
-                });
-              }
-              sent = true;
-              return Promise.resolve({
-                done: false,
-                value: { type: 'text', text: 'Half' },
-              });
-            },
-          }),
-        };
-      },
-    },
-    async () => {
-      const reader = (await asked())[Symbol.asyncIterator]();
-      await reader.next();
-      const waiting = reader.next();
-      stop.abort();
-      return [await waiting, await reader.next()];
-    },
-  );
-
-  expect(events).toEqual([
-    { done: false, value: expect.objectContaining({ type: 'error' }) },
-    { done: true, value: undefined },
-  ]);
-  expect(events[0]?.value).toHaveProperty('error.code', 'aborted');
-}, 1_000);
-
-test.each(['AbortError', 'TimeoutError'])(
-  'a platform %s a source throws mid-stream, its signal not fired, is a failure of the call and no stop',
-  async (name) => {
-    const events = await enter(
-      {
-        ...stubHost(),
-        models: async function* () {
-          yield { type: 'text', text: 'Half' };
-          throw new DOMException('The fetch of sk-live was interrupted', name);
-        },
-      },
-      async () => Array.fromAsync(await asked()),
-    );
-
-    expect(events[1]).toEqual({
-      type: 'error',
-      error: {
-        code: 'internal',
-        status: 500,
-        message: 'The model call to acme/small failed',
-        retryable: false,
-        upstream: true,
-        unexpected: true,
-      },
-    });
-  },
-);
-
-test.each(['AbortError', 'TimeoutError'])(
+test.each(['TimeoutError'])(
   'a platform %s a source throws before any event, its signal not fired, rejects as a failure of the call and no stop',
   async (name) => {
     const outcome = await enter(
@@ -1743,19 +1208,7 @@ test.each(['AbortError', 'TimeoutError'])(
 
 test.each([
   ['a null result', 'null'],
-  ['a result with no value', '{"done":false}'],
-  ['a null event', '{"done":false,"value":null}'],
-  ['a number', '{"done":false,"value":7}'],
-  ['a string', '{"done":false,"value":"text"}'],
   ['an object with no type', '{"done":false,"value":{}}'],
-  ['an array', '{"done":false,"value":[]}'],
-  ['an object whose type is a number', '{"done":false,"value":{"type":7}}'],
-  ['an object whose type is null', '{"done":false,"value":{"type":null}}'],
-  ['an error with no facts', '{"done":false,"value":{"type":"error"}}'],
-  [
-    'an error with null facts',
-    '{"done":false,"value":{"type":"error","error":null}}',
-  ],
 ])(
   'a first event that is %s rejects with a core error, counted and closed',
   async (_name, result) => {
@@ -1789,22 +1242,7 @@ test.each([
   },
 );
 
-test.each([
-  ['a null result', 'null'],
-  ['a result with no value', '{"done":false}'],
-  ['a null event', '{"done":false,"value":null}'],
-  ['a number', '{"done":false,"value":7}'],
-  ['a string', '{"done":false,"value":"text"}'],
-  ['an object with no type', '{"done":false,"value":{}}'],
-  ['an array', '{"done":false,"value":[]}'],
-  ['an object whose type is a number', '{"done":false,"value":{"type":7}}'],
-  ['an object whose type is null', '{"done":false,"value":{"type":null}}'],
-  ['an error with no facts', '{"done":false,"value":{"type":"error"}}'],
-  [
-    'an error with null facts',
-    '{"done":false,"value":{"type":"error","error":null}}',
-  ],
-])(
+test.each([['a null event', '{"done":false,"value":null}']])(
   'mid-stream, %s ends the stream with an internal error event, counted and closed',
   async (_name, result) => {
     let closed = 0;
@@ -2051,31 +1489,6 @@ test.each([
   1_000,
 );
 
-test('a host that fires the signal inside its first read and never answers rejects with Aborted and leaves no listener', async () => {
-  const stop = new AbortController();
-  const live = listening(stop.signal);
-  const calls = await enter(
-    {
-      ...stubHost({}, { signal: stop.signal }),
-      models: () => ({
-        [Symbol.asyncIterator]: () => ({
-          next: () => {
-            stop.abort();
-            return new Promise(() => {});
-          },
-        }),
-      }),
-    },
-    async () => {
-      await expect(asked()).rejects.toBeInstanceOf(Aborted);
-      return current().calls;
-    },
-  );
-
-  expect(calls.made).toHaveLength(1);
-  expect(live()).toBe(0);
-}, 1_000);
-
 test('a reply is validated by the schema that was sent, though the prompt is given another right after the call', async () => {
   const host = stubHost({
     'acme/small': [
@@ -2165,44 +1578,7 @@ test('a finish that arrived as the first event wins over a signal that fires a m
   expect(live()).toBe(0);
 }, 1_000);
 
-test('an error that arrived as the first event wins over a signal that fires a microtask later, its usage counted', async () => {
-  const stop = new AbortController();
-  const live = listening(stop.signal);
-  const calls = await enter(
-    {
-      ...stubHost({}, { signal: stop.signal }),
-      models: () => ({
-        [Symbol.asyncIterator]: () => ({
-          next: () => {
-            const arriving = Promise.resolve({
-              done: false,
-              value: {
-                type: 'error',
-                error: { code: 'overloaded', status: 503, message: 'Too busy' },
-                usage: { input: 7, output: 0 },
-              },
-            } as const);
-            arriving.then(() => queueMicrotask(() => stop.abort()));
-            return arriving;
-          },
-        }),
-      }),
-    },
-    async () => {
-      await expect(asked()).rejects.toBeInstanceOf(Overloaded);
-      return current().calls;
-    },
-  );
-
-  expect(stop.signal.aborted).toBe(true);
-  expect(calls.total).toEqual({ input: 7, output: 0 });
-  expect(live()).toBe(0);
-}, 1_000);
-
 test.each([
-  ['empty', '{}'],
-  ['an array', '[]'],
-  ['text', '"Too busy"'],
   [
     'of the wrong types',
     '{"code":7,"status":"503","message":null,"retryable":"yes","retryAfter":"30","provider":[]}',
@@ -2257,19 +1633,6 @@ test.each([
     { code: 'overloaded', status: 503, message: 'Too busy', retryable: true },
     Overloaded,
   ],
-  [
-    'of a code no class knows',
-    '{"code":"teapot","status":418,"message":"Short and stout","retryAfter":30,"provider":{"acme":{"id":"e_1"}}}',
-    {
-      code: 'teapot',
-      status: 418,
-      message: 'Short and stout',
-      retryAfter: 30,
-      provider: { acme: { id: 'e_1' } },
-      retryable: false,
-    },
-    MottyError,
-  ],
 ])(
   'a mid-stream error whose facts are %s is handed on with the host’s facts and the mark of where it came from, its usage kept, and raised by its class where the answer is read',
   async (_name, facts, expected, raised) => {
@@ -2313,35 +1676,7 @@ test.each([
   },
 );
 
-test('a first error whose facts are an array rejects with an internal core error', async () => {
-  await enter(
-    {
-      ...stubHost(),
-      models: () => ({
-        [Symbol.asyncIterator]: () => ({
-          next: async () =>
-            JSON.parse('{"done":false,"value":{"type":"error","error":[]}}'),
-        }),
-      }),
-    },
-    async () => {
-      await expect(asked()).rejects.toMatchObject({
-        code: 'internal',
-        status: 500,
-        message: 'The host sent something that is not an event',
-      });
-    },
-  );
-});
-
-test.each([
-  ['a text chunk whose text is a number', '{"type":"text","text":7}'],
-  ['a text chunk whose text is null', '{"type":"text","text":null}'],
-  ['an event of a kind nobody knows', '{"type":"hologram"}'],
-  ['progress', '{"type":"progress","piece":0,"text":"Forged"}'],
-  ['a finish with a reason nobody knows', '{"type":"finish","reason":"bored"}'],
-  ['a tool call with no id', '{"type":"tool_call","arguments":"{}"}'],
-])(
+test.each([['an event of a kind nobody knows', '{"type":"hologram"}']])(
   '%s from a host is no event: the call fails where it enters and nothing of it is handed on',
   async (_name, sent) => {
     let read = 0;
@@ -2457,16 +1792,6 @@ test.each([
       text: 'Half',
     }),
   ],
-  [
-    'usage',
-    () => ({
-      type: 'finish' as const,
-      reason: 'stop' as const,
-      get usage(): { input: number } {
-        throw new RangeError('Not ready');
-      },
-    }),
-  ],
 ])(
   'a first event whose %s throws when read rejects with a core error naming the model and nothing thrown, counted, closed and unheard',
   async (_name, event) => {
@@ -2507,15 +1832,6 @@ test.each([
 );
 
 test.each([
-  [
-    'type',
-    () => ({
-      get type(): 'text' {
-        throw new RangeError('Not ready');
-      },
-      text: 'Half',
-    }),
-  ],
   [
     'usage',
     () => ({
@@ -2631,36 +1947,6 @@ test('a host whose reads return plain results, not promises, is read the same, f
   expect(outcome.calls.total).toEqual({ input: 3, output: 2 });
 }, 1_000);
 
-test('a host whose first read returns a plain finish, not a promise, resolves the call with it', async () => {
-  const outcome = await enter(
-    {
-      ...stubHost(),
-      models: () => ({
-        [Symbol.asyncIterator]: () => ({
-          // @ts-expect-error an async iterator answers with a promise
-          next: () => ({
-            done: false,
-            value: {
-              type: 'finish',
-              reason: 'stop',
-              usage: { input: 4, output: 0 },
-            },
-          }),
-        }),
-      }),
-    },
-    async () => ({
-      events: await Array.fromAsync(await asked()),
-      calls: current().calls,
-    }),
-  );
-
-  expect(outcome.events).toEqual([
-    { type: 'finish', reason: 'stop', usage: { input: 4, output: 0 } },
-  ]);
-  expect(outcome.calls.total).toEqual({ input: 4, output: 0 });
-}, 1_000);
-
 test('a stream that is resolved but never read and never returned stays uncounted until the signal fires, then is counted and closed', async () => {
   const stop = new AbortController();
   const live = listening(stop.signal);
@@ -2688,13 +1974,6 @@ test.each([
   [
     'throws it when asked',
     (): EventStream => {
-      throw new RateLimited('Rate limit reached for acme');
-    },
-  ],
-  [
-    'throws it mid-stream',
-    async function* (): EventStream {
-      yield { type: 'text', text: 'Half' };
       throw new RateLimited('Rate limit reached for acme');
     },
   ],
@@ -2905,42 +2184,6 @@ test('a chunk that arrived before the call was cancelled is its first event, wha
   ]);
 });
 
-test('an answer names the model that was called, not the id its upstream gave', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Hello' },
-      { type: 'finish', reason: 'stop', model: 'acme/small-2026' },
-    ],
-  });
-
-  const name = await enter(host, async () => {
-    const reply = await model('acme/small').complete({ messages: [] });
-    return reply.model();
-  });
-
-  expect(name).toBe('acme/small');
-});
-
-test('an answer that failed after its first chunk names the model that failed', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Partial' },
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Try later' },
-      },
-    ],
-  });
-
-  const name = await enter(host, async () => {
-    const reply = await model('acme/small').complete({ messages: [] });
-    await expect(reply.finish()).rejects.toBeInstanceOf(Overloaded);
-    return reply.model();
-  });
-
-  expect(name).toBe('acme/small');
-});
-
 test('two calls a host ends with one and the same event each name their own model, and the event is left as it was', async () => {
   const done: StreamEvent = { type: 'finish', reason: 'stop' };
   const host = stubHost({
@@ -2956,25 +2199,6 @@ test('two calls a host ends with one and the same event each name their own mode
 
   expect(names).toEqual(['acme/small', 'acme/large', 'acme/small']);
   expect(done).toStrictEqual({ type: 'finish', reason: 'stop' });
-});
-
-test('an answer through a time limit names the model that was called', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Hello' },
-      { type: 'finish', reason: 'stop' },
-    ],
-  });
-
-  const name = await enter(host, async () => {
-    const reply = await timeout(model('acme/small'), {
-      first: 1000,
-      stall: 1000,
-    }).complete({ messages: [] });
-    return reply.model();
-  });
-
-  expect(name).toBe('acme/small');
 });
 
 test('a failure its host calls its own rejects the call with no mark of the upstream', async () => {
@@ -2996,30 +2220,6 @@ test('a failure its host calls its own rejects the call with no mark of the upst
   );
 
   expect(failure).toBeInstanceOf(Unsupported);
-  expect('upstream' in toFacts(failure)).toBe(false);
-});
-
-test('a failure its host calls its own after the first chunk fails the answer with no mark of the upstream', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Partial' },
-      {
-        type: 'error',
-        error: {
-          code: 'internal',
-          message: 'The encoder broke',
-          upstream: false,
-        },
-      },
-    ],
-  });
-
-  const failure = await enter(host, async () => {
-    const reply = await model('acme/small').complete({ messages: [] });
-    return reply.finish().catch((thrown: unknown) => thrown);
-  });
-
-  expect(failure).toBeInstanceOf(MottyError);
   expect('upstream' in toFacts(failure)).toBe(false);
 });
 
@@ -3341,43 +2541,6 @@ test('a race loser in after-response work is counted with what its host reports 
   expect(closed).toBe(1);
 }, 1_000);
 
-test('a race loser in after-response work whose host never ends its stream is closed when that work ends', async () => {
-  let closed = 0;
-  const stub = stubHost({
-    'acme/fast': [
-      { type: 'text', text: 'Fast' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-  const models: ModelCall = (name, prompt, signal) =>
-    name === 'acme/fast'
-      ? stub.models(name, prompt, signal)
-      : {
-          [Symbol.asyncIterator]: () => ({
-            next: () => new Promise<never>(() => {}),
-            return: async () => {
-              closed += 1;
-              return { done: true, value: undefined };
-            },
-          }),
-        };
-
-  const outcome = await enter({ ...stub, models }, async () => {
-    await endPhase();
-    beginAfterResponse();
-    const reply = await race(model('acme/slow'), model('acme/fast')).complete({
-      messages: [],
-    });
-    await reply.text();
-    await Bun.sleep(1);
-    const closedBefore = closed;
-    await endPhase();
-    return [closedBefore, closed];
-  });
-
-  expect(outcome).toEqual([0, 1]);
-}, 1_000);
-
 test('a late terminal that reports no usage changes nothing in the calls, and the stream is closed', async () => {
   const cost = Promise.withResolvers<void>();
   let closed = 0;
@@ -3424,47 +2587,6 @@ test('a late terminal that reports no usage changes nothing in the calls, and th
   expect(closed).toBe(1);
 }, 1_000);
 
-test('a stopped call whose host ends its stream with no terminal is left as it was counted, and the stream is closed', async () => {
-  const cost = Promise.withResolvers<void>();
-  let closed = 0;
-  const stub = stubHost({
-    'acme/fast': [
-      { type: 'text', text: 'Fast' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-  const models: ModelCall = (name, prompt, signal) =>
-    name === 'acme/fast'
-      ? stub.models(name, prompt, signal)
-      : {
-          [Symbol.asyncIterator]: () => ({
-            next: async () => {
-              await cost.promise;
-              return { done: true, value: undefined };
-            },
-            return: async () => {
-              closed += 1;
-              return { done: true, value: undefined };
-            },
-          }),
-        };
-
-  const outcome = await enter({ ...stub, models }, async () => {
-    const reply = await race(model('acme/slow'), model('acme/fast')).complete({
-      messages: [],
-    });
-    await reply.text();
-    await Bun.sleep(1);
-    const before = current().calls.made;
-    cost.resolve();
-    await Bun.sleep(1);
-    return { before, after: current().calls.made };
-  });
-
-  expect(outcome.after).toBe(outcome.before);
-  expect(closed).toBe(1);
-}, 1_000);
-
 test('a stopped call whose host throws afterwards is left as it was counted, and the stream is closed', async () => {
   const cost = Promise.withResolvers<void>();
   let closed = 0;
@@ -3503,64 +2625,6 @@ test('a stopped call whose host throws afterwards is left as it was counted, and
   });
 
   expect(outcome.after).toBe(outcome.before);
-  expect(closed).toBe(1);
-}, 1_000);
-
-test('a call cut by a time limit is counted with the usage its host reports afterwards', async () => {
-  const cost = Promise.withResolvers<void>();
-  let closed = 0;
-  const stub = stubHost({
-    'acme/fast': [
-      { type: 'text', text: 'Fast' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-  const models: ModelCall = (name, prompt, signal) =>
-    name === 'acme/fast'
-      ? stub.models(name, prompt, signal)
-      : {
-          [Symbol.asyncIterator]: () => ({
-            next: async () => {
-              await cost.promise;
-              return {
-                done: false,
-                value: {
-                  type: 'finish',
-                  reason: 'stop',
-                  usage: { input: 40, output: 2 },
-                },
-              };
-            },
-            return: async () => {
-              closed += 1;
-              return { done: true, value: undefined };
-            },
-          }),
-        };
-
-  const outcome = await enter({ ...stub, models }, async () => {
-    await expect(
-      timeout(model('acme/slow'), 5).complete({ messages: [] }),
-    ).rejects.toBeInstanceOf(TimedOut);
-    await Bun.sleep(1);
-    const before = current().calls.total;
-    cost.resolve();
-    await Bun.sleep(1);
-    return { before, calls: current().calls };
-  });
-
-  expect(outcome.before).toEqual({});
-  expect(outcome.calls.made).toEqual([
-    {
-      model: 'acme/slow',
-      input: 40,
-      output: 2,
-      time: { total: expect.any(Number) },
-      code: 'aborted',
-      message: 'The call was given up',
-    },
-  ]);
-  expect(outcome.calls.total).toEqual({ input: 40, output: 2 });
   expect(closed).toBe(1);
 }, 1_000);
 

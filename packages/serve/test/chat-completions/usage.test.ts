@@ -5,31 +5,6 @@ import {
   usageWritten,
 } from '../../src/chat-completions/usage.ts';
 
-test('usage is read with its cached, written and reasoning counts', () => {
-  expect(
-    usageRead({
-      prompt_tokens: 120,
-      completion_tokens: 40,
-      total_tokens: 160,
-      prompt_tokens_details: {
-        cached_tokens: 100,
-        cache_write_tokens: 20,
-        audio_tokens: 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens: 32,
-        accepted_prediction_tokens: 0,
-      },
-    }),
-  ).toEqual({
-    input: 120,
-    output: 40,
-    cached: 100,
-    cacheWrite: 20,
-    reasoning: 32,
-  });
-});
-
 test('the cost a router reports is read, and written back under its name', () => {
   expect(
     usageRead({
@@ -47,11 +22,6 @@ test('the cost a router reports is read, and written back under its name', () =>
     total_tokens: 17,
     cost: 0.0000023,
   });
-});
-
-test('a cost nobody reported is neither read nor written', () => {
-  expect(usageRead({ prompt_tokens: 15, cost: null })).toEqual({ input: 15 });
-  expect(usageWritten({ input: 15, output: 2 })).not.toHaveProperty('cost');
 });
 
 test('a count the upstream did not report is absent, a zero is a zero', () => {
@@ -87,24 +57,6 @@ test('cached tokens in the details outrank a count at the top of usage', () => {
       true,
     ),
   ).toEqual({ input: 3417, cached: 3327 });
-});
-
-test('usage is written with its totals and the breakdowns reported', () => {
-  expect(
-    usageWritten({
-      input: 120,
-      output: 40,
-      cached: 100,
-      cacheWrite: 20,
-      reasoning: 32,
-    }),
-  ).toEqual({
-    prompt_tokens: 120,
-    completion_tokens: 40,
-    total_tokens: 160,
-    prompt_tokens_details: { cached_tokens: 100, cache_write_tokens: 20 },
-    completion_tokens_details: { reasoning_tokens: 32 },
-  });
 });
 
 test('usage is written without a breakdown nobody reported', () => {

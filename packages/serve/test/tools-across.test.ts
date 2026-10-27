@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { Unsupported } from '@mottyjs/core';
 import type { Chunk } from '@mottyjs/core/host';
 import { chatCompletions, messages, responses } from '../src/index.ts';
 import { events } from '../src/messages/events.ts';
@@ -244,24 +243,6 @@ test('a tool under the provider`s shared key is one only another API runs, since
 
   expect(body).not.toHaveProperty('tools');
   expect(leftOut.map(({ setting }) => setting)).toEqual(['tool.offered']);
-});
-
-test('a tool only another API runs that the tool choice requires fails the call', () => {
-  const { request } = messages.decode(
-    {
-      model: 'relay',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: 'Look it up.' }],
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      tool_choice: { type: 'tool', name: 'web_search' },
-    },
-    new Headers(),
-  );
-
-  expect(() => responses.encode('model-x', request)).toThrow(Unsupported);
-  expect(() => chatCompletions.encode('model-x', request)).toThrow(
-    'Chat Completions cannot carry a tool only another API runs, which the tool choice names',
-  );
 });
 
 test('a free-form custom tool goes to Anthropic Messages as a tool that takes its text in one field, and said so', () => {

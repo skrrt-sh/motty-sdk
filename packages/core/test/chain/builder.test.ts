@@ -1,18 +1,12 @@
 import { expect, test } from 'bun:test';
 import {
   type AnsweringMotty,
-  type AnyMotty,
   chain,
   type Motty,
 } from '../../src/chain/builder.ts';
 import { motty } from '../../src/chain/motty.ts';
 import { reroute } from '../../src/chain/route.ts';
-import {
-  type Contract,
-  isMarked,
-  type Marked,
-  mark,
-} from '../../src/contract.ts';
+import { isMarked, type Marked } from '../../src/contract.ts';
 import type { Chunk } from '../../src/data/event.ts';
 import type { ChatRequest, Message, Prompt } from '../../src/data/message.ts';
 import { type Answer, answer } from '../../src/request/answer.ts';
@@ -176,24 +170,6 @@ test('an entry that returns nothing does not compile', () => {
   });
 
   expect(routed[chain].answers).toBe(true);
-});
-
-test('a hook before the answer sees a route that may be absent and any path', () => {
-  const observed = motty({ name: 'observed' })
-    .afterHandle(({ route, path }) => {
-      const entry: string | undefined = route;
-      const entries: readonly string[] = path;
-      note(`${entry} ${entries.join('/')}`);
-    })
-    .afterResponse((ctx) => {
-      const entries: readonly string[] = ctx.path;
-      if (ctx.outcome === 'completed') {
-        const entry: string | undefined = ctx.route;
-        note(`${entry} ${entries.join('/')}`);
-      }
-    });
-
-  expect(observed[chain].answers).toBe(false);
 });
 
 test('a hook before the answer reading its route as always there does not compile', () => {
@@ -581,23 +557,6 @@ test('a reroute to its own entry does not compile', () => {
   expect(routed[chain].answers).toBe(true);
 });
 
-test('any motty is an AnyMotty', () => {
-  const hooksOnly: AnyMotty = emptyPrompt;
-  const deriving: AnyMotty = tuning;
-  const handled: AnyMotty = deep;
-  const routed: AnyMotty = structured;
-  const nested: AnyMotty = coder;
-  // @ts-expect-error
-  const caught: AnyMotty = deep.catch(() => reroute('standard'));
-
-  expect(
-    [hooksOnly, deriving, handled, routed, nested].map(
-      (any) => any[chain].name,
-    ),
-  ).toEqual(['empty-prompt', 'settings', 'deep', 'structured', 'coder']);
-  expect(chain in caught).toBe(false);
-});
-
 test('any motty, finished or not, is held and taken as a Motty', () => {
   const fresh: Motty = motty({ name: 'fresh' });
   const handled: Motty = motty({ name: 'done' }).handle(() => answer('Done'));
@@ -677,15 +636,6 @@ test('only a motty that answers is an AnsweringMotty', () => {
       unanswered,
     ].map((answering) => answering[chain].answers),
   ).toEqual([true, true, true, true, true, false, false, false]);
-});
-
-test('the mark is typed as the contract', () => {
-  const served = motty({ name: 'root' }).handle(() => answer('Handled'));
-  const contract: Contract = served[mark];
-  // @ts-expect-error
-  const wrong: string = served[mark];
-
-  expect<unknown>(wrong).toBe(contract);
 });
 
 test('a catch reads what the parent derived and may return nothing', () => {

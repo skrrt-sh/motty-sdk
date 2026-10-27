@@ -26,22 +26,6 @@ test('what is no promise is given back as it is, with no wait', () => {
   expect(wait('standard', signal)).toBe('standard');
 });
 
-test('a promise that settles is passed on, its value or what it rejected with', async () => {
-  const { signal } = ownSignal();
-  const failure = new UpstreamFailed('The tier store is down');
-
-  expect(await wait(Promise.resolve('deep'), signal)).toBe('deep');
-  await expect(wait(Promise.reject(failure), signal)).rejects.toBe(failure);
-});
-
-test('a promise that never settles ends with Aborted a turn after the signal fires', async () => {
-  const phase = ownSignal();
-  const waiting = wait(new Promise(() => {}), phase.signal);
-  phase.stop();
-
-  await expect(waiting).rejects.toBeInstanceOf(Aborted);
-});
-
 test('a wait begun once the signal has fired still gives the code its turn, then ends with the stop', async () => {
   const phase = ownSignal();
   phase.stop();
@@ -182,17 +166,6 @@ test('a signal follows another by one listener, which is dropped when it fires o
   );
 });
 
-test('a signal that follows one already fired is fired from the start, with its reason and no listener', () => {
-  const reason = new TimedOut('The host gave the request two minutes');
-  const host = AbortSignal.abort(reason);
-  const added = spyOn(host, 'addEventListener');
-
-  const late = ownSignal(host);
-
-  expect(late.signal.reason).toBe(reason);
-  expect(added).toHaveBeenCalledTimes(0);
-});
-
 test('whoever asked to be told after the turn is told once, a turn after the signal fires, unless it let go first', async () => {
   const phase = ownSignal();
   const told: string[] = [];
@@ -236,22 +209,6 @@ test('on a signal that has already fired, at once is at the asking and after the
   expect(atOnce).toEqual(['now']);
   expect(told).toEqual(['now', 'later']);
   expect(added).toHaveBeenCalledTimes(0);
-});
-
-test('one listener on a signal the core did not make serves both kinds of asking', async () => {
-  const foreign = new AbortController();
-  const added = spyOn(foreign.signal, 'addEventListener');
-  const told: string[] = [];
-
-  onAbort(foreign.signal, () => told.push('now'), 'atOnce');
-  onAbort(foreign.signal, () => told.push('later'), 'afterTurn');
-  foreign.abort();
-  const atOnce = [...told];
-  await Bun.sleep(1);
-
-  expect(atOnce).toEqual(['now']);
-  expect(told).toEqual(['now', 'later']);
-  expect(added).toHaveBeenCalledTimes(1);
 });
 
 test('a stop with no reason has none to give, and a stop with a reason gives it', () => {

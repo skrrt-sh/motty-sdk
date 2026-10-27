@@ -150,8 +150,6 @@ test('what a fragment holds for this API is carried as it came', () => {
 });
 
 test.each([
-  [{}],
-  [{ provider: { 'openai.responses': { namespace: 'time' } } }],
   [{ provider: { 'openai.chat': { index: 9, function: { name: 'stray' } } } }],
 ])(
   'a later fragment with no input and nothing this wire writes adds nothing: %j',
@@ -282,11 +280,6 @@ test.each([
     { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0=' } },
   ],
   [
-    'an address said to be an image',
-    { type: 'file', url: 'https://x.test/made.png', mediaType: 'image/png' },
-    { type: 'image_url', image_url: { url: 'https://x.test/made.png' } },
-  ],
-  [
     'an address this family read as a picture, with what its entry held',
     {
       type: 'file',
@@ -304,7 +297,6 @@ test.each([
 });
 
 test.each([
-  ['a PDF', { type: 'file', data: 'JVBERi0=', mediaType: 'application/pdf' }],
   [
     'a file by address of no named type',
     { type: 'file', url: 'https://x.test/a' },

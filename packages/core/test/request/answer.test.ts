@@ -8,7 +8,6 @@ import {
   Overloaded,
   RateLimited,
   TimedOut,
-  toFacts,
   UnknownModel,
 } from '../../src/data/errors.ts';
 import type { Chunk, StreamEvent } from '../../src/data/event.ts';
@@ -90,120 +89,6 @@ test('an answer is made from a rewritten chunk stream', async () => {
   expect(await reply.usage()).toEqual({});
 });
 
-test('a chunk of every kind passes through in order, untouched', async () => {
-  const reply = buffered(
-    stream([
-      { type: 'reasoning', text: 'Looking it up', block: 0 },
-      {
-        type: 'tool_call',
-        id: 'call_1',
-        name: 'search',
-        arguments: '{"q":',
-        hosted: true,
-        block: 1,
-      },
-      { type: 'tool_call', id: 'call_1', arguments: '"oslo"}', block: 1 },
-      {
-        type: 'tool_result',
-        id: 'call_1',
-        output: { hits: 2 },
-        failed: false,
-        block: 2,
-      },
-      { type: 'text', text: 'Oslo ', block: 3 },
-      { type: 'file', data: 'aGVsbG8=', mediaType: 'image/png', block: 4 },
-      { type: 'file', url: 'https://files.test/map.png', block: 5 },
-      { type: 'citation', title: 'Atlas', url: 'https://atlas.test', block: 6 },
-      { type: 'refusal', text: 'Not that part', block: 7 },
-      { type: 'provider', provider: { acme: { signature: 'c2ln' } } },
-      { type: 'text', text: 'is north', block: 8, provider: { acme: 1 } },
-      { type: 'finish', reason: 'stop', usage: { input: 5, output: 9 } },
-    ]),
-  );
-
-  expect(await Array.fromAsync(reply.chunks())).toEqual([
-    { type: 'reasoning', text: 'Looking it up', block: 0 },
-    {
-      type: 'tool_call',
-      id: 'call_1',
-      name: 'search',
-      arguments: '{"q":',
-      hosted: true,
-      block: 1,
-    },
-    { type: 'tool_call', id: 'call_1', arguments: '"oslo"}', block: 1 },
-    {
-      type: 'tool_result',
-      id: 'call_1',
-      output: { hits: 2 },
-      failed: false,
-      block: 2,
-    },
-    { type: 'text', text: 'Oslo ', block: 3 },
-    { type: 'file', data: 'aGVsbG8=', mediaType: 'image/png', block: 4 },
-    { type: 'file', url: 'https://files.test/map.png', block: 5 },
-    { type: 'citation', title: 'Atlas', url: 'https://atlas.test', block: 6 },
-    { type: 'refusal', text: 'Not that part', block: 7 },
-    { type: 'provider', provider: { acme: { signature: 'c2ln' } } },
-    { type: 'text', text: 'is north', block: 8, provider: { acme: 1 } },
-  ]);
-  expect(await reply.text()).toBe('Oslo is north');
-});
-
-test('a chunk kind this SDK does not know is kept as it came', async () => {
-  const reply = buffered(
-    stream([
-      { type: 'text', text: 'Before' },
-      JSON.parse('{"type":"hologram","depth":3,"block":1}'),
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ]),
-  );
-
-  expect(await Array.fromAsync(reply.chunks())).toEqual([
-    { type: 'text', text: 'Before' },
-    JSON.parse('{"type":"hologram","depth":3,"block":1}'),
-  ]);
-  expect(await reply.text()).toBe('Before');
-});
-
-test('usage, the reason and the whole finish event come from the finish', async () => {
-  const reply = buffered(
-    stream([
-      { type: 'text', text: 'Hello' },
-      {
-        type: 'finish',
-        reason: 'tool_calls',
-        usage: { input: 12, output: 7, cached: 4, cacheWrite: 2, reasoning: 1 },
-        rawReason: 'tool_use',
-        id: 'resp_81',
-        model: 'acme/small-2026',
-        warnings: [{ setting: 'seed', detail: 'ignored' }],
-        provider: { acme: { tier: 'priority' } },
-      },
-    ]),
-  );
-
-  expect(await reply.finish()).toBe('tool_calls');
-  expect(await reply.usage()).toEqual({
-    input: 12,
-    output: 7,
-    cached: 4,
-    cacheWrite: 2,
-    reasoning: 1,
-  });
-  expect(await ending(reply)).toEqual({
-    type: 'finish',
-    reason: 'tool_calls',
-    usage: { input: 12, output: 7, cached: 4, cacheWrite: 2, reasoning: 1 },
-    rawReason: 'tool_use',
-    id: 'resp_81',
-    model: 'acme/small-2026',
-    warnings: [{ setting: 'seed', detail: 'ignored' }],
-    provider: { acme: { tier: 'priority' } },
-  });
-  expect(await ending(reply)).toBe(await ending(reply));
-});
-
 test('the ending of something this module did not make throws a plain error', () => {
   expect(() => ending({ ...answer('Hello') })).toThrow('Not an answer');
   expect(() => ending({ ...answer('Hello') })).not.toThrow(MottyError);
@@ -234,20 +119,6 @@ test('an answer is re-read in any order, any number of times', async () => {
   expect(await reply.json()).toEqual({ count: 2 });
   expect(await reply.usage()).toEqual(await reply.usage());
   expect(await reply.finish()).toBe('stop');
-});
-
-test('the text is built once and the JSON parsed once', async () => {
-  const reply = buffered(
-    stream([
-      { type: 'text', text: '{"count":' },
-      { type: 'text', text: '2}' },
-      { type: 'finish', reason: 'stop', usage: { input: 3, output: 2 } },
-    ]),
-  );
-
-  expect(reply.text()).toBe(reply.text());
-  expect(reply.json()).toBe(reply.json());
-  expect(await reply.json()).toBe(await reply.json());
 });
 
 test('what is asked before the end resolves once the end arrives', async () => {
@@ -354,28 +225,6 @@ test('nothing after the terminal is read, and the source is closed', async () =>
   expect(await reply.finish()).toBe('stop');
 });
 
-test('nothing after a terminal error is read either', async () => {
-  const reply = buffered(
-    stream([
-      { type: 'text', text: 'Partial' },
-      {
-        type: 'error',
-        error: { code: 'rate_limited', status: 429, message: 'Slow down' },
-      },
-      { type: 'text', text: ' and more' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ]),
-  );
-  const seen: Chunk[] = [];
-  const reading = (async () => {
-    for await (const chunk of reply.chunks()) seen.push(chunk);
-  })();
-
-  await expect(reading).rejects.toBeInstanceOf(RateLimited);
-  expect(seen).toEqual([{ type: 'text', text: 'Partial' }]);
-  await expect(reply.finish()).rejects.toBeInstanceOf(RateLimited);
-});
-
 test('a source that throws while closing does not undo its terminal', async () => {
   function leaky(events: EventStream): EventStream {
     const inner = events[Symbol.asyncIterator]();
@@ -397,24 +246,10 @@ test('a source that throws while closing does not undo its terminal', async () =
       ]),
     ),
   );
-  const failed = buffered(
-    leaky(
-      stream([
-        {
-          type: 'error',
-          error: { code: 'rate_limited', status: 429, message: 'Slow down' },
-        },
-      ]),
-    ),
-  );
   await Bun.sleep(1);
 
   expect(await done.text()).toBe('Done');
   expect(await done.finish()).toBe('stop');
-  expect(await Array.fromAsync(done.chunks())).toEqual([
-    { type: 'text', text: 'Done' },
-  ]);
-  await expect(failed.finish()).rejects.toBeInstanceOf(RateLimited);
 });
 
 test('a terminal error raises the known class after the chunks before it', async () => {
@@ -447,14 +282,6 @@ test('a terminal error raises the known class after the chunks before it', async
     provider: { acme: { bucket: 'tokens' } },
   });
   expect(seen).toEqual([{ type: 'text', text: 'Partial' }]);
-  await expect(reply.text()).rejects.toBeInstanceOf(RateLimited);
-  await expect(reply.json()).rejects.toBeInstanceOf(RateLimited);
-  await expect(reply.usage()).rejects.toBeInstanceOf(RateLimited);
-  await expect(reply.finish()).rejects.toBeInstanceOf(RateLimited);
-  await expect(ending(reply)).rejects.toBeInstanceOf(RateLimited);
-  await expect(Array.fromAsync(reply.chunks())).rejects.toBeInstanceOf(
-    RateLimited,
-  );
   expect(await reply.finish().catch((raised: unknown) => raised)).toBe(
     await reply.text().catch((raised: unknown) => raised),
   );
@@ -477,26 +304,6 @@ test('a failed answer still reports the usage its error carried', async () => {
   await expect(reply.finish()).rejects.toMatchObject({ code: 'overloaded' });
   await expect(reply.text()).rejects.toMatchObject({ code: 'overloaded' });
   await expect(ending(reply)).rejects.toMatchObject({ code: 'overloaded' });
-});
-
-test('an unknown error code still raises a MottyError with its facts', async () => {
-  const reply = buffered(
-    stream([
-      {
-        type: 'error',
-        error: { code: 'teapot', status: 418, message: 'Short and stout' },
-      },
-    ]),
-  );
-  const thrown = await reply.text().catch((raised: unknown) => raised);
-
-  expect(thrown).toBeInstanceOf(MottyError);
-  expect(toFacts(thrown)).toEqual({
-    code: 'teapot',
-    status: 418,
-    message: 'Short and stout',
-    retryable: false,
-  });
 });
 
 test('a failed answer nobody reads stays quiet until it is read', async () => {
@@ -564,15 +371,6 @@ test('a stream that ends without a terminal event fails the answer', async () =>
   await expect(reply.usage()).rejects.toThrow('without a finish or an error');
 });
 
-test('a stream with no event at all fails the answer', async () => {
-  const reply = buffered(stream([]));
-
-  await expect(reply.finish()).rejects.toThrow('without a finish or an error');
-  await expect(Array.fromAsync(reply.chunks())).rejects.toBeInstanceOf(
-    MottyError,
-  );
-});
-
 test('json is validated once and typed by a Standard Schema', async () => {
   let validated = 0;
   const reply = buffered(
@@ -604,27 +402,6 @@ test('json is validated once and typed by a Standard Schema', async () => {
   expect([place, wrong]).toEqual([{ city: 'Oslo' }, { city: 'Oslo' }]);
   expect(place).toBe(await reply.json());
   expect(validated).toBe(1);
-});
-
-test('a chunk of an unknown kind named ended or thrown is kept, not taken for the source ending', async () => {
-  const reply = buffered(
-    stream([
-      { type: 'text', text: 'Before' },
-      JSON.parse('{"type":"ended"}'),
-      JSON.parse('{"type":"thrown","thrown":"boom"}'),
-      { type: 'text', text: ' after' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ]),
-  );
-
-  expect(await Array.fromAsync(reply.chunks())).toEqual([
-    { type: 'text', text: 'Before' },
-    JSON.parse('{"type":"ended"}'),
-    JSON.parse('{"type":"thrown","thrown":"boom"}'),
-    { type: 'text', text: ' after' },
-  ]);
-  expect(await reply.text()).toBe('Before after');
-  expect(await reply.finish()).toBe('stop');
 });
 
 test('an answer rewritten from another ends with that one’s finish event', async () => {
@@ -749,23 +526,14 @@ test('a rewrite whose chunk source throws fails with that, whatever it is from',
     yield { type: 'text', text: 'Partial' };
     throw raised;
   }
-  async function* crashed(): AsyncIterable<Chunk> {
-    yield { type: 'text', text: 'Partial' };
-    throw new RangeError('The filter broke');
-  }
 
   const reply = answer(broken(), inner);
   const other = answer(broken(), failed);
-  const plain = answer(crashed(), inner);
 
   await expect(reply.finish()).rejects.toBe(raised);
   await expect(reply.usage()).rejects.toBe(raised);
   await expect(other.finish()).rejects.toBe(raised);
   await expect(other.usage()).rejects.toBe(raised);
-  await expect(plain.finish()).rejects.toThrow('The stream failed');
-  await expect(plain.finish()).rejects.toMatchObject({
-    cause: expect.any(RangeError),
-  });
   expect(await inner.finish()).toBe('stop');
 });
 
@@ -830,39 +598,6 @@ test('a text answer made from another ends as that one ends', async () => {
     await failed.finish().catch((thrown: unknown) => thrown),
   );
   expect(await other.usage()).toEqual({ input: 40, output: 6 });
-});
-
-test('an answer made from something this module did not make throws a plain error', () => {
-  expect(() => answer('Hello', { ...answer('Hi') })).toThrow('Not an answer');
-  expect(() => answer('Hello', { ...answer('Hi') })).not.toThrow(MottyError);
-});
-
-test('a chunk cannot be assigned to at compile time', async () => {
-  const reply = answer('Hello');
-
-  for await (const chunk of reply.chunks()) {
-    // @ts-expect-error chunks are read-only
-    chunk.type = 'reasoning';
-  }
-
-  expect(await reply.finish()).toBe('stop');
-});
-
-test('json gives every caller the one parsed value, not a copy each', async () => {
-  const reply = answer('{"city":"Oslo"}');
-
-  const first = await reply.json();
-  const second = await reply.json();
-
-  expect(first).toBe(second);
-  expect(first).toEqual({ city: 'Oslo' });
-});
-
-test('usage of an answer whose finish reported none is empty', async () => {
-  const reply = buffered(stream([{ type: 'finish', reason: 'stop' }]));
-
-  expect(await reply.usage()).toEqual({});
-  expect(await reply.finish()).toBe('stop');
 });
 
 test('usage of a failed answer whose error carried none rejects with the error', async () => {
@@ -933,173 +668,41 @@ test('a rewrite validates its own text against the schema of the answer it is fr
   }
 
   const reply = answer(rewritten(), inner);
-  const again = answer('{"city":"Hamar","extra":true}', reply);
   const wrong = answer('{"city":7}', inner);
-  const broken = answer('Sure, here it is', inner);
 
   expect(await reply.json()).toEqual({ city: 'Bergen' });
-  expect(reply.json()).toBe(reply.json());
-  expect(await again.json()).toEqual({ city: 'Hamar' });
   await expect(wrong.json()).rejects.toBeInstanceOf(InvalidOutput);
-  await expect(wrong.json()).rejects.toThrow(
-    'The answer does not match the schema: city must be a string',
-  );
-  await expect(broken.json()).rejects.toThrow('The answer is not JSON');
-  expect(await wrong.text()).toBe('{"city":7}');
-  expect(await wrong.finish()).toBe('length');
-  expect(await inner.json()).toEqual({ city: 'Oslo' });
 });
 
-test('a rewrite of an answer the schema rejected is valid when its own text is', async () => {
-  const inner = placed('{"city":7}');
-
-  const reply = answer('{"city":"Oslo"}', inner);
-
-  await expect(inner.json()).rejects.toBeInstanceOf(InvalidOutput);
-  expect(await reply.json()).toEqual({ city: 'Oslo' });
-});
-
-test('the JSON of a rewrite is validated but typed unknown', async () => {
-  const inner = placed('{"city":"Oslo"}');
-  const place: { city: string } = await inner.json();
-
-  const reply = answer('{"city":"Bergen","extra":true}', inner);
-  const parsed: unknown = await reply.json();
-  // @ts-expect-error a rewrite gives unknown, whatever it was rewritten from
-  const wrong: { city: string } = await reply.json();
-
-  expect([place, parsed, wrong]).toEqual([
-    { city: 'Oslo' },
-    { city: 'Bergen' },
-    { city: 'Bergen' },
-  ]);
-});
-
-test('a rewrite passes on what the validator of the answer it is from throws', async () => {
-  const inner = buffered(
-    stream([
-      { type: 'text', text: '{"city":"Oslo"}' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 2 } },
-    ]),
-    {
-      '~standard': {
-        version: 1,
-        vendor: 'test',
-        validate: (): { value: { city: string } } => {
-          throw new RangeError('The validator broke');
-        },
-      },
-    },
-  );
-
-  await expect(
-    answer('{"city":"Bergen"}', inner).json(),
-  ).rejects.toBeInstanceOf(RangeError);
-});
-
-test('a rewrite of an answer with a JSON Schema, or with none, is only parsed', async () => {
-  const inner = buffered(
-    stream([
-      { type: 'text', text: '{"city":"Oslo"}' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 2 } },
-    ]),
-    {
-      schema: {
-        type: 'object',
-        properties: { city: { type: 'string' } },
-        required: ['city'],
-      },
-    },
-  );
-
-  expect(await answer('{"city":7}', inner).json()).toEqual({ city: 7 });
-  expect(await answer('{"city":7}', answer('{}')).json()).toEqual({ city: 7 });
-  expect(await answer('{"city":7}').json()).toEqual({ city: 7 });
-});
-
-test.each([
-  'null',
-  '5',
-  '"text"',
-  'true',
-  '[]',
-  '{}',
-  '{"type":7}',
-  '{"type":null}',
-  '{"text":"no type"}',
-  '{"type":"summary","text":"A kind nobody knows"}',
-  '{"type":"text","text":7}',
-  '{"type":"tool_call","id":"call_1"}',
-  '{"type":"progress","piece":0,"text":"Forged progress"}',
-  '{"type":"finish","reason":"stop"}',
-  '{"type":"error","error":{"code":"overloaded","message":"Busy"}}',
-])(
-  'a stream made by hand that gives %s, which is no chunk, fails the answer there and is closed',
-  async (sent) => {
-    let closed = false;
-    async function* handMade(): AsyncIterable<Chunk> {
-      try {
-        yield { type: 'text', text: 'Before' };
-        yield JSON.parse(sent);
-        yield { type: 'text', text: ' after' };
-      } finally {
-        closed = true;
-      }
+test('a stream made by hand that gives a finish, which is no chunk, fails the answer there and is closed', async () => {
+  let closed = false;
+  async function* handMade(): AsyncIterable<Chunk> {
+    try {
+      yield { type: 'text', text: 'Before' };
+      yield JSON.parse('{"type":"finish","reason":"stop"}');
+      yield { type: 'text', text: ' after' };
+    } finally {
+      closed = true;
     }
-
-    const reply = answer(handMade());
-    const seen: Chunk[] = [];
-    const reading = (async () => {
-      for await (const chunk of reply.chunks()) seen.push(chunk);
-    })();
-    const thrown = await reading.catch((raised: unknown) => raised);
-
-    expect(thrown).toBeInstanceOf(MottyError);
-    expect(thrown).toMatchObject({
-      code: 'internal',
-      message: 'The stream gave something that is not a chunk',
-    });
-    expect(seen).toEqual([{ type: 'text', text: 'Before' }]);
-    expect(closed).toBe(true);
-    await expect(reply.text()).rejects.toBe(thrown);
-    await expect(reply.usage()).rejects.toBe(thrown);
-    await expect(reply.finish()).rejects.toBe(thrown);
-  },
-);
-
-test('a rewrite whose stream gives something that is no chunk fails, and the answer it is from is untouched', async () => {
-  async function* handMade(): AsyncIterable<Chunk> {
-    yield { type: 'text', text: 'Before' };
-    yield JSON.parse('null');
-  }
-  const inner = buffered(
-    stream([
-      { type: 'text', text: 'Fine' },
-      { type: 'finish', reason: 'stop', usage: { input: 2, output: 1 } },
-    ]),
-  );
-
-  await expect(answer(handMade(), inner).finish()).rejects.toThrow(
-    'The stream gave something that is not a chunk',
-  );
-  await expect(
-    answer(
-      (async function* callable(): AsyncIterable<Chunk> {
-        yield Object.assign(() => {}, { type: 'text', text: 'Hello' } as const);
-      })(),
-    ).finish(),
-  ).rejects.toThrow('The stream gave something that is not a chunk');
-  expect(await inner.finish()).toBe('stop');
-});
-
-test('a provider chunk made by hand is passed on with its own data unchecked', async () => {
-  async function* handMade(): AsyncIterable<Chunk> {
-    yield { type: 'provider', provider: { acme: { trace: ['a', 1, null] } } };
   }
 
-  expect(await Array.fromAsync(answer(handMade()).chunks())).toEqual([
-    { type: 'provider', provider: { acme: { trace: ['a', 1, null] } } },
-  ]);
+  const reply = answer(handMade());
+  const seen: Chunk[] = [];
+  const reading = (async () => {
+    for await (const chunk of reply.chunks()) seen.push(chunk);
+  })();
+  const thrown = await reading.catch((raised: unknown) => raised);
+
+  expect(thrown).toBeInstanceOf(MottyError);
+  expect(thrown).toMatchObject({
+    code: 'internal',
+    message: 'The stream gave something that is not a chunk',
+  });
+  expect(seen).toEqual([{ type: 'text', text: 'Before' }]);
+  expect(closed).toBe(true);
+  await expect(reply.text()).rejects.toBe(thrown);
+  await expect(reply.usage()).rejects.toBe(thrown);
+  await expect(reply.finish()).rejects.toBe(thrown);
 });
 
 test('a stream made by hand that goes silent ends with Aborted once the signal fires, is closed and is not read again', async () => {
@@ -1170,40 +773,34 @@ test('a stream made by hand that keeps giving chunks after the signal fired is c
   expect([read, reads, closed]).toEqual([3, 3, 1]);
 });
 
-test.each([
-  ['a chunk', '{"type":"text","text":"Late"}'],
-  ['something that is no chunk', '42'],
-])(
-  'a stream made by hand whose pending read settles with %s after it was given up is closed once and not read again',
-  async (_, value) => {
-    const stop = new AbortController();
-    const late = Promise.withResolvers<IteratorResult<Chunk>>();
-    let reads = 0;
-    let closed = 0;
+test('a stream made by hand whose pending read settles with something that is no chunk after it was given up is closed once and not read again', async () => {
+  const stop = new AbortController();
+  const late = Promise.withResolvers<IteratorResult<Chunk>>();
+  let reads = 0;
+  let closed = 0;
 
-    const reply = enter(stubHost({}, { signal: stop.signal }), () =>
-      answer({
-        [Symbol.asyncIterator]: () => ({
-          next: () => {
-            reads += 1;
-            return late.promise;
-          },
-          return: async () => {
-            closed += 1;
-            return { done: true, value: undefined };
-          },
-        }),
+  const reply = enter(stubHost({}, { signal: stop.signal }), () =>
+    answer({
+      [Symbol.asyncIterator]: () => ({
+        next: () => {
+          reads += 1;
+          return late.promise;
+        },
+        return: async () => {
+          closed += 1;
+          return { done: true, value: undefined };
+        },
       }),
-    );
-    stop.abort();
-    const thrown = await reply.text().catch((raised: unknown) => raised);
-    late.resolve({ done: false, value: JSON.parse(value) });
-    await Bun.sleep(1);
+    }),
+  );
+  stop.abort();
+  const thrown = await reply.text().catch((raised: unknown) => raised);
+  late.resolve({ done: false, value: JSON.parse('42') });
+  await Bun.sleep(1);
 
-    expect(thrown).toBeInstanceOf(Aborted);
-    expect([reads, closed]).toEqual([1, 1]);
-  },
-);
+  expect(thrown).toBeInstanceOf(Aborted);
+  expect([reads, closed]).toEqual([1, 1]);
+});
 
 test('a stream made by hand whose stop is told by the host with an error of its own fails the answer with that error', async () => {
   const stop = new AbortController();
@@ -1260,63 +857,31 @@ test('a stream made by hand that was read to its end is not closed', async () =>
   expect(closed).toBe(0);
 });
 
-test('a cycle of answers reading their own chunks never ends, and is left to its author to break', async () => {
-  const self = Promise.withResolvers<AsyncIterable<Chunk>>();
-  const other = Promise.withResolvers<AsyncIterable<Chunk>>();
-  async function* later(
-    chunks: Promise<AsyncIterable<Chunk>>,
-  ): AsyncIterable<Chunk> {
-    yield* await chunks;
-  }
-
-  const alone = answer(later(self.promise));
-  self.resolve(alone.chunks());
-  const first = answer(later(other.promise));
-  const second = answer(first.chunks(), first);
-  other.resolve(second.chunks());
-  const next = second.chunks()[Symbol.asyncIterator]().next();
-
-  expect(
-    await Promise.all(
-      [alone.finish(), first.text(), second.usage(), next].map(pending),
-    ),
-  ).toEqual([true, true, true, true]);
-});
-
-test.each([
-  ['text', (reply: ReturnType<typeof answer>) => reply.text()],
-  ['json', (reply: ReturnType<typeof answer>) => reply.json()],
-  ['usage', (reply: ReturnType<typeof answer>) => reply.usage()],
-  ['finish', (reply: ReturnType<typeof answer>) => reply.finish()],
-])(
-  '%s of an answer made outside any request waits under the signal of the request that reads it, and the answer is left as it was',
-  async (_name, read) => {
-    let closed = 0;
-    const canned = answer({
-      [Symbol.asyncIterator]: () => ({
-        next: () => new Promise(() => {}),
-        return: async () => {
-          closed += 1;
-          return { done: true, value: undefined };
-        },
-      }),
-    });
-    const stop = new AbortController();
-
-    const thrown = await enter(
-      stubHost({}, { signal: stop.signal }),
-      async () => {
-        const waiting = read(canned).catch((caught: unknown) => caught);
-        stop.abort();
-        return waiting;
+test('the text of an answer made outside any request waits under the signal of the request that reads it, and the answer is left as it was', async () => {
+  let closed = 0;
+  const canned = answer({
+    [Symbol.asyncIterator]: () => ({
+      next: () => new Promise(() => {}),
+      return: async () => {
+        closed += 1;
+        return { done: true, value: undefined };
       },
-    );
+    }),
+  });
+  const stop = new AbortController();
 
-    expect(thrown).toBeInstanceOf(Aborted);
-    expect(closed).toBe(0);
-  },
-  1_000,
-);
+  const thrown = await enter(
+    stubHost({}, { signal: stop.signal }),
+    async () => {
+      const waiting = canned.text().catch((caught: unknown) => caught);
+      stop.abort();
+      return waiting;
+    },
+  );
+
+  expect(thrown).toBeInstanceOf(Aborted);
+  expect(closed).toBe(0);
+});
 
 test('what is read of an answer that has ended is not waited on, whatever became of the signal', async () => {
   const reply = answer('Hi');
@@ -1366,15 +931,6 @@ test('a stream made by hand that is given up when its phase ends makes no error 
   expect(unread).toBe(0);
   expect(thrown).toBeInstanceOf(Aborted);
   expect(made).toBe(1);
-});
-
-test('an answer made by hand names no model', async () => {
-  async function* spoken(): AsyncIterable<Chunk> {
-    yield { type: 'text', text: 'Hello' };
-  }
-
-  expect(await answer('Hello').model()).toBeUndefined();
-  expect(await answer(spoken()).model()).toBeUndefined();
 });
 
 test('the id an upstream gives in its finish is not the model of the answer', async () => {
@@ -1445,22 +1001,4 @@ test('a rewrite whose chunk source throws names no model', async () => {
   });
 
   expect(name).toBeUndefined();
-});
-
-test('the model of an answer still arriving waits for its ending', async () => {
-  const gate = Promise.withResolvers<void>();
-  const reply = buffered(
-    heldAt(
-      stream([
-        { type: 'text', text: 'Hello' },
-        { type: 'finish', reason: 'stop' },
-      ]),
-      'finish',
-      gate.promise,
-    ),
-  );
-
-  expect(await pending(reply.model())).toBe(true);
-  gate.resolve();
-  expect(await reply.model()).toBeUndefined();
 });

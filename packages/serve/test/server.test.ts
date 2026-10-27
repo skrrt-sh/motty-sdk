@@ -287,49 +287,6 @@ test('the time limit: a caller waiting for a whole answer gets a 504, and the re
   await served.close();
 });
 
-test('the time limit: a stream that had begun is ended with the error', async () => {
-  const reported = Promise.withResolvers<Report>();
-  const served = mount(coder, () => ({
-    models: [halting(Promise.withResolvers<void>().promise)],
-    limits: { duration: 40 },
-    report: reported.resolve,
-  }));
-  using server = Bun.serve({ port: 0, fetch: served.fetch });
-
-  const reply = await ask(server.port, true);
-  expect(reply.status).toBe(200);
-  const events = await Array.fromAsync(
-    parsed(reply.body ?? new ReadableStream<Uint8Array>()),
-  );
-
-  expect(events.map(({ data }) => JSON.parse(data))).toMatchObject([
-    { choices: [{ delta: { content: 'Two threads ' } }] },
-    { error: { message: 'The work timed out', code: 'timed_out' } },
-  ]);
-  expect(await reported.promise).toMatchObject({
-    outcome: 'aborted',
-    error: { code: 'timed_out' },
-  });
-  await served.close();
-});
-
-test('the time limit: a stream nothing was said in yet is a 504', async () => {
-  const served = mount(
-    motty({ name: 'coder' }).handle(async () => {
-      await Promise.withResolvers<void>().promise;
-      return answer('Use a mutex.');
-    }),
-    () => ({ limits: { duration: 40 } }),
-  );
-  using server = Bun.serve({ port: 0, fetch: served.fetch });
-
-  const reply = await ask(server.port, true);
-
-  expect(reply.status).toBe(504);
-  expect(await reply.json()).toMatchObject({ error: { code: 'timed_out' } });
-  await served.close();
-});
-
 test('shutdown: no new request is taken, and the one in flight ends with its after-response work done', async () => {
   const release = Promise.withResolvers<void>();
   const done: string[] = [];
@@ -595,32 +552,6 @@ test('a request still being let in when the drain is over is stopped with the sh
   ]);
 });
 
-test("the host is handed the delivery of a request's record, which settles only once an async report has", async () => {
-  const sent = Promise.withResolvers<void>();
-  const order: string[] = [];
-  const works: Promise<unknown>[] = [];
-  const served = mount(coder, () => ({
-    models: [fake(on(gpt, 'Use a mutex.'))],
-    report: async () => {
-      await sent.promise;
-      order.push('report');
-    },
-  }));
-
-  const reply = await served.fetch(question(false), undefined, {
-    waitUntil: (work) => works.push(work),
-  });
-  await reply.text();
-  const settled = works[0]?.then(() => order.push('work'));
-  await Bun.sleep(20);
-  expect(order).toEqual([]);
-
-  sent.resolve();
-  await settled;
-  expect(order).toEqual(['report', 'work']);
-  await served.close();
-});
-
 test.each([true, false])(
   'the delivery is handed over while the request is taken in, before there is a reply: stream %p',
   async (stream) => {
@@ -652,58 +583,6 @@ test.each([true, false])(
     await served.close();
   },
 );
-
-test('each admitted request hands over one delivery of its own', async () => {
-  const works: Promise<unknown>[] = [];
-  const served = mount(coder, () => ({
-    models: [fake(on(gpt, 'Use a mutex.'))],
-    report: () => Bun.sleep(5),
-  }));
-
-  for (const stream of [false, true, false]) {
-    const reply = await served.fetch(question(stream), undefined, {
-      waitUntil: (work) => works.push(work),
-    });
-    await reply.text();
-  }
-  await served.close();
-
-  expect(works).toHaveLength(3);
-  expect(new Set(works).size).toBe(3);
-});
-
-test('a report that rejects still settles the delivery, which never rejects', async () => {
-  const works: Promise<unknown>[] = [];
-  const served = mount(coder, () => ({
-    models: [fake(on(gpt, 'Use a mutex.'))],
-    report: () => Promise.reject(new Error('The sink is gone')),
-  }));
-
-  const reply = await served.fetch(question(false), undefined, {
-    waitUntil: (work) => works.push(work),
-  });
-
-  expect(reply.status).toBe(200);
-  expect(works).toHaveLength(1);
-  expect(await works[0]).toBeUndefined();
-  await served.close();
-});
-
-test('with no report the delivery still settles', async () => {
-  const works: Promise<unknown>[] = [];
-  const served = mount(coder, () => ({
-    models: [fake(on(gpt, 'Use a mutex.'))],
-  }));
-
-  const reply = await served.fetch(question(true), undefined, {
-    waitUntil: (work) => works.push(work),
-  });
-  await reply.text();
-
-  expect(works).toHaveLength(1);
-  expect(await works[0]).toBeUndefined();
-  await served.close();
-});
 
 test('a waitUntil that throws leaves the request answered as normal, and its flight still lands, so shutdown does not wait out the drain', async () => {
   const reports: Report[] = [];

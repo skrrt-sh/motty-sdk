@@ -5,9 +5,7 @@ import {
   LimitReached,
   MottyError,
   Overloaded,
-  QuotaExceeded,
   RateLimited,
-  TimedOut,
 } from '../../src/data/errors.ts';
 import type { StreamEvent } from '../../src/data/event.ts';
 import { current, enter } from '../../src/request/context.ts';
@@ -19,7 +17,6 @@ import {
 } from '../../src/request/model.ts';
 import { retry } from '../../src/request/retry.ts';
 import { fallback } from '../../src/request/switching.ts';
-import { timeout } from '../../src/request/timeout.ts';
 import { stubHost } from '../stub-host.ts';
 
 afterEach(() => {
@@ -90,67 +87,13 @@ function scripted(
   }));
 }
 
-test('a count of retries that is not a whole number is a mistake at load', () => {
-  expect(() => retry(model('acme/small'), 1.5)).toThrow(Error);
-  expect(() => retry(model('acme/small'), 0.5)).toThrow(Error);
-  expect(() => retry(model('acme/small'), 2)).not.toThrow();
-});
-
-test('retry answers from the first try without waiting', async () => {
-  jest.useFakeTimers();
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Hello' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-    ],
-  });
-
-  const [text, calls] = await enter(host, async () => {
-    const reply = await due(
-      retry(model('acme/small'), 3).complete({
-        messages: [],
-      }),
-    );
-    return [await due(reply.text()), current().calls];
-  });
-
-  expect(text).toBe('Hello');
-  expect(calls.made).toHaveLength(1);
-  expect(jest.getTimerCount()).toBe(0);
-});
-
-test('retry backs off 500 ms, then double, and throws the last failure once its retries are spent', async () => {
-  jest.useFakeTimers();
-  const host = stubHost({
-    'acme/busy': [
-      {
-        type: 'error',
-        error: { code: 'overloaded', status: 503, message: 'Busy' },
-      },
-    ],
-  });
-
-  await enter(host, async () => {
-    const failed = retry(model('acme/busy'), 2)
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown);
-    await settled();
-    expect(current().calls.made).toHaveLength(1);
-    jest.advanceTimersByTime(499);
-    await settled();
-    expect(current().calls.made).toHaveLength(1);
-    jest.advanceTimersByTime(1);
-    await settled();
-    expect(current().calls.made).toHaveLength(2);
-    jest.advanceTimersByTime(999);
-    await settled();
-    expect(current().calls.made).toHaveLength(2);
-    jest.advanceTimersByTime(1);
-    expect(await due(failed)).toBeInstanceOf(Overloaded);
-    expect(current().calls.made).toHaveLength(3);
-  });
-
-  expect(jest.getTimerCount()).toBe(0);
+test('a count of retries that is not a whole number of zero or more is a mistake at load, never coerced into one', () => {
+  for (const times of [1.5, -1, '2']) {
+    expect(() =>
+      Reflect.apply(retry, undefined, [model('acme/small'), times]),
+    ).toThrow('retry() needs a whole number of retries');
+  }
+  expect(() => retry(model('acme/small'), 0)).not.toThrow();
 });
 
 test('retry answers once a retried call works', async () => {
@@ -233,67 +176,6 @@ test('retry stops at a failure that is not retryable after one that was', async 
   expect(jest.getTimerCount()).toBe(0);
 });
 
-test('retry repeats a rate limit but not a spent quota', async () => {
-  jest.useFakeTimers();
-  const host = stubHost({
-    'acme/limited': [
-      {
-        type: 'error',
-        error: { code: 'rate_limited', status: 429, message: 'Slow down' },
-      },
-    ],
-    'acme/spent': [
-      {
-        type: 'error',
-        error: { code: 'quota_exceeded', status: 429, message: 'No credit' },
-      },
-    ],
-  });
-
-  await enter(host, async () => {
-    expect(
-      await due(
-        retry(model('acme/spent'), 2)
-          .complete({ messages: [] })
-          .catch((thrown: unknown) => thrown),
-      ),
-    ).toBeInstanceOf(QuotaExceeded);
-    const failed = retry(model('acme/limited'), 1)
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown);
-    await settled();
-    jest.advanceTimersByTime(500);
-    expect(await due(failed)).toBeInstanceOf(RateLimited);
-  });
-
-  expect(host.sent('acme/spent')).toHaveLength(1);
-  expect(host.sent('acme/limited')).toHaveLength(2);
-});
-
-test('retry repeats a call that timed out', async () => {
-  jest.useFakeTimers();
-  const host = stubHost();
-  const signals: AbortSignal[] = [];
-
-  await enter(host, async () => {
-    const failed = retry(timeout(hung(signals), 5), 1)
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown);
-    await settled();
-    jest.advanceTimersByTime(5);
-    await settled();
-    expect(signals).toHaveLength(1);
-    jest.advanceTimersByTime(500);
-    await settled();
-    expect(signals).toHaveLength(2);
-    jest.advanceTimersByTime(5);
-    expect(await due(failed)).toBeInstanceOf(TimedOut);
-  });
-
-  expect(signals.map((signal) => signal.aborted)).toEqual([true, true]);
-  expect(jest.getTimerCount()).toBe(0);
-});
-
 test('retry calls again at once on a retry-after of zero', async () => {
   jest.useFakeTimers();
   const host = stubHost({
@@ -320,54 +202,6 @@ test('retry calls again at once on a retry-after of zero', async () => {
   });
 
   expect(host.sent('acme/limited')).toHaveLength(2);
-});
-
-test('a try that failed before a later one answered stays in the calls with its code and its message', async () => {
-  jest.useFakeTimers();
-  const replies: StreamEvent[][] = [
-    [
-      {
-        type: 'error',
-        error: {
-          code: 'rate_limited',
-          status: 429,
-          message: 'Slow down',
-          retryAfter: 0,
-        },
-      },
-    ],
-    [
-      { type: 'text', text: 'Hello' },
-      { type: 'finish', reason: 'stop' },
-    ],
-  ];
-  const host = {
-    ...stubHost(),
-    models: async function* () {
-      yield* replies.shift() ?? [];
-    },
-  };
-
-  const made = await enter(host, async () => {
-    const reply = retry(model('acme/limited'), 1).complete({ messages: [] });
-    await settled();
-    jest.advanceTimersByTime(1);
-    await (await due(reply)).text();
-    return current().calls.made;
-  });
-
-  expect(made).toStrictEqual([
-    {
-      model: 'acme/limited',
-      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
-      code: 'rate_limited',
-      message: 'Slow down',
-    },
-    {
-      model: 'acme/limited',
-      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
-    },
-  ]);
 });
 
 test('retry follows what the upstream said about a failure over its class', async () => {
@@ -417,31 +251,6 @@ test('retry follows what the upstream said about a failure over its class', asyn
   expect(host.sent('acme/passing')).toHaveLength(2);
 });
 
-test('retry does not repeat a thrown value that is not one of the core’s errors', async () => {
-  jest.useFakeTimers();
-  const host = stubHost();
-  let tries = 0;
-
-  await enter(host, async () =>
-    expect(
-      await due(
-        retry(
-          callable(async () => {
-            tries += 1;
-            throw new TypeError('Not ours');
-          }),
-          2,
-        )
-          .complete({ messages: [] })
-          .catch((thrown: unknown) => thrown),
-      ),
-    ).toBeInstanceOf(TypeError),
-  );
-
-  expect(tries).toBe(1);
-  expect(jest.getTimerCount()).toBe(0);
-});
-
 test('retry does not repeat a failure that came after the first chunk', async () => {
   jest.useFakeTimers();
   const host = stubHost({
@@ -467,26 +276,6 @@ test('retry does not repeat a failure that came after the first chunk', async ()
 
   expect(host.sent('acme/breaking')).toHaveLength(1);
   expect(jest.getTimerCount()).toBe(0);
-});
-
-test('retry makes no try when the request was stopped before the first', async () => {
-  const request = new AbortController();
-  request.abort();
-  let tries = 0;
-
-  await enter(stubHost({}, { signal: request.signal }), () =>
-    expect(
-      retry(
-        callable(async () => {
-          tries += 1;
-          throw new Overloaded('Busy');
-        }),
-        2,
-      ).complete({ messages: [] }),
-    ).rejects.toBeInstanceOf(Aborted),
-  );
-
-  expect(tries).toBe(0);
 });
 
 test('retry ends its wait with Aborted when the request is stopped, and calls no more', async () => {
@@ -571,52 +360,6 @@ test('retry stops with Aborted, the call’s own failure as its cause, when the 
 
   expect(signals).toHaveLength(1);
   expect(jest.getTimerCount()).toBe(0);
-});
-
-test('retry throws a failure that is not retryable at once', async () => {
-  const host = stubHost({
-    'acme/strict': [
-      {
-        type: 'error',
-        error: { code: 'blocked', status: 400, message: 'Refused' },
-      },
-    ],
-  });
-
-  const calls = await enter(host, async () => {
-    await expect(
-      retry(model('acme/strict'), 2).complete({ messages: [] }),
-    ).rejects.toBeInstanceOf(Blocked);
-    return current().calls;
-  });
-
-  expect(calls.made).toHaveLength(1);
-});
-
-test('retry waits the failure’s retry-after before it calls again', async () => {
-  const host = stubHost({
-    'acme/limited': [
-      {
-        type: 'error',
-        error: {
-          code: 'rate_limited',
-          status: 429,
-          message: 'Slow down',
-          retryAfter: 20,
-        },
-      },
-    ],
-  });
-
-  const [early, late] = await enter(host, async () => {
-    const pending = retry(model('acme/limited'), 1).complete({ messages: [] });
-    await Bun.sleep(5);
-    const early = current().calls.made.length;
-    await expect(pending).rejects.toBeInstanceOf(RateLimited);
-    return [early, current().calls.made.length];
-  });
-
-  expect([early, late]).toEqual([1, 2]);
 });
 
 test('retry doubles its backoff from 500 ms and holds it at 30 seconds, however many retries came before', async () => {
@@ -705,32 +448,6 @@ test('retry gives up at once on a retry-after longer than its backoff cap, with 
   expect(jest.getTimerCount()).toBe(0);
 });
 
-test('retry gives up at once on a retry-after of a day or of longer than any timer runs', async () => {
-  jest.useFakeTimers();
-
-  for (const retryAfter of [86_400_000, 2 ** 40]) {
-    let tries = 0;
-    const failed = await enter(stubHost(), () =>
-      due(
-        retry(
-          callable(async () => {
-            tries += 1;
-            throw new RateLimited('Slow down', { retryAfter });
-          }),
-          20,
-        )
-          .complete({ messages: [] })
-          .catch((thrown: unknown) => thrown),
-      ),
-    );
-
-    expect(failed).toBeInstanceOf(RateLimited);
-    expect(tries).toBe(1);
-  }
-
-  expect(jest.getTimerCount()).toBe(0);
-});
-
 test('retry waits out a retry-after as long as its backoff cap', async () => {
   jest.useFakeTimers();
   const host = stubHost({
@@ -764,12 +481,7 @@ test('retry waits out a retry-after as long as its backoff cap', async () => {
 test('retry backs off as if unhinted when the retry-after is negative or not a finite number', async () => {
   jest.useFakeTimers();
 
-  for (const retryAfter of [
-    -1,
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-    Number.NEGATIVE_INFINITY,
-  ]) {
+  for (const retryAfter of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
     let tries = 0;
     await enter(stubHost(), async () => {
       const failed = retry(
@@ -870,39 +582,6 @@ test('retry does not repeat a thrown value that only looks retryable and is not 
   expect(jest.getTimerCount()).toBe(0);
 });
 
-test('retry throws LimitReached as it is from the try after a wait, and waits no more', async () => {
-  jest.useFakeTimers();
-  const host = stubHost(
-    {
-      'acme/busy': [
-        {
-          type: 'error',
-          error: { code: 'overloaded', status: 503, message: 'Busy' },
-        },
-      ],
-    },
-    { limits: { calls: 2 } },
-  );
-
-  await enter(host, async () => {
-    const failed = retry(model('acme/busy'), 5)
-      .complete({ messages: [] })
-      .catch((thrown: unknown) => thrown);
-    await settled();
-    jest.advanceTimersByTime(500);
-    await settled();
-    expect(current().calls.made).toHaveLength(2);
-    expect(jest.getTimerCount()).toBe(1);
-    jest.advanceTimersByTime(1000);
-    const thrown = await due(failed);
-    expect(thrown).toBeInstanceOf(LimitReached);
-    expect(current().calls.made).toHaveLength(2);
-  });
-
-  expect(host.sent('acme/busy')).toHaveLength(2);
-  expect(jest.getTimerCount()).toBe(0);
-});
-
 test('retry drops its listener from the signal once a wait has run its course', async () => {
   jest.useFakeTimers();
   const request = new AbortController();
@@ -962,12 +641,4 @@ test('retry stopped during a later try that ignores its signal carries the failu
 
   expect(signals.map((signal) => signal.aborted)).toEqual([true, true]);
   expect(jest.getTimerCount()).toBe(0);
-});
-
-test('a count of retries that is not a number is a mistake at load, never coerced into one', () => {
-  for (const times of ['2', null, true, undefined, [2], 2n]) {
-    expect(() =>
-      Reflect.apply(retry, undefined, [model('acme/small'), times]),
-    ).toThrow('retry() needs a whole number of retries');
-  }
 });

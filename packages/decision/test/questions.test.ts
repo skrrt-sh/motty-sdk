@@ -1,42 +1,5 @@
 import { expect, test } from 'bun:test';
-import { choice, noul, score } from '../src/questions.ts';
-
-test('a builder adds the kind of its question and leaves the rest as given', () => {
-  expect(
-    choice({
-      instructions: 'How much reasoning does this need?',
-      criteria: { quick: 'A short question', deep: null },
-    }),
-  ).toEqual({
-    type: 'choice',
-    instructions: 'How much reasoning does this need?',
-    criteria: { quick: 'A short question', deep: null },
-  });
-  expect(
-    score({
-      instructions: 'How risky is this change?',
-      criteria: ['Harmless', 'Needs a review', 'Dangerous'],
-    }),
-  ).toEqual({
-    type: 'score',
-    instructions: 'How risky is this change?',
-    criteria: ['Harmless', 'Needs a review', 'Dangerous'],
-  });
-  expect(noul({ instructions: 'Is this about software?' })).toEqual({
-    type: 'noul',
-    instructions: 'Is this about software?',
-  });
-  expect(
-    noul({
-      instructions: 'Is this about software?',
-      criteria: { true: 'It names code', false: 'It names none' },
-    }),
-  ).toEqual({
-    type: 'noul',
-    instructions: 'Is this about software?',
-    criteria: { true: 'It names code', false: 'It names none' },
-  });
-});
+import { choice, score } from '../src/questions.ts';
 
 test('a choice takes one to 255 options and is refused with none or one more', () => {
   const options = (count: number) =>

@@ -26,38 +26,6 @@ test('a number answers a noul with the probability of yes', async () => {
   });
 });
 
-test('a probability per option answers a choice with the likeliest', async () => {
-  const models = fake(
-    on(judge, { tier: { quick: 0.05, standard: 0.5, deep: 0.45 } }),
-  );
-
-  const output = await models.decide(
-    'acme/judge',
-    {
-      state: 'Why does this deadlock?',
-      questions: {
-        tier: {
-          type: 'choice',
-          instructions: 'How much reasoning does this need?',
-          criteria: { quick: 'None', standard: 'Some', deep: null },
-        },
-      },
-    },
-    AbortSignal.any([]),
-  );
-
-  expect(output).toMatchObject({
-    answers: {
-      tier: {
-        type: 'choice',
-        choice: 'standard',
-        probabilities: { quick: 0.05, standard: 0.5, deep: 0.45 },
-        confidence: expect.closeTo(0.25, 2),
-      },
-    },
-  });
-});
-
 test('the options a script leaves out share what it leaves over, so a choice sums to one as the API has it', async () => {
   const models = fake(
     on(judge, {

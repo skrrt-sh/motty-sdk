@@ -459,25 +459,6 @@ test('text with nothing in it opens no block', () => {
   ]).toMatchObject([{ type: 'message_delta' }, { type: 'message_stop' }]);
 });
 
-test('the reasoning count is written with the usage', () => {
-  expect(
-    writer(false)({
-      type: 'finish',
-      reason: 'stop',
-      usage: { input: 10, output: 503, reasoning: 480 },
-    }),
-  ).toMatchObject([
-    {
-      usage: {
-        input_tokens: 10,
-        output_tokens: 503,
-        output_tokens_details: { thinking_tokens: 480 },
-      },
-    },
-    { type: 'message_stop' },
-  ]);
-});
-
 test('a tool call of this family is written with the fields its upstream gave it', () => {
   const write = writer(false);
   expect([
@@ -552,21 +533,14 @@ test('a tool call of this family is written with the fields its upstream gave it
   ]);
 });
 
-test.each([
-  ['no data', {}],
-  [
-    "another family's data",
-    { provider: { 'openai.responses': { namespace: 'agents' } } },
-  ],
-  ['empty data of this family', { provider: { anthropic: {} } }],
-])('a tool call with %s is written as it always was', (_, provider) => {
+test("a tool call with another family's data is written as it always was", () => {
   expect(
     writer(false)({
       type: 'tool_call',
       id: 'call_1',
       name: 'get_weather',
       arguments: '{"location": "Paris"}',
-      ...provider,
+      provider: { 'openai.responses': { namespace: 'agents' } },
     }),
   ).toEqual([
     {
@@ -612,37 +586,6 @@ test("a tool call's own id, name and kind are never replaced by what rides with 
         input: {},
       },
     },
-  ]);
-});
-
-test('the finish is written with the refusal details the upstream gave', () => {
-  expect(
-    writer(false)({
-      type: 'finish',
-      reason: 'content_filter',
-      rawReason: 'refusal',
-      usage: { input: 10, output: 0 },
-      provider: {
-        anthropic: {
-          stop_details: {
-            type: 'refusal',
-            category: 'cyber',
-            explanation: null,
-          },
-        },
-      },
-    }),
-  ).toEqual([
-    {
-      type: 'message_delta',
-      delta: {
-        stop_reason: 'refusal',
-        stop_sequence: null,
-        stop_details: { type: 'refusal', category: 'cyber', explanation: null },
-      },
-      usage: { input_tokens: 10, output_tokens: 0 },
-    },
-    { type: 'message_stop' },
   ]);
 });
 

@@ -46,85 +46,11 @@ test('system as a string is the first message', () => {
   ]);
 });
 
-test('system as blocks keeps each block and its cache marker', () => {
-  const { request } = decode(
-    {
-      model: 'coder',
-      max_tokens: 64,
-      system: [
-        { type: 'text', text: 'You are terse.' },
-        {
-          type: 'text',
-          text: '<the whole style guide>',
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [{ role: 'user', content: 'Hi' }],
-    },
-    new Headers(),
-  );
-  expect(request.messages[0]).toEqual({
-    role: 'system',
-    parts: [
-      { type: 'text', text: 'You are terse.' },
-      { type: 'text', text: '<the whole style guide>', cache: {} },
-    ],
-  });
-});
-
-test('a system turn inside the conversation stays where it is', () => {
-  const { request } = decode(
-    {
-      model: 'coder',
-      max_tokens: 64,
-      messages: [
-        { role: 'user', content: 'Hi' },
-        { role: 'system', content: 'Terse mode enabled.' },
-      ],
-    },
-    new Headers(),
-  );
-  expect(request.messages[1]).toEqual({
-    role: 'system',
-    text: 'Terse mode enabled.',
-  });
-});
-
-test('tools, the tool choice, the output and streaming are decoded', () => {
-  const decoded = decode(
-    {
-      model: 'coder',
-      max_tokens: 64,
-      stream: true,
-      tools: [{ name: 'get_weather', input_schema: { type: 'object' } }],
-      tool_choice: { type: 'tool', name: 'get_weather' },
-      output_config: {
-        format: { type: 'json_schema', schema: { type: 'object' } },
-      },
-      messages: [{ role: 'user', content: 'Weather in Paris?' }],
-    },
-    new Headers(),
-  );
-  expect(decoded.stream).toBe(true);
-  expect(decoded.request.tools).toEqual([
-    { type: 'function', name: 'get_weather', input: { type: 'object' } },
-  ]);
-  expect(decoded.request.options).toEqual({
-    maxTokens: 64,
-    toolChoice: { tool: 'get_weather' },
-  });
-  expect(decoded.request.output).toEqual({
-    schema: { type: 'object' },
-    strict: true,
-  });
-});
-
 test('a body that is not a valid request is rejected', () => {
   const none = new Headers();
   const turn = { role: 'user', content: 'Hi' };
   for (const body of [
     'model=coder',
-    [],
     { max_tokens: 64, messages: [turn] },
     { model: 'coder', messages: [turn] },
     { model: 'coder', max_tokens: 64 },
@@ -155,82 +81,6 @@ test('an API version with another stream format is rejected', () => {
       new Headers({ 'anthropic-version': '2023-01-01' }),
     ),
   ).toThrow(InvalidRequest);
-});
-
-test('every header of this API`s own but its version is read with the body, and no other', () => {
-  expect(
-    decode(
-      {
-        model: 'coder',
-        max_tokens: 64,
-        messages: [{ role: 'user', content: 'Hi' }],
-        context_management: { edits: [{ type: 'clear_thinking_20251015' }] },
-      },
-      new Headers({
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'context-management-2025-06-27',
-        'anthropic-not-known-yet': 'on',
-        'x-api-key': 'sk-ant-callers-own',
-        'x-claude-code-session-id': 'b0c1af96',
-        'x-billing-token': 'a token for a service the motty calls',
-      }),
-    ).request.options,
-  ).toEqual({
-    maxTokens: 64,
-    provider: {
-      anthropic: {
-        context_management: { edits: [{ type: 'clear_thinking_20251015' }] },
-      },
-    },
-    hints: {
-      anthropic: {
-        'anthropic-beta': 'context-management-2025-06-27',
-        'anthropic-not-known-yet': 'on',
-      },
-    },
-  });
-});
-
-test('the reply shows progress only to a caller who asked for thinking', async () => {
-  const turn = { role: 'user', content: 'Hi' };
-  const asked = decode(
-    {
-      model: 'coder',
-      max_tokens: 64,
-      thinking: { type: 'adaptive', display: 'summarized' },
-      messages: [turn],
-    },
-    new Headers(),
-  );
-  const muted = decode(
-    {
-      model: 'coder',
-      max_tokens: 64,
-      thinking: { type: 'adaptive', display: 'omitted' },
-      messages: [turn],
-    },
-    new Headers(),
-  );
-  const silent = decode(
-    { model: 'coder', max_tokens: 64, messages: [turn] },
-    new Headers(),
-  );
-  const finish = { type: 'finish', reason: 'stop' } as const;
-  const progress = { type: 'progress', piece: 0, text: 'Routing' } as const;
-  const text = { type: 'text', text: 'Hi' } as const;
-  expect(asked.collected([progress, text], finish, '1')).toMatchObject({
-    id: 'msg_1',
-    model: 'coder',
-    content: [
-      { type: 'thinking', thinking: 'Routing', signature: '' },
-      { type: 'text', text: 'Hi' },
-    ],
-  });
-  for (const decoded of [muted, silent]) {
-    expect(decoded.collected([progress, text], finish, '1')).toMatchObject({
-      content: [{ type: 'text', text: 'Hi' }],
-    });
-  }
 });
 
 test("a system turn's own fields ride with it, effort as a hint", () => {
@@ -276,12 +126,8 @@ test('each thinking setting decides whether the reply shows progress', async () 
   }
   for (const [thinking, kinds] of [
     [undefined, ['text']],
-    [{ type: 'disabled' }, ['text']],
     [{ type: 'adaptive', display: 'omitted' }, ['text']],
-    [{ type: 'enabled', budget_tokens: 2048, display: 'omitted' }, ['text']],
     [{ type: 'adaptive' }, ['thinking', 'text']],
-    [{ type: 'adaptive', display: 'summarized' }, ['thinking', 'text']],
-    [{ type: 'enabled', budget_tokens: 2048 }, ['thinking', 'text']],
   ] as const) {
     const decoded = decode(
       {

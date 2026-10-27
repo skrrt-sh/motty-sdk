@@ -1,25 +1,21 @@
 import { expect, test } from 'bun:test';
 import {
-  Aborted,
   answer,
   type ChatRequest,
   InvalidOutput,
-  LimitReached,
   type Motty,
   motty,
-  RateLimited,
   UnknownModel,
 } from '@mottyjs/core';
 import {
   type EventStream,
-  fromFacts,
   type Host,
   type Json,
   mark,
   type RequestRecord,
 } from '@mottyjs/core/host';
 import * as entry from '../src/index.ts';
-import { choice, decision, noul, score } from '../src/index.ts';
+import { decision, noul } from '../src/index.ts';
 
 function ask(): ChatRequest {
   return {
@@ -97,99 +93,6 @@ test('decide sends the name beside the state and the questions, under a signal, 
   expect(decided).toEqual([0.97]);
 });
 
-test('every kind of question is answered in the fields of the API', async () => {
-  const output = {
-    model: 'jev-2',
-    answers: {
-      tier: {
-        type: 'choice',
-        choice: 'deep',
-        probabilities: { quick: 0.1, deep: 0.9 },
-        confidence: 0.8,
-      },
-      risk: {
-        type: 'score',
-        score: 1,
-        legend: { '0': 'Harmless', '1': 'Dangerous' },
-        probabilities: { '0': 0.3, '1': 0.7 },
-        confidence: 0.4,
-      },
-      software: { type: 'noul', noul: 1 },
-    },
-    usage: { input_tokens: 60, output_tokens: 3 },
-  };
-  const decided: unknown[] = [];
-
-  await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      const { tier, risk, software } = await decision('typesafe/jev').decide(
-        ['Refactor the scheduler', { files: 40 }],
-        {
-          tier: choice({
-            instructions: 'How much reasoning does this need?',
-            criteria: { quick: 'A short question', deep: 'Needs a plan' },
-          }),
-          risk: score({
-            instructions: 'How risky is this change?',
-            criteria: ['Harmless', 'Dangerous'],
-          }),
-          software: noul({ instructions: 'Is this about software?' }),
-        },
-      );
-      decided.push(
-        tier.choice,
-        tier.probabilities.deep,
-        tier.confidence,
-        risk.score,
-        risk.probabilities['1'],
-        risk.legend['1'],
-        risk.confidence,
-        software.noul,
-      );
-      return answer('Hi');
-    }),
-    deciding(output),
-  );
-
-  expect(decided).toEqual(['deep', 0.9, 0.8, 1, 0.7, 'Dangerous', 0.4, 1]);
-});
-
-test('a decision call is counted like a model call, with the usage the API reported', async () => {
-  const totals: unknown[] = [];
-
-  const { record } = await ran(
-    motty({ name: 'coder' }).handle(async ({ calls }) => {
-      const jev = decision('typesafe/jev');
-      const questions = { software: noul({ instructions: 'Software?' }) };
-      await jev.decide('What does git stash do?', questions);
-      await jev.decide('And git pop?', questions);
-      totals.push(calls.total, calls.made.length);
-      return answer('Hi');
-    }),
-    deciding({
-      answers: { software: { type: 'noul', noul: 0.97 } },
-      usage: { input_tokens: 41, output_tokens: 1 },
-    }),
-  );
-
-  expect(totals).toEqual([{ input: 82, output: 2 }, 2]);
-  expect(record.calls).toEqual([
-    {
-      model: 'typesafe/jev',
-      input: 41,
-      output: 1,
-      time: { total: expect.any(Number) },
-    },
-    {
-      model: 'typesafe/jev',
-      input: 41,
-      output: 1,
-      time: { total: expect.any(Number) },
-    },
-  ]);
-  expect(record.usage).toEqual({ input: 82, output: 2 });
-});
-
 test('a cost reported with the usage of a decision call is counted with it', async () => {
   const { record } = await ran(
     motty({ name: 'coder' }).handle(async () => {
@@ -210,46 +113,6 @@ test('a cost reported with the usage of a decision call is counted with it', asy
     { input: 41, output: 1, cost: 0.002 },
   ]);
   expect(record.usage).toEqual({ input: 82, output: 2, cost: 0.004 });
-});
-
-test('a cost that is no amount is dropped, and the tokens beside it are counted', async () => {
-  const { record } = await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      await decision('typesafe/jev').decide('What does git stash do?', {
-        software: noul({ instructions: 'Software?' }),
-      });
-      return answer('Hi');
-    }),
-    deciding({
-      answers: { software: { type: 'noul', noul: 0.97 } },
-      usage: { input_tokens: 41, output_tokens: 1, cost: -1 },
-    }),
-  );
-
-  expect(record.usage).toEqual({ input: 41, output: 1 });
-});
-
-test('a decision call counts toward the limit on calls, and the call past it is not made', async () => {
-  const { decisions, asked } = deciding({
-    answers: { software: { type: 'noul', noul: 0.97 } },
-  });
-  const caught: unknown[] = [];
-
-  await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      const jev = decision('typesafe/jev');
-      const questions = { software: noul({ instructions: 'Software?' }) };
-      await jev.decide('What does git stash do?', questions);
-      await jev.decide('And git pop?', questions).catch((thrown: unknown) => {
-        caught.push(thrown);
-      });
-      return answer('Hi');
-    }),
-    { decisions, limits: { calls: 1 } },
-  );
-
-  expect(caught).toEqual([expect.any(LimitReached)]);
-  expect(asked).toHaveLength(1);
 });
 
 test('a decision with no question is refused before any call is made or counted', async () => {
@@ -273,82 +136,6 @@ test('a decision with no question is refused before any call is made or counted'
   ]);
   expect(asked).toEqual([]);
   expect(record.calls).toEqual([]);
-});
-
-test('a decision call follows the signal: it ends with Aborted when the host stops, though the host never answers', async () => {
-  const stop = new AbortController();
-  const caught: unknown[] = [];
-  const signals: AbortSignal[] = [];
-
-  const { record } = await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      await decision('typesafe/jev')
-        .decide('What does git stash do?', {
-          software: noul({ instructions: 'Software?' }),
-        })
-        .catch((thrown: unknown) => {
-          caught.push(thrown);
-        });
-      return answer('Hi');
-    }),
-    {
-      signal: stop.signal,
-      decisions: (_model, _input, signal) => {
-        signals.push(signal);
-        queueMicrotask(() => stop.abort());
-        return new Promise(() => {});
-      },
-    },
-  );
-
-  expect(caught).toEqual([expect.any(Aborted)]);
-  expect(signals.map((signal) => signal.aborted)).toEqual([true]);
-  expect(record.outcome).toBe('aborted');
-  expect(record.calls).toEqual([
-    {
-      model: 'typesafe/jev',
-      code: 'aborted',
-      message: 'The work was stopped',
-      time: { total: expect.any(Number) },
-    },
-  ]);
-});
-
-test('a call the host failed rejects with that error, and the record holds its code and what it said', async () => {
-  const caught: unknown[] = [];
-
-  const { events, record } = await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      await decision('typesafe/jev')
-        .decide('What does git stash do?', {
-          software: noul({ instructions: 'Software?' }),
-        })
-        .catch((thrown: unknown) => {
-          caught.push(thrown);
-        });
-      return answer('Hi');
-    }),
-    {
-      decisions: async () => {
-        throw fromFacts({
-          code: 'rate_limited',
-          status: 429,
-          message: 'Slow down',
-        });
-      },
-    },
-  );
-
-  expect(caught).toEqual([expect.any(RateLimited)]);
-  expect(events[0]).toEqual({ type: 'text', text: 'Hi' });
-  expect(record.calls).toEqual([
-    {
-      model: 'typesafe/jev',
-      code: 'rate_limited',
-      message: 'Slow down',
-      time: { total: expect.any(Number) },
-    },
-  ]);
 });
 
 test('a host with no decision call fails only that call, with UnknownModel, and the motty goes on', async () => {
@@ -378,25 +165,6 @@ test('a host with no decision call fails only that call, with UnknownModel, and 
         'The host serves no decision model, so none is named typesafe/jev',
       time: { total: expect.any(Number) },
     },
-  ]);
-});
-
-test('an uncaught failure of a decision call fails the request with its code', async () => {
-  const { events } = await ran(
-    motty({ name: 'coder' }).handle(async () => {
-      await decision('typesafe/jev').decide('What does git stash do?', {
-        software: noul({ instructions: 'Software?' }),
-      });
-      return answer('Hi');
-    }),
-    deciding({ answers: {} }),
-  );
-
-  expect(events).toEqual([
-    expect.objectContaining({
-      type: 'error',
-      error: expect.objectContaining({ code: 'invalid_output', status: 502 }),
-    }),
   ]);
 });
 

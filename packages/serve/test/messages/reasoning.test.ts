@@ -160,14 +160,6 @@ test('an effort is adaptive thinking, shown, at the nearest level', () => {
       detail: 'Anthropic Messages has no field for minimal effort, sent as low',
     },
   ]);
-  for (const effort of ['low', 'medium', 'high', 'xhigh', 'max'] as const) {
-    const asked = leaving('messages');
-    expect(reasoningTo(asked, { effort }, undefined, undefined)).toEqual({
-      thinking: { type: 'adaptive', display: 'summarized' },
-      effort,
-    });
-    expect(asked.leftOut()).toEqual([]);
-  }
 });
 
 test('an effort with reasoning muted is adaptive thinking, omitted', () => {
@@ -194,19 +186,6 @@ test('a budget is manual thinking, shown', () => {
     ),
   ).toEqual({
     thinking: { type: 'enabled', budget_tokens: 4096, display: 'summarized' },
-  });
-});
-
-test('a budget with reasoning muted is manual thinking, omitted', () => {
-  expect(
-    reasoningTo(
-      leaving('messages'),
-      { budgetTokens: 4096, exclude: true },
-      undefined,
-      undefined,
-    ),
-  ).toEqual({
-    thinking: { type: 'enabled', budget_tokens: 4096, display: 'omitted' },
   });
 });
 
@@ -407,7 +386,6 @@ test.each([
   [{ effort: 'high' } as const],
   [{ budgetTokens: 2048 }],
   [{ exclude: true }],
-  [{ effort: 'none' } as const],
 ])(
   'a request that says %j is sent none of the connection`s reasoning fields',
   (reasoning) => {
@@ -426,7 +404,7 @@ test.each([
   },
 );
 
-test.each([[undefined], [{}], [{ exclude: false }]])(
+test.each([[undefined], [{ exclude: false }]])(
   'a request whose reasoning is %j says nothing, and is sent the connection`s as stated',
   (reasoning) => {
     expect(

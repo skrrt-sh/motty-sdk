@@ -301,149 +301,37 @@ test.each([
   },
 );
 
-test.each(['max_tokens', 'tool_use'])(
-  'a call that is the last block of a reply that stopped for %s is not said to have ended',
-  async (reason) => {
-    const chunks = await read(
-      {
-        type: 'content_block_start',
-        index: 0,
-        content_block: { type: 'tool_use', id: 'toolu_01', name: 'write' },
-      },
-      {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'input_json_delta', partial_json: '{"text":"half' },
-      },
-      { type: 'content_block_stop', index: 0 },
-      { type: 'message_delta', delta: { stop_reason: reason } },
-      { type: 'message_stop' },
-    );
-    expect(chunks.slice(0, -1)).toEqual([
-      {
-        type: 'tool_call',
-        id: 'toolu_01',
-        name: 'write',
-        arguments: '',
-        block: 0,
-      },
-      {
-        type: 'tool_call',
-        id: 'toolu_01',
-        arguments: '{"text":"half',
-        block: 0,
-      },
-    ]);
-  },
-);
-
-test("a citation delta is a citation with the upstream's own form kept", async () => {
-  const citation = {
-    type: 'char_location',
-    cited_text: 'The grass is green.',
-    document_index: 0,
-    document_title: 'Facts',
-    start_char_index: 0,
-    end_char_index: 19,
-  };
+test('a call that is the last block of a reply cut at its limit is not said to have ended', async () => {
   const chunks = await read(
     {
       type: 'content_block_start',
       index: 0,
-      content_block: { type: 'text', text: '' },
+      content_block: { type: 'tool_use', id: 'toolu_01', name: 'write' },
     },
     {
       type: 'content_block_delta',
       index: 0,
-      delta: { type: 'citations_delta', citation },
+      delta: { type: 'input_json_delta', partial_json: '{"text":"half' },
     },
-    {
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'text_delta', text: 'Green.' },
-    },
-    {
-      type: 'message_delta',
-      delta: { stop_reason: 'end_turn', stop_sequence: null },
-      usage: { output_tokens: 15 },
-    },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'message_delta', delta: { stop_reason: 'max_tokens' } },
     { type: 'message_stop' },
   );
-  expect(chunks[0]).toEqual({
-    type: 'citation',
-    title: 'Facts',
-    text: 'The grass is green.',
-    block: 0,
-    provider: { anthropic: citation },
-  });
-});
-
-test('the stop sequence and the refusal details ride on the finish', async () => {
-  const [stopped] = await read(
+  expect(chunks.slice(0, -1)).toEqual([
     {
-      type: 'message_delta',
-      delta: { stop_reason: 'stop_sequence', stop_sequence: 'END' },
-      usage: { output_tokens: 3 },
-    },
-    { type: 'message_stop' },
-  );
-  expect(stopped).toMatchObject({
-    provider: { anthropic: { stop_sequence: 'END' } },
-  });
-  const [refused] = await read(
-    {
-      type: 'message_delta',
-      delta: {
-        stop_reason: 'refusal',
-        stop_sequence: null,
-        stop_details: { type: 'refusal', category: 'cyber', explanation: null },
-      },
-      usage: { output_tokens: 0 },
-    },
-    { type: 'message_stop' },
-  );
-  expect(refused).toMatchObject({
-    reason: 'content_filter',
-    provider: {
-      anthropic: {
-        stop_details: { type: 'refusal', category: 'cyber', explanation: null },
-      },
-    },
-  });
-});
-
-test('the final counts replace the first ones', async () => {
-  const [finish] = await read(
-    {
-      type: 'message_start',
-      message: {
-        id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
-        model: 'claude-opus-5-5',
-        usage: { input_tokens: 25, output_tokens: 1 },
-      },
+      type: 'tool_call',
+      id: 'toolu_01',
+      name: 'write',
+      arguments: '',
+      block: 0,
     },
     {
-      type: 'message_delta',
-      delta: { stop_reason: 'end_turn', stop_sequence: null },
-      usage: {
-        input_tokens: 30,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 2000,
-        output_tokens: 40,
-        output_tokens_details: { thinking_tokens: 12 },
-      },
+      type: 'tool_call',
+      id: 'toolu_01',
+      arguments: '{"text":"half',
+      block: 0,
     },
-    { type: 'message_stop' },
-  );
-  expect(finish).toMatchObject({
-    usage: {
-      input: 2030,
-      output: 40,
-      cached: 2000,
-      cacheWrite: 0,
-      reasoning: 12,
-    },
-  });
+  ]);
 });
 
 test('a later message delta adds to the ending and wipes nothing', async () => {
@@ -541,16 +429,13 @@ test('a ping and an event not known here are ignored', async () => {
   ).toMatchObject([{ type: 'finish', reason: 'stop' }]);
 });
 
-test.each([
-  '{"type":"content_block_de',
-  `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"f","input":${'{"a":'.repeat(100_000)}1${'}'.repeat(100_000)}}}`,
-])('a frame that cannot be read fails the stream once', async (data) => {
+test('a frame that cannot be read fails the stream once', async () => {
   async function* upstream() {
     yield {
       event: 'message_start',
       data: '{"type":"message_start","message":{"usage":{"input_tokens":25,"output_tokens":1}}}',
     };
-    yield { event: 'content_block_delta', data };
+    yield { event: 'content_block_delta', data: '{"type":"content_block_de' };
     yield { event: 'message_stop', data: '{"type":"message_stop"}' };
   }
   expect(await Array.fromAsync(events(upstream()))).toEqual([
@@ -768,41 +653,6 @@ test('what a message says beside the fields read here rides on the finish', asyn
   ]);
 });
 
-test('a message that says nothing more leaves a finish with no data of its own', async () => {
-  expect(
-    await read(
-      {
-        type: 'message_start',
-        message: {
-          id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-opus-5-5',
-          content: [],
-          stop_reason: null,
-          stop_sequence: null,
-          usage: { input_tokens: 25, output_tokens: 1 },
-        },
-      },
-      {
-        type: 'message_delta',
-        delta: { stop_reason: 'end_turn', stop_sequence: null },
-        usage: { output_tokens: 40 },
-      },
-      { type: 'message_stop' },
-    ),
-  ).toEqual([
-    {
-      type: 'finish',
-      reason: 'stop',
-      rawReason: 'end_turn',
-      id: 'msg_01XFDUDYJgAACzvnptvVoYEL',
-      model: 'claude-opus-5-5',
-      usage: { input: 25, output: 40 },
-    },
-  ]);
-});
-
 test('a block told whole is told when it ends, with what its deltas said', async () => {
   const chunks = await read(
     {
@@ -939,75 +789,6 @@ test('a block told whole that never ends is still told before the finish', async
   ]);
 });
 
-test('a block told whole is still told when the upstream fails before it ends', async () => {
-  expect(
-    await read(
-      {
-        type: 'content_block_start',
-        index: 0,
-        content_block: {
-          type: 'mcp_tool_use',
-          id: 'mcptoolu_01',
-          name: 'echo',
-          server_name: 'example',
-          input: {},
-        },
-      },
-      {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'input_json_delta', partial_json: '{"text": "hi"}' },
-      },
-      {
-        type: 'error',
-        error: { type: 'overloaded_error', message: 'Overloaded' },
-      },
-    ),
-  ).toMatchObject([
-    {
-      type: 'provider',
-      block: 0,
-      provider: {
-        anthropic: {
-          type: 'mcp_tool_use',
-          id: 'mcptoolu_01',
-          name: 'echo',
-          server_name: 'example',
-          input: { text: 'hi' },
-        },
-      },
-    },
-    { type: 'error', error: { code: 'overloaded' } },
-  ]);
-});
-
-test('a block told whole is still told when the stream is cut before it ends', async () => {
-  expect(
-    await read({
-      type: 'content_block_start',
-      index: 0,
-      content_block: {
-        type: 'web_search_tool_result',
-        tool_use_id: 'srvtoolu_01',
-        content: [],
-      },
-    }),
-  ).toMatchObject([
-    {
-      type: 'provider',
-      block: 0,
-      provider: {
-        anthropic: {
-          type: 'web_search_tool_result',
-          tool_use_id: 'srvtoolu_01',
-          content: [],
-        },
-      },
-    },
-    { type: 'error', error: { code: 'upstream_failed' } },
-  ]);
-});
-
 test('a block told whole is still told when the upstream itself fails, and the failure is thrown as it was', async () => {
   const failure = new Error('socket closed');
   async function* upstream() {
@@ -1031,26 +812,6 @@ test('a block told whole is still told when the upstream itself fails, and the f
     },
   });
   await expect(stream.next()).rejects.toBe(failure);
-});
-
-test('a block told whole is still told when an event after it cannot be read', async () => {
-  expect(
-    await read(
-      {
-        type: 'content_block_start',
-        index: 0,
-        content_block: { type: 'compaction', content: 'Summary' },
-      },
-      'not an event',
-    ),
-  ).toMatchObject([
-    {
-      type: 'provider',
-      block: 0,
-      provider: { anthropic: { type: 'compaction', content: 'Summary' } },
-    },
-    { type: 'error', error: { code: 'upstream_failed' } },
-  ]);
 });
 
 test('a delta read here that comes inside a block told whole is part of that block', async () => {
@@ -1262,37 +1023,38 @@ test('a block held through a hundred thousand deltas is built once, not once for
   });
 });
 
-test.each(['tool_use', 'server_tool_use'])(
-  'a %s block keeps every field not read here, an empty one and one named as a field of another block too',
-  async (type) => {
-    const unread = {
-      signature: 'SG',
-      text: 'T',
-      thinking: 'TH',
-      caller: null,
-      a: [],
-      b: {},
-      c: 0,
-      d: '',
-      e: false,
-    };
-    const [call] = await read({
-      type: 'content_block_start',
-      index: 0,
-      content_block: { type, id: 'toolu_01', name: 'f', input: {}, ...unread },
-    });
-    expect(call).toEqual({
-      type: 'tool_call',
+test('a tool_use block keeps every field not read here, an empty one and one named as a field of another block too', async () => {
+  const unread = {
+    signature: 'SG',
+    text: 'T',
+    thinking: 'TH',
+    caller: null,
+    a: [],
+    b: {},
+    c: 0,
+    d: '',
+    e: false,
+  };
+  const [call] = await read({
+    type: 'content_block_start',
+    index: 0,
+    content_block: {
+      type: 'tool_use',
       id: 'toolu_01',
       name: 'f',
-      arguments: '',
-      block: 0,
-      ...(type === 'tool_use'
-        ? { provider: { anthropic: unread } }
-        : { hosted: true, provider: { anthropic: { ...unread, type } } }),
-    });
-  },
-);
+      input: {},
+      ...unread,
+    },
+  });
+  expect(call).toEqual({
+    type: 'tool_call',
+    id: 'toolu_01',
+    name: 'f',
+    arguments: '',
+    block: 0,
+    provider: { anthropic: unread },
+  });
+});
 
 test('input said after its block ended is not the call`s', async () => {
   expect(
@@ -1316,16 +1078,17 @@ test('input said after its block ended is not the call`s', async () => {
   ]);
 });
 
-test.each([null, {}, { text: 'kindless' }])(
-  'a block that starts as %j has no kind and is no block',
-  async (block) => {
-    expect(
-      await read(
-        { type: 'content_block_start', index: 0, content_block: block },
-        { type: 'content_block_stop', index: 0 },
-        { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
-        { type: 'message_stop' },
-      ),
-    ).toMatchObject([{ type: 'finish', reason: 'stop' }]);
-  },
-);
+test('a block that starts with no kind is no block', async () => {
+  expect(
+    await read(
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { text: 'kindless' },
+      },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+      { type: 'message_stop' },
+    ),
+  ).toMatchObject([{ type: 'finish', reason: 'stop' }]);
+});

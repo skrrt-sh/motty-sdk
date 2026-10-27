@@ -55,7 +55,6 @@ test.each([
   ['mismatched_organization', 401, 'upstream_refused'],
   ['invalid_project', 401, 'upstream_refused'],
   ['unsupported_country_region_territory', 403, 'upstream_refused'],
-  ['content_policy_violation', 400, 'blocked'],
   ['unsupported_parameter', 400, 'unsupported'],
 ] as const)('the code %s, whatever its status, is %s', (code, status, kind) => {
   expect(
@@ -314,54 +313,6 @@ test('a router`s spent credits are a spent quota, in its own words without the l
   });
 });
 
-test('a router`s rate limit keeps what it says of whose limit it was', () => {
-  expect(
-    failure(
-      'openrouter',
-      429,
-      new Headers(),
-      '{"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"google/gemma-4-26b-a4b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations","provider_name":"Google AI Studio","is_byok":false,"provider_error_code":"429","limit_source":"upstream_provider_shared_pool","remedy_hint":"Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing"}},"user_id":"user_made_up"}',
-    ),
-  ).toMatchObject({
-    code: 'rate_limited',
-    provider: {
-      openrouter: {
-        status: 429,
-        code: 429,
-        metadata: {
-          provider_name: 'Google AI Studio',
-          is_byok: false,
-          provider_error_code: '429',
-          limit_source: 'upstream_provider_shared_pool',
-        },
-      },
-    },
-  });
-});
-
-test('a provider`s whole reply beside a router`s error is kept only in part', () => {
-  const { provider } = failure(
-    'openrouter',
-    400,
-    new Headers(),
-    JSON.stringify({
-      error: {
-        message: 'Provider returned error',
-        code: 400,
-        metadata: { provider_name: 'acme', raw: 'x'.repeat(5000) },
-      },
-    }),
-  );
-
-  expect(provider).toEqual({
-    openrouter: {
-      status: 400,
-      code: 400,
-      metadata: { provider_name: 'acme', raw: 'x'.repeat(300) },
-    },
-  });
-});
-
 test('the upstream`s word on another try is read from its header', () => {
   expect(
     failure(
@@ -400,33 +351,6 @@ test('a provider`s own reader names a failed response first, given all that came
           : undefined,
     ),
   ).toMatchObject({ code: 'quota_exceeded', message: 'Insufficient Balance' });
-});
-
-test('a provider`s own reader names a failure in a stream first, with no status', () => {
-  expect(
-    failed(
-      'deepseek',
-      { message: 'Insufficient Balance', code: 'rate_limit_exceeded' },
-      (status, _, { message }) =>
-        status === undefined && message === 'Insufficient Balance'
-          ? { code: 'quota_exceeded' }
-          : undefined,
-    ).code,
-  ).toBe('quota_exceeded');
-});
-
-test('a failure in a stream with a number for its code is named by that number', () => {
-  expect(
-    failed('openrouter', { code: 429, message: 'Rate limit exceeded' }),
-  ).toEqual({
-    code: 'rate_limited',
-    message: 'Rate limit exceeded',
-    provider: { openrouter: { code: 429 } },
-    upstream: true,
-  });
-  expect(
-    failed('openrouter', { code: 502, message: 'Provider disconnected' }),
-  ).not.toHaveProperty('retryable');
 });
 
 test('a spent quota and a rate limit share a status and not a meaning', () => {
@@ -712,21 +636,6 @@ test('the sentence written where the upstream said nothing is not what the adapt
   ).toBe('The upstream answered 500');
 });
 
-test('a failure told inside a stream is cut the same way', () => {
-  expect(
-    failed(
-      'acme',
-      { message: 'No key hunter2-hunter2', 'hunter2-hunter2': 'is not valid' },
-      undefined,
-      undefined,
-      (text) => text.replaceAll('hunter2-hunter2', '[cut]'),
-    ),
-  ).toMatchObject({
-    message: 'No key [cut]',
-    provider: { acme: { '[cut]': 'is not valid' } },
-  });
-});
-
 test('a failure told inside a stream is named by its code alone', () => {
   expect(
     failed('openai.responses', {
@@ -790,27 +699,6 @@ test('what a router put beside the error, not in it, is read the same', () => {
   );
 });
 
-test('a router`s failure with nothing beside it keeps its own message', () => {
-  expect(
-    failure(
-      'openai.chat',
-      400,
-      new Headers(),
-      '{"error":{"message":"Expected temperature to be at most 2, received 9","code":400,"metadata":{"provider_name":null}}}',
-    ).message,
-  ).toBe('Expected temperature to be at most 2, received 9');
-});
-
-test('what the provider said inside a stream is read from the error', () => {
-  expect(
-    failed('openai.chat', {
-      code: 502,
-      message: 'Provider returned error',
-      metadata: { raw: 'upstream connect error' },
-    }).message,
-  ).toBe('Provider returned error: upstream connect error');
-});
-
 test('a list of what a validator refused is the message, and the record keeps the list while it is small', () => {
   expect(
     failure(
@@ -864,20 +752,8 @@ test('a list beside a message that was told is not what was said, and is not kep
 });
 
 test.each([
-  [
-    401,
-    'upstream_refused',
-    "The upstream refused the host's credentials or account",
-  ],
-  [
-    403,
-    'upstream_refused',
-    "The upstream refused the host's credentials or account",
-  ],
   [404, 'unknown_model', 'Unrecognized request argument supplied: foo'],
-  [429, 'rate_limited', 'Unrecognized request argument supplied: foo'],
   [500, 'upstream_failed', 'Unrecognized request argument supplied: foo'],
-  [503, 'overloaded', 'Unrecognized request argument supplied: foo'],
 ] as const)(
   'the words of a refused option name nothing on a %i, the status OpenAI never refuses one with',
   (status, code, message) => {

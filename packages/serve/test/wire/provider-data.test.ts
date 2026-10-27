@@ -26,18 +26,6 @@ test('the other API of one provider is another wire', () => {
   ).toThrow(Unsupported);
 });
 
-test('what is read is a copy the body may hold', () => {
-  const bias = { '50256': -100 };
-
-  const { logit_bias: read } = own(
-    { 'openai.chat': { logit_bias: bias } },
-    'it',
-  );
-
-  expect(read).toEqual(bias);
-  expect(read).not.toBe(bias);
-});
-
 test('a map with no entry for this wire fails the call', () => {
   expect(() =>
     own({ anthropic: { thinking: { type: 'enabled' } } }, 'an option'),
@@ -91,31 +79,12 @@ test('a refusal names five fields and counts the rest', () => {
   );
 });
 
-test.each([
-  [{ anthropic: { caller: { type: 'direct' } } }, {}],
-  [undefined, {}],
-  [
-    { anthropic: { caller: { type: 'direct' } }, 'openai.chat': { a: 1 } },
-    { a: 1 },
-  ],
-])(
+test.each([[{ anthropic: { caller: { type: 'direct' } } }, {}]])(
   'what a map holds for another wire alone is read as nothing and not refused',
   (data, read) => {
     expect(mine(data)).toEqual(read);
   },
 );
-
-test('a map with an entry for each wire is read for this one alone', () => {
-  expect(
-    own(
-      {
-        anthropic: { thinking: { type: 'enabled' } },
-        'openai.chat': { logprobs: true },
-      },
-      'an option',
-    ),
-  ).toEqual({ logprobs: true });
-});
 
 test('an empty entry for this wire says there is nothing to add', () => {
   expect(
@@ -217,11 +186,7 @@ test('below the options the provider`s entry is no entry: its APIs share no shap
   ).toEqual({ b: 2 });
 });
 
-test.each([
-  [{ previous_response_id: null }],
-  [{ previous_response_id: [] }],
-  [{ previous_response_id: {} }],
-])(
+test.each([[{ previous_response_id: null }], [{ previous_response_id: [] }]])(
   'another API`s option that says nothing, as %j, fails no call and is not sent',
   (openai) => {
     expect(

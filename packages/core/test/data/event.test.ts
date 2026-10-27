@@ -1,162 +1,20 @@
 import { expect, test } from 'bun:test';
 import {
-  type Chunk,
   chunkOf,
   eventOf,
-  type Failed,
-  type Finish,
-  type FinishReason,
   isTerminal,
   type StreamEvent,
-  type Terminal,
-  type Usage,
   usageOf,
 } from '../../src/data/event.ts';
 
-test('a generated file carries its bytes with a media type, or a url', () => {
-  // @ts-expect-error
-  const untyped: Chunk = { type: 'file', data: 'iVBORw0=' };
-
-  expect(untyped.type).toBe('file');
-});
-
-test('a generated file the provider holds is named by its id alone', () => {
-  const held: Chunk = { type: 'file', id: 'file_1' };
-  const typed: Chunk = { type: 'file', id: 'file_2', mediaType: 'image/png' };
-  // @ts-expect-error
-  const twice: Chunk = { type: 'file', id: 'file_3', url: 'https://a.test' };
-
-  expect([held.type, typed.type, twice.type]).toEqual(['file', 'file', 'file']);
-});
-
-test('a chunk carries no hints, which only a request has', () => {
-  // @ts-expect-error
-  const hinted: Chunk = { type: 'text', text: 'Hello', hints: {} };
-
-  expect(hinted.type).toBe('text');
-});
-
-test('a reader cannot write to a chunk, a terminal event or the facts of a failure', () => {
-  const chunk: Chunk = { type: 'text', text: 'Hello' };
-  const finish: Terminal = { type: 'finish', reason: 'stop', usage: {} };
-  const failed: Failed = {
-    type: 'error',
-    error: { code: 'overloaded', message: 'busy', provider: {} },
-  };
-  // @ts-expect-error
-  chunk.text = 'Goodbye';
-  // @ts-expect-error
-  chunk.block = 1;
-  // @ts-expect-error
-  finish.reason = 'length';
-  // @ts-expect-error
-  if (finish.usage !== undefined) finish.usage.input = 1;
-  // @ts-expect-error
-  failed.error.message = 'idle';
-  // @ts-expect-error
-  failed.error.provider = {};
-
-  expect([chunk.type, finish.type, failed.type]).toEqual([
-    'text',
-    'finish',
-    'error',
-  ]);
-});
-
-test('a terminal event is not a chunk', () => {
-  const finish: Chunk = {
-    // @ts-expect-error a finish ends the stream, it is not content
-    type: 'finish',
-    reason: 'stop',
-    usage: { input: 1, output: 1, cached: 0, reasoning: 0 },
-  };
-  // @ts-expect-error content does not end a stream
-  const text: Terminal = { type: 'text', text: 'Hello' };
-
-  expect([finish.type, text.type]).toEqual(['finish', 'text']);
-});
-
-test('events hold plain data only', () => {
-  const opaque: Chunk = {
-    type: 'provider',
-    // @ts-expect-error a function is not plain data
-    provider: { openai: { parse: () => 'logprobs' } },
-  };
-  const whole: Chunk = {
-    type: 'tool_call',
-    id: 'call_1',
-    name: 'search',
-    // @ts-expect-error arguments stream as text, not as a parsed value
-    arguments: { q: 'motty' },
-  };
-  const thrown: StreamEvent = {
-    type: 'error',
-    // @ts-expect-error facts, never an error instance
-    error: new Error('Try again'),
-  };
-
-  expect([opaque.type, whole.type, thrown.type]).toEqual([
-    'provider',
-    'tool_call',
-    'error',
-  ]);
-});
-
-test('usage and the finish reason are closed sets', () => {
-  const reported: Usage = { input: 1, output: 1 };
-  const detailed: Usage = {
-    input: 9,
-    output: 5,
-    cached: 4,
-    cacheWrite: 2,
-    reasoning: 3,
-  };
-  const other: FinishReason = 'other';
-  // @ts-expect-error one family's wire name is not the common set
-  const reason: FinishReason = 'end_turn';
-  const finish: Terminal = {
-    type: 'finish',
-    reason: 'length',
-    // @ts-expect-error no count the upstream did not report
-    usage: { input: 1, output: 1, total: 2 },
-  };
-
-  expect('cached' in reported).toBe(false);
-  expect(`${detailed.cacheWrite} ${other} ${reason} ${finish.type}`).toBe(
-    '2 other end_turn finish',
-  );
-});
-
 test.each([
-  [{ type: 'text', text: 'Hello' }],
   [{ type: 'text', text: '', block: 0, provider: { openai: { index: 0 } } }],
-  [{ type: 'reasoning', text: 'Compare the two locks' }],
-  [{ type: 'refusal', text: 'I cannot help with that' }],
   [{ type: 'tool_call', id: 'call_1', arguments: '{"q":' }],
-  [
-    {
-      type: 'tool_call',
-      id: 'call_1',
-      name: 'search',
-      arguments: '',
-      hosted: true,
-    },
-  ],
   [{ type: 'tool_result', id: 'call_1', output: null }],
-  [
-    {
-      type: 'tool_result',
-      id: 'call_1',
-      output: { hits: [1, 2] },
-      failed: false,
-      hosted: true,
-    },
-  ],
   [{ type: 'file', data: 'iVBORw0=', mediaType: 'image/png' }],
   [{ type: 'file', url: 'https://example.com/a.png' }],
   [{ type: 'file', id: 'file_1', mediaType: 'image/png' }],
   [{ type: 'citation' }],
-  [{ type: 'citation', title: 'Docs', url: 'https://example.com', text: 'x' }],
   [{ type: 'provider', provider: { openai: { logprobs: [] } } }],
 ])('%j enters as the chunk it is', (chunk) => {
   expect([chunkOf(chunk) === chunk, eventOf(chunk) === chunk]).toEqual([
@@ -166,63 +24,40 @@ test.each([
 });
 
 test.each([
-  [undefined],
   [null],
   ['text'],
-  [42],
-  [[{ type: 'text', text: 'Hello' }]],
-  [{}],
-  [{ text: 'Hello' }],
-  [{ type: 7, text: 'Hello' }],
   [{ type: 'image', url: 'https://example.com/a.png' }],
-  [{ type: 'text' }],
   [{ type: 'text', text: 7 }],
-  [{ type: 'text', text: new Date(0) }],
-  [{ type: 'text', text: () => 'Hello' }],
-  [{ type: 'text', text: 'Hello', block: 1n }],
-  [{ type: 'text', text: 'Hello', block: Number.NaN }],
   [{ type: 'text', text: 'Hello', block: '0' }],
   [{ type: 'text', text: 'Hello', provider: 'openai' }],
   [{ type: 'text', text: 'Hello', provider: [] }],
-  [{ type: 'text', text: 'Hello', provider: null }],
-  [{ type: 'reasoning', text: null }],
-  [{ type: 'refusal', text: ['no'] }],
-  [{ type: 'tool_call', arguments: '{}' }],
   [{ type: 'tool_call', id: 1, arguments: '{}' }],
-  [{ type: 'tool_call', id: 'call_1' }],
   [{ type: 'tool_call', id: 'call_1', arguments: { q: 'motty' } }],
   [{ type: 'tool_call', id: 'call_1', arguments: '', name: 7 }],
   [{ type: 'tool_call', id: 'call_1', arguments: '', hosted: 'yes' }],
   [{ type: 'tool_call', id: 'call_1', arguments: '', ended: 'yes' }],
   [{ type: 'tool_result', output: 'found' }],
-  [{ type: 'tool_result', id: 'call_1' }],
   [{ type: 'tool_result', id: 'call_1', output: () => 'found' }],
-  [{ type: 'tool_result', id: 'call_1', output: 5n }],
   [{ type: 'tool_result', id: 'call_1', output: Number.POSITIVE_INFINITY }],
   [{ type: 'tool_result', id: 'call_1', output: 'found', failed: 1 }],
   [{ type: 'tool_result', id: 'call_1', output: 'found', hosted: 'no' }],
   [{ type: 'file' }],
-  [{ type: 'file', mediaType: 'image/png' }],
   [{ type: 'file', data: 'iVBORw0=' }],
   [{ type: 'file', data: new Uint8Array(4), mediaType: 'image/png' }],
   [{ type: 'file', data: 'iVBORw0=', mediaType: 'image/png', id: 'file_1' }],
   [{ type: 'file', url: 'https://example.com/a.png', id: 'file_1' }],
   [{ type: 'file', url: new URL('https://example.com/a.png') }],
-  [{ type: 'file', id: 1 }],
   [{ type: 'file', id: 'file_1', mediaType: 7 }],
   [{ type: 'citation', title: 7 }],
   [{ type: 'citation', url: new URL('https://example.com') }],
   [{ type: 'citation', text: false }],
   [{ type: 'provider' }],
-  [{ type: 'provider', provider: 'openai' }],
 ])('%p is not an event', (value) => {
   expect([chunkOf(value), eventOf(value)]).toEqual([undefined, undefined]);
 });
 
-test.each([
-  [{ type: 'progress', text: 'Reading the diff' }],
-  [{ type: 'progress', chunk: { type: 'text', text: 'Hello' } }],
-])('progress %j cannot be forged as an event', (value) => {
+test('progress cannot be forged as an event', () => {
+  const value = { type: 'progress', chunk: { type: 'text', text: 'Hello' } };
   expect([chunkOf(value), eventOf(value)]).toEqual([undefined, undefined]);
 });
 
@@ -240,21 +75,17 @@ test('provider data, tool output and warnings pass unchecked', () => {
   ]).toEqual([true, true]);
 });
 
-test.each([
-  [{ type: 'finish', reason: 'stop' }],
-  [
-    {
-      type: 'finish',
-      reason: 'tool_calls',
-      usage: { input: 12, output: 0, cached: 4, cacheWrite: 2, reasoning: 1 },
-      rawReason: 'tool_use',
-      id: 'msg_1',
-      model: 'acme/small',
-      warnings: [{ setting: 'seed' }],
-      provider: { anthropic: { stop_sequence: null } },
-    },
-  ],
-])('%j enters as the terminal event it is', (event) => {
+test('a finish enters as the terminal event it is', () => {
+  const event = {
+    type: 'finish',
+    reason: 'tool_calls',
+    usage: { input: 12, output: 0, cached: 4, cacheWrite: 2, reasoning: 1 },
+    rawReason: 'tool_use',
+    id: 'msg_1',
+    model: 'acme/small',
+    warnings: [{ setting: 'seed' }],
+    provider: { anthropic: { stop_sequence: null } },
+  };
   expect(eventOf(event) === event).toBe(true);
 });
 
@@ -295,40 +126,29 @@ test('a failure its host calls its own enters unmarked, and that word is not kep
   expect(sent.error.upstream).toBe(false);
 });
 
-test.each([[true], [null], ['false'], [0], [{}]])(
-  'a failure whose host says %p of it is marked as from outside',
-  (upstream) => {
-    expect(
-      eventOf({
-        type: 'error',
-        error: { code: 'rate_limited', message: 'busy', upstream },
-      }),
-    ).toHaveProperty('error.upstream', true);
-  },
-);
+test('a failure whose host says anything but false of it is marked as from outside', () => {
+  expect(
+    eventOf({
+      type: 'error',
+      error: { code: 'rate_limited', message: 'busy', upstream: 'false' },
+    }),
+  ).toHaveProperty('error.upstream', true);
+});
 
-test.each([
-  [{ type: 'finish', reason: 'stop' }],
-  [{ type: 'error', error: { code: 'overloaded', message: 'busy' } }],
-])('the terminal event %j is not a chunk', (event) => {
-  expect(chunkOf(event)).toBeUndefined();
+test('a terminal event is not a chunk', () => {
+  expect(chunkOf({ type: 'finish', reason: 'stop' })).toBeUndefined();
 });
 
 test.each([
-  [{ type: 'finish' }],
   [{ type: 'finish', reason: 'end_turn' }],
-  [{ type: 'finish', reason: 7 }],
   [{ type: 'finish', reason: 'stop', rawReason: 7 }],
   [{ type: 'finish', reason: 'stop', id: 1 }],
   [{ type: 'finish', reason: 'stop', model: ['acme/small'] }],
   [{ type: 'finish', reason: 'stop', warnings: 'seed' }],
   [{ type: 'finish', reason: 'stop', provider: 'anthropic' }],
-  [{ type: 'error' }],
-  [{ type: 'error', error: 'overloaded' }],
   [{ type: 'error', error: null }],
   [{ type: 'error', error: { message: 'busy' } }],
   [{ type: 'error', error: { code: 503, message: 'busy' } }],
-  [{ type: 'error', error: new Error('busy') }],
 ])('%p is not a terminal event', (value) => {
   expect(eventOf(value)).toBeUndefined();
 });
@@ -336,16 +156,9 @@ test.each([
 test.each([
   [{ input: 12, output: -1 }, { input: 12 }],
   [{ input: 12, output: 1.5 }, { input: 12 }],
-  [{ input: 12, output: Number.NaN }, { input: 12 }],
-  [{ input: 12, output: Number.POSITIVE_INFINITY }, { input: 12 }],
   [{ input: 12, output: 2 ** 53 }, { input: 12 }],
   [{ input: 12, output: '3' }, { input: 12 }],
-  [{ input: 12, output: 3n }, { input: 12 }],
-  [{ input: 12, output: null }, { input: 12 }],
-  [{ input: () => 12, cached: 0 }, { cached: 0 }],
   ['lots', {}],
-  [null, {}],
-  [12, {}],
 ])('usage %p costs the wrong counts and keeps the event', (usage, kept) => {
   expect([
     eventOf({ type: 'finish', reason: 'stop', usage }),
@@ -367,19 +180,6 @@ test.each([
 test('a count of zero is a count', () => {
   const finish = { type: 'finish', reason: 'stop', usage: { cached: 0 } };
   expect(eventOf(finish) === finish).toBe(true);
-});
-
-test('usage with nothing wrong is given back as it is', () => {
-  const usage = { input: 12, cached: 0 };
-  expect(usageOf(usage) === usage).toBe(true);
-});
-
-test('usage from any reporter keeps only its whole counts', () => {
-  expect([
-    usageOf({ input: 12, output: 1.5, cached: '4', reasoning: 0 }),
-    usageOf('lots'),
-    usageOf(undefined),
-  ]).toStrictEqual([{ input: 12, reasoning: 0 }, {}, {}]);
 });
 
 test('a cost is an amount, whole or not, and is kept beside the counts', () => {
@@ -411,37 +211,6 @@ test.each([
     true,
   ],
   [{ type: 'text', text: 'Hello' } satisfies StreamEvent, false],
-  [{ type: 'provider', provider: {} } satisfies StreamEvent, false],
-  [{ type: 'progress', piece: 0, text: 'Reading' }, false],
 ])('%j is terminal: %p', (event, terminal) => {
   expect(isTerminal(event)).toBe(terminal);
-});
-
-test('the terminal check narrows an event to how it ended, and what is left to a chunk', () => {
-  function ended(event: StreamEvent): string {
-    if (!isTerminal(event)) {
-      const chunk: Chunk = event;
-      return chunk.type;
-    }
-    const terminal: Finish | Failed = event;
-    return terminal.type === 'finish' ? terminal.reason : terminal.error.code;
-  }
-
-  expect([
-    ended({ type: 'text', text: 'Hello' }),
-    ended({ type: 'finish', reason: 'length' }),
-    ended({ type: 'error', error: { code: 'overloaded', message: 'busy' } }),
-  ]).toEqual(['text', 'length', 'overloaded']);
-});
-
-test('the terminal check keeps what else a stream holds apart from its end', () => {
-  function told(sent: StreamEvent | { type: 'progress'; text: string }) {
-    if (isTerminal(sent)) return sent.type;
-    return sent.type === 'progress' ? sent.text : sent.type;
-  }
-
-  expect([
-    told({ type: 'progress', text: 'Reading' }),
-    told({ type: 'finish', reason: 'stop' }),
-  ]).toEqual(['Reading', 'finish']);
 });

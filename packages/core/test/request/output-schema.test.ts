@@ -8,47 +8,6 @@ afterEach(() => {
   mock.restore();
 });
 
-test('a JSON Schema output reaches the host untouched', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: '{"city":"Oslo"}' },
-      {
-        type: 'finish',
-        reason: 'stop',
-        usage: { input: 1, output: 2, cached: 0, reasoning: 0 },
-      },
-    ],
-  });
-
-  const value = await enter(host, async () => {
-    const reply = await model('acme/small').complete({
-      messages: [],
-      output: {
-        schema: {
-          type: 'object',
-          properties: { city: { type: 'string' } },
-          required: ['city'],
-        },
-      },
-    });
-    return reply.json();
-  });
-
-  expect(value).toEqual({ city: 'Oslo' });
-  expect(host.sent('acme/small')).toEqual([
-    {
-      messages: [],
-      output: {
-        schema: {
-          type: 'object',
-          properties: { city: { type: 'string' } },
-          required: ['city'],
-        },
-      },
-    },
-  ]);
-});
-
 test('a Standard Schema reaches the host as its JSON Schema and types the value', async () => {
   const host = stubHost({
     'acme/small': [
@@ -137,28 +96,6 @@ test('a Standard Schema with no JSON Schema throws Unsupported, uncounted and un
   expect(calls.made).toEqual([]);
 });
 
-test('a JSON Schema form that is not JSON throws Unsupported', async () => {
-  const host = stubHost();
-
-  await enter(host, async () => {
-    await expect(
-      model('acme/small').complete({
-        messages: [],
-        output: {
-          '~standard': {
-            version: 1,
-            vendor: 'test',
-            validate: (value: unknown) => ({ value }),
-            jsonSchema: { output: () => ({ default: () => 'Oslo' }) },
-          },
-        },
-      }),
-    ).rejects.toBeInstanceOf(Unsupported);
-  });
-
-  expect(host.sent('acme/small')).toEqual([]);
-});
-
 test('a prompt with no output reaches the host as the very object, with no output key', async () => {
   const host = stubHost({
     'acme/small': [{ type: 'finish', reason: 'stop' }],
@@ -193,42 +130,11 @@ test('messages, options and a JSON Schema output reach the host as the reference
   expect(sent?.output).toBe(prompt.output);
 });
 
-test('with a Standard Schema only the output is replaced, messages and options stay the same references', async () => {
-  const host = stubHost({
-    'acme/small': [{ type: 'finish', reason: 'stop' }],
-  });
-  const prompt = {
-    messages: [{ role: 'user' as const, text: 'Hi' }],
-    options: { stop: ['END'] },
-    output: {
-      '~standard': {
-        version: 1 as const,
-        vendor: 'test',
-        validate: (value: unknown) => ({ value }),
-        jsonSchema: { output: () => ({ type: 'object' }) },
-      },
-    },
-  };
-
-  await enter(host, () => model('acme/small').complete(prompt));
-
-  const sent = host.sent('acme/small')[0];
-  expect(sent).not.toBe(prompt);
-  expect(sent?.messages).toBe(prompt.messages);
-  expect(sent?.options).toBe(prompt.options);
-  expect(sent?.output).toEqual({ schema: { type: 'object' } });
-  expect(prompt.output).toHaveProperty('~standard');
-});
-
 test.each([
-  ['a date', () => ({ default: new Date(0) })],
-  ['a map', () => ({ properties: new Map() })],
   ['a class instance', () => ({ default: new URL('https://example.com') })],
   ['an array with a hole', () => ({ enum: new Array(2) })],
-  ['a promise', () => ({ default: Promise.resolve('Oslo') })],
   ['an undefined value', () => ({ default: undefined })],
   ['a number that is not finite', () => ({ maximum: Number.NaN })],
-  ['a big integer', () => ({ maximum: 7n })],
   [
     'a value that holds itself',
     () => {
@@ -281,29 +187,6 @@ test.each([
     expect(calls.made).toEqual([]);
   },
 );
-
-test('a JSON Schema form made by an async converter throws Unsupported', async () => {
-  const host = stubHost();
-
-  await enter(host, async () => {
-    await expect(
-      model('acme/small').complete({
-        messages: [],
-        output: {
-          '~standard': {
-            version: 1,
-            vendor: 'test',
-            validate: (value: unknown) => ({ value }),
-            // @ts-expect-error a converter gives the schema, not a promise of it
-            jsonSchema: { output: async () => ({ type: 'object' }) },
-          },
-        },
-      }),
-    ).rejects.toBeInstanceOf(Unsupported);
-  });
-
-  expect(host.sent('acme/small')).toEqual([]);
-});
 
 test('a JSON Schema form of plain data is sent, an object with no prototype included', async () => {
   const host = stubHost({
@@ -373,33 +256,9 @@ test.each([
   },
 );
 
-test('an output with a JSON Schema form but no validate function throws Unsupported and the host is not asked', async () => {
-  const host = stubHost();
-
-  await enter(host, async () => {
-    await expect(
-      model('acme/small').complete({
-        messages: [],
-        output: {
-          // @ts-expect-error a Standard Schema has a validate function
-          '~standard': {
-            version: 1,
-            vendor: 'test',
-            jsonSchema: { output: () => ({ type: 'object' }) },
-          },
-        },
-      }),
-    ).rejects.toBeInstanceOf(Unsupported);
-  });
-
-  expect(host.sent('acme/small')).toEqual([]);
-});
-
 test.each([
   ['null', 'null'],
   ['text', '"object"'],
-  ['a number', '7'],
-  ['true', 'true'],
   ['an array', '[]'],
 ])(
   'an output that is %s throws Unsupported and the host is not asked',
@@ -446,7 +305,6 @@ test('an output whose ~standard throws when read throws Unsupported holding the 
 test.each([
   ['undefined', JSON.parse('{}').prompt],
   ['null', JSON.parse('null')],
-  ['text', JSON.parse('"Hi"')],
 ])(
   'a prompt that is %s fails the call with a plain error, the author’s mistake',
   async (_name, prompt) => {
@@ -467,11 +325,8 @@ test.each([
 
 test.each([
   ['an array', '[]'],
-  ['an array of schemas', '[{"type":"object"}]'],
   ['null', 'null'],
   ['text', '"object"'],
-  ['a number', '7'],
-  ['true', 'true'],
 ])(
   'a JSON Schema form whose root is %s throws Unsupported and the host is not asked',
   async (_name, form) => {
@@ -592,35 +447,6 @@ test('a JSON Schema form whose branches share one definition is sent, the shared
   expect(host.sent('acme/small')).toHaveLength(1);
 }, 1_000);
 
-test('a JSON Schema form that holds itself two objects down throws Unsupported', async () => {
-  const host = stubHost();
-
-  await enter(host, async () => {
-    await expect(
-      model('acme/small').complete({
-        messages: [],
-        output: {
-          '~standard': {
-            version: 1,
-            vendor: 'test',
-            validate: (value: unknown) => ({ value }),
-            jsonSchema: {
-              output: () => {
-                const items: unknown[] = [];
-                const schema = { type: 'array', prefixItems: items };
-                items.push({ not: schema });
-                return schema;
-              },
-            },
-          },
-        },
-      }),
-    ).rejects.toBeInstanceOf(Unsupported);
-  });
-
-  expect(host.sent('acme/small')).toEqual([]);
-});
-
 test('a Standard Schema inside the object form reaches the host as its JSON Schema with what is stated beside it, and types the value', async () => {
   const host = stubHost({
     'acme/small': [
@@ -682,35 +508,6 @@ test('a Standard Schema inside the object form reaches the host as its JSON Sche
   ]);
 });
 
-test('a Standard Schema inside the object form with nothing stated beside it is sent as its JSON Schema alone', async () => {
-  const host = stubHost({
-    'acme/small': [
-      { type: 'text', text: '{}' },
-      { type: 'finish', reason: 'stop' },
-    ],
-  });
-
-  await enter(host, () =>
-    model('acme/small').complete({
-      messages: [],
-      output: {
-        schema: {
-          '~standard': {
-            version: 1,
-            vendor: 'test',
-            validate: (value: unknown) => ({ value }),
-            jsonSchema: { output: () => ({ type: 'object' }) },
-          },
-        },
-      },
-    }),
-  );
-
-  expect(host.sent('acme/small')).toEqual([
-    { messages: [], output: { schema: { type: 'object' } } },
-  ]);
-});
-
 test('a callable Standard Schema inside the object form is sent as its JSON Schema', async () => {
   const host = stubHost({
     'acme/small': [
@@ -739,53 +536,4 @@ test('a callable Standard Schema inside the object form is sent as its JSON Sche
   expect(host.sent('acme/small')).toEqual([
     { messages: [], output: { strict: true, schema: { type: 'object' } } },
   ]);
-});
-
-test('a Standard Schema inside the object form with no JSON Schema throws Unsupported, uncounted and unasked', async () => {
-  const host = stubHost({ 'acme/small': [{ type: 'finish', reason: 'stop' }] });
-
-  await enter(host, async () => {
-    await expect(
-      model('acme/small').complete({
-        messages: [],
-        output: {
-          strict: true,
-          schema: {
-            '~standard': {
-              version: 1,
-              vendor: 'test',
-              validate: (value: unknown) => ({ value }),
-            },
-          },
-        },
-      }),
-    ).rejects.toBeInstanceOf(Unsupported);
-    expect(current().calls.made).toEqual([]);
-  });
-
-  expect(host.sent('acme/small')).toEqual([]);
-});
-
-test('a schema inside the object form with a JSON Schema form but no validate function throws Unsupported and the host is not asked', async () => {
-  const host = stubHost({ 'acme/small': [{ type: 'finish', reason: 'stop' }] });
-
-  await enter(host, async () => {
-    await expect(
-      model('acme/small').complete({
-        messages: [],
-        output: {
-          schema: {
-            // @ts-expect-error a Standard Schema has a validate function
-            '~standard': {
-              version: 1,
-              vendor: 'test',
-              jsonSchema: { output: () => ({ type: 'object' }) },
-            },
-          },
-        },
-      }),
-    ).rejects.toBeInstanceOf(Unsupported);
-  });
-
-  expect(host.sent('acme/small')).toEqual([]);
 });

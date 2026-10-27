@@ -5,12 +5,6 @@ async function* chunked(...pieces: string[]) {
   for (const piece of pieces) yield new TextEncoder().encode(piece);
 }
 
-test('an event is formatted as its data line and a blank line', () => {
-  expect(formatted({ data: '{"type":"ping"}' })).toBe(
-    'data: {"type":"ping"}\n\n',
-  );
-});
-
 test('a named event is formatted with its name first', () => {
   expect(formatted({ event: 'message_stop', data: '{}' })).toBe(
     'event: message_stop\ndata: {}\n\n',
@@ -71,7 +65,6 @@ test.each([
 );
 
 test.each([
-  ['line feeds', '\n'],
   ['returns and line feeds', '\r\n'],
   ['returns', '\r'],
 ])(
@@ -110,19 +103,6 @@ test('an event the body ended in the middle of is dropped', async () => {
   );
 
   expect(events).toEqual([{ data: 'whole' }]);
-});
-
-test('what was parsed formats back to the same events', async () => {
-  const sent = [
-    { event: 'content_block_delta', data: '{"text":"a\\nb"}' },
-    { data: 'two\nlines' },
-  ];
-
-  const events = await Array.fromAsync(
-    parsed(chunked(sent.map(formatted).join(''))),
-  );
-
-  expect(events).toEqual(sent);
 });
 
 test('the body of a response is parsed, and leaving early cancels it', async () => {

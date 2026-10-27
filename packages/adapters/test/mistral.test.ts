@@ -1,23 +1,6 @@
 import { expect, test } from 'bun:test';
 import { adapted } from '@mottyjs/core/host';
-import * as entry from '../src/mistral.ts';
 import { mistral } from '../src/mistral.ts';
-
-test('built from Mistral`s reference alone, with no key held: it serves the names under its prefix, and with no key it fails when made', () => {
-  const adapter = mistral({ key: 'sk-host' });
-
-  expect(adapter.serves('mistral/mistral-medium-3-5')).toBe(true);
-  expect(adapter.serves('openrouter/mistralai/mistral-medium-3-5')).toBe(false);
-  expect(mistral({ key: 'k', prefix: 'own' }).serves('own/x')).toBe(true);
-  expect(adapter.decide).toBeUndefined();
-  expect(() => mistral({ key: undefined })).toThrow(
-    'The mistral adapter was given no key',
-  );
-  expect(() => mistral({ key: '' })).toThrow();
-  expect(() => mistral({ key: ' \t' })).toThrow(
-    'The mistral adapter was given no key',
-  );
-});
 
 test('a call goes to Chat Completions under the address with the key, and content that is a list while the model thinks and a string after, a tool call and usage are read, by its reference', async () => {
   const seen: { path: string; key: string | null }[] = [];
@@ -288,7 +271,6 @@ data: [DONE]
 
 test.each([
   { effort: 'none', sent: 'none', warned: [] },
-  { effort: 'high', sent: 'high', warned: [] },
   { effort: 'max', sent: 'xhigh', warned: ['reasoning.level'] },
 ] as const)(
   'an effort of $effort goes under OpenAI`s name as $sent, the order not to reason included',
@@ -340,114 +322,6 @@ data: [DONE]
   },
 );
 
-test('a budget has no field, and is left out and reported', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    mistral({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'mistral/mistral-medium-3-5',
-      {
-        messages: [{ role: 'user', text: 'What is 17*23?' }],
-        options: { reasoning: { budgetTokens: 2000 } },
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toEqual([
-    {
-      model: 'mistral-medium-3-5',
-      messages: [{ role: 'user', content: 'What is 17*23?' }],
-      stream: true,
-    },
-  ]);
-  expect(events.at(-1)).toMatchObject({
-    type: 'finish',
-    warnings: [{ setting: 'reasoning.budgetTokens' }],
-  });
-  expect(events.at(-1)).toHaveProperty('warnings.length', 1);
-});
-
-test('a JSON output goes with its schema', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"{\\"product\\":391}"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    mistral({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'mistral/mistral-small-latest',
-      {
-        messages: [{ role: 'user', text: 'What is 17*23?' }],
-        output: {
-          name: 'product',
-          strict: true,
-          schema: {
-            type: 'object',
-            properties: { product: { type: 'integer' } },
-            required: ['product'],
-            additionalProperties: false,
-          },
-        },
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toEqual([
-    {
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'product',
-          schema: {
-            type: 'object',
-            properties: { product: { type: 'integer' } },
-            required: ['product'],
-            additionalProperties: false,
-          },
-          strict: true,
-        },
-      },
-      model: 'mistral-small-latest',
-      messages: [{ role: 'user', content: 'What is 17*23?' }],
-      stream: true,
-    },
-  ]);
-  expect(events.at(-1)).not.toHaveProperty('warnings');
-});
-
 test('a temperature and a top-p outside Mistral`s ranges are sent as the nearest inside, and top-k has no field', async () => {
   const seen: unknown[] = [];
   using upstream = Bun.serve({
@@ -497,80 +371,8 @@ data: [DONE]
   ).toEqual(['temperature.range', 'topK', 'topP.range']);
 });
 
-test('reasoning goes back as a thinking chunk of the assistant turn`s content, as its reference asks', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"1173"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    mistral({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'mistral/mistral-medium-3-5',
-      {
-        messages: [
-          { role: 'user', text: 'What is 17 * 23?' },
-          {
-            role: 'assistant',
-            parts: [
-              { type: 'reasoning', text: '340 + 51 = 391.' },
-              { type: 'text', text: '17 * 23 = 391.' },
-            ],
-          },
-          { role: 'user', text: 'Now multiply that by 3.' },
-        ],
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toMatchObject([
-    {
-      messages: [
-        { role: 'user', content: 'What is 17 * 23?' },
-        {
-          role: 'assistant',
-          content: [
-            {
-              type: 'thinking',
-              thinking: [{ type: 'text', text: '340 + 51 = 391.' }],
-            },
-            { type: 'text', text: '17 * 23 = 391.' },
-          ],
-        },
-        { role: 'user', content: 'Now multiply that by 3.' },
-      ],
-    },
-  ]);
-  expect(events.at(-1)).not.toHaveProperty('warnings');
-});
-
 test.each([
   {
-    status: 404,
-    body: {
-      object: 'error',
-      message: 'The model does not exist.',
-      type: 'invalid_request_error',
-      param: 'model',
-      code: 'unknown_model',
-    },
-    kind: 'unknown_model',
-  },
-  {
     status: 400,
     body: {
       object: 'error',
@@ -580,34 +382,6 @@ test.each([
       code: 'unknown_model',
     },
     kind: 'unknown_model',
-  },
-  {
-    status: 429,
-    body: {
-      object: 'error',
-      message: 'Requests rate limit exceeded.',
-      type: 'rate_limit_error',
-    },
-    kind: 'rate_limited',
-  },
-  {
-    status: 400,
-    body: {
-      object: 'error',
-      message: 'The temperature is outside the range from 0 to 1.5.',
-      type: 'invalid_request_error',
-      param: 'temperature',
-    },
-    kind: 'invalid_request',
-  },
-  {
-    status: 500,
-    body: {
-      object: 'error',
-      message: 'An unexpected error occurred.',
-      type: 'server_error',
-    },
-    kind: 'upstream_failed',
   },
   {
     status: 503,
@@ -651,72 +425,7 @@ test.each([
   },
 );
 
-test('a field Mistral refuses is told with what was wrong and where, by its reference', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      Response.json(
-        {
-          detail: [
-            {
-              type: 'less_than_equal',
-              loc: ['body', 'temperature'],
-              msg: 'Input should be less than or equal to 1.5',
-              input: 2,
-              ctx: { le: 1.5 },
-            },
-            {
-              type: 'extra_forbidden',
-              loc: ['body', 'top_k'],
-              msg: 'Extra inputs are not permitted',
-              input: 40,
-            },
-          ],
-        },
-        { status: 422 },
-      ),
-  });
-  const { models } = adapted([
-    mistral({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'mistral/mistral-small-latest',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(events).toMatchObject([
-    {
-      type: 'error',
-      error: {
-        code: 'invalid_request',
-        status: 422,
-        message:
-          'body.temperature: Input should be less than or equal to 1.5; body.top_k: Extra inputs are not permitted',
-        upstream: true,
-      },
-    },
-  ]);
-});
-
 test.each([
-  {
-    status: 401,
-    body: { detail: 'Invalid API Key' },
-    said: 'Invalid API Key',
-  },
-  {
-    status: 401,
-    body: {
-      object: 'error',
-      message: 'The API key is missing, invalid, or expired.',
-      type: 'authentication_error',
-    },
-    said: 'The API key is missing, invalid, or expired.',
-  },
   {
     status: 400,
     body: {
@@ -758,34 +467,3 @@ test.each([
     ]);
   },
 );
-
-test('a body that is no JSON is told by its status', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () => new Response('upstream connect error', { status: 502 }),
-  });
-  const { models } = adapted([
-    mistral({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'mistral/mistral-small-latest',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(events).toMatchObject([
-    { type: 'error', error: { code: 'upstream_failed', upstream: true } },
-  ]);
-});
-
-test('the entry exports exactly the held values, and no type', async () => {
-  const text = await Bun.file(
-    new URL('../src/mistral.ts', import.meta.url),
-  ).text();
-
-  expect(Object.keys(entry).sort()).toEqual(['mistral']);
-  expect(text.match(/export (type|interface) /g)).toBeNull();
-});

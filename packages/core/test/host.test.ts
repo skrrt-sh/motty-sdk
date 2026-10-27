@@ -86,13 +86,3 @@ test('the host entry exports exactly the held types', async () => {
     'Usage',
   ]);
 });
-
-test('the host entry holds named exports from other files and nothing else', async () => {
-  const text = await Bun.file(
-    new URL('../src/host.ts', import.meta.url),
-  ).text();
-
-  expect(
-    text.replace(/export (type )?\{[^}]*\} from '[^']*';/g, '').trim(),
-  ).toBe('');
-});

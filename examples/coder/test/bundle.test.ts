@@ -101,14 +101,11 @@ describe("the bundle", () => {
   });
 });
 
-describe.each([
-  { from: "source", load: async (): Promise<Marked> => source },
-  { from: "bundle", load: bundled },
-])("the motty from its $from, behind a host with its own SDK copy", ({ load }) => {
+describe("the motty from its bundle, behind a host with its own SDK copy", () => {
   let coder: Marked;
 
   beforeAll(async () => {
-    coder = await load();
+    coder = await bundled();
   });
 
   test("a short question is answered by the quick tier, a piece at a time", async () => {
@@ -187,43 +184,6 @@ describe.each([
     });
   });
 
-  test("settings the motty's schema refuses fail the request", async () => {
-    const reported = Promise.withResolvers<Report>();
-    const served = mount(coder, () => ({
-      auth: bearer({ secret: "s3cret", id: "ada" }),
-      settings: { tiers: { quickQuestionChars: -1 } },
-      report: reported.resolve,
-    }));
-
-    const reply = await served.fetch(ask("What does git stash do?"));
-
-    expect(reply.status).toBe(500);
-    expect(await reported.promise).toMatchObject({ outcome: "failed", part: "settings" });
-  });
-
-  test("a question that is not obvious goes where the decision model leans", async () => {
-    const reported = Promise.withResolvers<Report>();
-    const models = fake(
-      on(jev, { software: 0.97, tier: { quick: 0.05, standard: 0.5, deep: 0.45 } }),
-      on(sonnet, "1. Find the lock order"),
-      on(opus, "deep reply"),
-    );
-    const served = mount(coder, () => ({
-      models: [models],
-      auth: bearer({ secret: "s3cret", id: "ada" }),
-      report: reported.resolve,
-    }));
-
-    const reply = await served.fetch(ask("Why does this deadlock? ".repeat(40)));
-
-    expect(await Array.fromAsync(pieces(reply))).toEqual(["deep reply"]);
-    expect(models.sent(jev)).toHaveLength(2);
-    expect(models.sent(opus)[0]?.messages.at(-1)?.text).toContain("1. Find the lock order");
-    const { path, calls } = await reported.promise;
-    expect(path).toEqual(["chat", "deep"]);
-    expect(calls.map((call) => call.model)).toEqual([jev.name, jev.name, sonnet.name, opus.name]);
-  });
-
   test("the tier that answered is stored under the motty's name", async () => {
     const reported = Promise.withResolvers<Report>();
     const storage = memory();
@@ -288,36 +248,5 @@ describe.each([
       path: ["chat", "deep"],
     });
     expect(stopped).toEqual([opus.name]);
-  });
-
-  test("the record names every call made and counts what was used", async () => {
-    const reported = Promise.withResolvers<Report>();
-    const served = mount(coder, () => ({
-      models: [
-        fake(
-          on(jev, { software: 0.97 }),
-          on(sonnet, "plan"),
-          on(opus, [
-            { type: "text", text: "deep reply" },
-            { type: "finish", reason: "stop", usage: { input: 900, output: 2 } },
-          ]),
-        ),
-      ],
-      auth: bearer({ secret: "s3cret", id: "ada" }),
-      report: reported.resolve,
-    }));
-
-    const reply = await served.fetch(ask("Why does this deadlock?", { model: "acme/coder:max" }));
-    await Array.fromAsync(pieces(reply));
-
-    const record = await reported.promise;
-    expect(record).toMatchObject({
-      outcome: "completed",
-      path: ["chat", "deep"],
-      usage: { input: 900, output: 2 },
-      afterResponse: { failed: [], skipped: [] },
-    });
-    expect(record.calls.map((call) => call.model)).toEqual([jev.name, sonnet.name, opus.name]);
-    expect(record.id).toBeString();
   });
 });

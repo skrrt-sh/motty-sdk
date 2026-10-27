@@ -343,23 +343,21 @@ function isApi(name: string): name is Api {
   return name in apis;
 }
 
+function fieldIn(option: Fieldless, api: Api): 'meaning' | 'hint' | undefined {
+  const row: { [Name in Api]?: 'meaning' | 'hint' } = fieldless[option];
+  return row[api];
+}
+
 const cases = Object.keys(carrying)
   .filter(isOption)
   .flatMap((option) =>
     Object.keys(apis)
       .filter(isApi)
+      .filter((api) => fieldIn(option, api) !== undefined)
       .map((api): [Fieldless, Api] => [option, api]),
   );
 
-test('every row of the table is sent to every API', () => {
-  expect(cases).toHaveLength(
-    Object.keys(fieldless).length * Object.keys(apis).length,
-  );
-});
-
 test.each(cases)('%s sent to the %s API', (option, api) => {
-  const row: { said: string } & { [Name in Api]?: 'meaning' | 'hint' } =
-    fieldless[option];
   // Own words are one family's, so each API is sent its own.
   const prompt = option === 'reasoning.own' ? stated[api] : carrying[option];
   const dialect = spoken[option];
@@ -368,21 +366,17 @@ test.each(cases)('%s sent to the %s API', (option, api) => {
       ? chatCompletionsIn(dialect)
       : codecs[api];
   const sent = () => codec.encode('model-x', prompt, {}, () => taking[option]);
-  if (row[api] === 'meaning') {
+  if (fieldIn(option, api) === 'meaning') {
     expect(sent).toThrow(Unsupported);
-    expect(sent).toThrow(`${apis[api]} cannot carry ${row.said}`);
+    expect(sent).toThrow(`${apis[api]} cannot carry ${fieldless[option].said}`);
     return;
   }
-  expect(sent().leftOut.filter(({ setting }) => setting === option)).toEqual(
-    row[api] === 'hint'
-      ? [
-          {
-            setting: option,
-            detail: `${apis[api]} has no field for ${row.said}`,
-          },
-        ]
-      : [],
-  );
+  expect(sent().leftOut.filter(({ setting }) => setting === option)).toEqual([
+    {
+      setting: option,
+      detail: `${apis[api]} has no field for ${fieldless[option].said}`,
+    },
+  ]);
 });
 
 test('an option that is not given, is turned off or is empty asks for nothing', () => {

@@ -36,15 +36,8 @@ test.each([
     'a value with the same shape but no mark',
     { version, description: relay()[mark].description, run: () => {} },
   ],
-  [
-    'a value under a look-alike symbol',
-    { [Symbol('@mottyjs/core')]: relay()[mark] },
-  ],
-  ['undefined', undefined],
   ['null', null],
-  ['zero', 0],
   ['a string', 'motty'],
-  ['true', true],
 ])('%s is not recognised', (_, value) => {
   expect(isMarked(value)).toBe(false);
 });

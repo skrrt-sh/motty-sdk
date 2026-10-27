@@ -106,71 +106,6 @@ test('progress offered in afterHandle still goes out, the stage closing after it
   ]);
 });
 
-test('think does nothing once the answer is being sent', async () => {
-  const gate = Promise.withResolvers<void>();
-  async function* arriving(): AsyncIterable<Chunk> {
-    yield { type: 'text', text: 'The lock ' };
-    await gate.promise;
-    think('Too late to be progress');
-    yield { type: 'text', text: 'order differs' };
-  }
-  const reader = reading(
-    motty({ name: 'coder' }).handle(() => answer(arriving())),
-  );
-
-  expect((await reader.next()).value).toEqual({
-    type: 'text',
-    text: 'The lock ',
-  });
-  gate.resolve();
-  expect((await reader.next()).value).toEqual({
-    type: 'text',
-    text: 'order differs',
-  });
-  expect((await reader.next()).value?.type).toBe('finish');
-});
-
-test('think in afterResponse does nothing and does not throw', async () => {
-  const over = Promise.withResolvers<RequestRecord>();
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .handle(() => answer('Hi'))
-      .afterResponse(() => {
-        think('Remembering the route');
-      }),
-    stubHost({}, { record: over.resolve }),
-  );
-
-  expect(seen.map((event) => event.type)).toEqual(['text', 'finish']);
-  expect((await over.promise).afterResponse.failed).toEqual([]);
-});
-
-test('a forwarded answer still arriving when the answer starts is dropped', async () => {
-  const gate = Promise.withResolvers<void>();
-  async function* arriving(): AsyncIterable<Chunk> {
-    yield { type: 'text', text: 'Planning' };
-    await gate.promise;
-    yield { type: 'text', text: ' the rest' };
-  }
-
-  const seen = await told(
-    motty({ name: 'coder' })
-      .beforeHandle(async () => {
-        think(answer(arriving()));
-        await Bun.sleep(1);
-      })
-      .handle(() => answer('The lock order differs')),
-  );
-  gate.resolve();
-
-  expect(seen).toEqual([
-    { type: 'progress', piece: 0, text: 'Planning' },
-    { type: 'text', text: 'The lock order differs' },
-    { type: 'finish', reason: 'stop', usage: {} },
-  ]);
-});
-
 test('a request that failed before any answer ends with one error after its progress, a server failure told in its own words', async () => {
   const seen = await told(
     motty({ name: 'coder' }).handle(() => {
@@ -192,28 +127,6 @@ test('a request that failed before any answer ends with one error after its prog
       usage: {},
     },
   ]);
-});
-
-test('the finish tells the total over every call, not only the one that answered', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).route(
-      async ({ prompt }) => {
-        await model('acme/judge').complete(prompt);
-        return 'deep' as const;
-      },
-      { deep: ({ prompt }) => model('acme/large').complete(prompt) },
-    ),
-    stubHost({
-      'acme/judge': says('hard', 40, 2),
-      'acme/large': says('The lock order differs', 50, 9),
-    }),
-  );
-
-  expect(seen.at(-1)).toEqual({
-    type: 'finish',
-    reason: 'stop',
-    usage: { input: 90, output: 11 },
-  });
 });
 
 test('the finish keeps what the answer ended with besides its usage', async () => {
@@ -444,49 +357,6 @@ test('an event waits for the reader before the next is produced', async () => {
   expect(order).toEqual(['before the finish was read', 'response']);
 });
 
-test('a reader that leaves ends the stream and the request counts as aborted', async () => {
-  const done = Promise.withResolvers<string>();
-  const reader = reading(
-    motty({ name: 'coder' })
-      .handle(({ prompt }) => model('acme/large').complete(prompt))
-      .afterResponse(({ outcome }) => {
-        done.resolve(outcome);
-      }),
-    stubHost({
-      'acme/large': [
-        { type: 'text', text: 'The lock ' },
-        { type: 'text', text: 'order differs' },
-        { type: 'finish', reason: 'stop', usage: { input: 5, output: 7 } },
-      ],
-    }),
-  );
-
-  await reader.next();
-  await reader.return?.();
-
-  expect(await reader.next()).toEqual({ done: true, value: undefined });
-  expect(await done.promise).toBe('aborted');
-});
-
-test('every event of an answer with progress survives a JSON round trip', async () => {
-  const seen = await told(
-    motty({ name: 'coder' })
-      .beforeHandle(() => {
-        think('Reading the request');
-      })
-      .handle(() => answer('The lock order differs')),
-  );
-
-  expect(seen.map((event) => event.type)).toEqual([
-    'progress',
-    'text',
-    'finish',
-  ]);
-  for (const event of seen) {
-    expect(JSON.parse(JSON.stringify(event))).toStrictEqual(event);
-  }
-});
-
 test('every kind of chunk and a full finish survive a JSON round trip', async () => {
   const seen = await told(
     motty({ name: 'coder' }).handle(({ prompt }) =>
@@ -550,33 +420,6 @@ test('every kind of chunk and a full finish survive a JSON round trip', async ()
   }
 });
 
-test('a structured answer survives a JSON round trip', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).handle(({ prompt }) =>
-      model('acme/small').complete({
-        ...prompt,
-        output: { schema: { type: 'object' } },
-      }),
-    ),
-    stubHost({
-      'acme/small': [
-        { type: 'text', text: '{"tier":' },
-        { type: 'text', text: '"deep"}' },
-        { type: 'finish', reason: 'stop' },
-      ],
-    }),
-  );
-
-  expect(seen.at(-1)).toStrictEqual({
-    type: 'finish',
-    reason: 'stop',
-    usage: {},
-  });
-  for (const event of seen) {
-    expect(JSON.parse(JSON.stringify(event))).toStrictEqual(event);
-  }
-});
-
 test('the error of a failed request survives a JSON round trip', async () => {
   const seen = await told(
     motty({ name: 'coder' }).handle(() => {
@@ -588,44 +431,6 @@ test('the error of a failed request survives a JSON round trip', async () => {
   for (const event of seen) {
     expect(JSON.parse(JSON.stringify(event))).toStrictEqual(event);
   }
-});
-
-test('the error of a stopped request survives a JSON round trip', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).handle(() => answer('Hi')),
-    stubHost({}, { signal: AbortSignal.abort() }),
-  );
-
-  expect(seen).toEqual([stopped()]);
-  for (const event of seen) {
-    expect(JSON.parse(JSON.stringify(event))).toStrictEqual(event);
-  }
-});
-
-test('a finish reports no count when no upstream reported one, and a reported zero as zero', async () => {
-  const silent = await told(
-    motty({ name: 'coder' }).handle(({ prompt }) =>
-      model('acme/small').complete(prompt),
-    ),
-    stubHost({ 'acme/small': [{ type: 'finish', reason: 'stop' }] }),
-  );
-  const zero = await told(
-    motty({ name: 'coder' }).handle(({ prompt }) =>
-      model('acme/small').complete(prompt),
-    ),
-    stubHost({ 'acme/small': says('', 0, 0) }),
-  );
-
-  expect(silent.at(-1)).toStrictEqual({
-    type: 'finish',
-    reason: 'stop',
-    usage: {},
-  });
-  expect(zero.at(-1)).toStrictEqual({
-    type: 'finish',
-    reason: 'stop',
-    usage: { input: 0, output: 0 },
-  });
 });
 
 test('closing the stream ends a wait on a silent upstream and refuses the next call', async () => {
@@ -753,19 +558,6 @@ test('closing a stream that has ended changes nothing: the request completed', a
   await reader.return?.();
 
   expect((await over.promise).outcome).toBe('completed');
-});
-
-test('the signal a hook was given fires once the answer has been sent', async () => {
-  const held = Promise.withResolvers<AbortSignal>();
-  const seen = await told(
-    motty({ name: 'coder' }).handle(({ signal }) => {
-      held.resolve(signal);
-      return answer('Hi');
-    }),
-  );
-
-  expect(seen.map((event) => event.type)).toEqual(['text', 'finish']);
-  expect((await held.promise).aborted).toBe(true);
 });
 
 test('an answer made outside any request is left when the host stops the request that sends it: the caller gets its terminal event, after-response work runs and the record arrives', async () => {

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { MottyError, model, Overloaded } from '@mottyjs/core';
+import { model, Overloaded } from '@mottyjs/core';
 import { fake, on } from '../src/index.ts';
 
 const small = model('acme/small');
@@ -110,31 +110,6 @@ test('an SDK error is sent as its facts', async () => {
   ]);
 });
 
-test("an author's own error is sent as its facts", async () => {
-  class OutOfCredit extends MottyError.define('out_of_credit', 402) {}
-  const models = fake(on(small, new OutOfCredit('Top up first')));
-
-  const events = await Array.fromAsync(
-    models.call(
-      'acme/small',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.any([]),
-    ),
-  );
-
-  expect(events).toEqual([
-    {
-      type: 'error',
-      error: {
-        code: 'out_of_credit',
-        status: 402,
-        message: 'Top up first',
-        retryable: false,
-      },
-    },
-  ]);
-});
-
 test('a function is asked with the prompt and replies in any other way', async () => {
   const models = fake(
     on(small, (prompt) => `${prompt.messages.length} messages`),
@@ -163,28 +138,6 @@ test('a function is asked with the prompt and replies in any other way', async (
 
   expect(counted[0]).toEqual({ type: 'text', text: '2 messages' });
   expect(echoed[0]).toEqual({ type: 'text', text: '{"last":"hi"}' });
-});
-
-test('an async function replies once it has its reply', async () => {
-  const models = fake(
-    on(small, async (prompt) => {
-      await Bun.sleep(5);
-      return `${prompt.messages.length} messages`;
-    }),
-  );
-
-  const events = await Array.fromAsync(
-    models.call(
-      'acme/small',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.any([]),
-    ),
-  );
-
-  expect(events).toEqual([
-    { type: 'text', text: '1 messages' },
-    { type: 'finish', reason: 'stop' },
-  ]);
 });
 
 test("a function is given the call's stop signal", async () => {

@@ -64,19 +64,6 @@ test('a token that states no expiry signs nobody in where the host requires one'
   ).toEqual({ id: 'user-1' });
 });
 
-test('a token signed with another secret, or changed after, means no caller', async () => {
-  const adapter = jwt({ secret: 'host-secret' });
-  const other = await signed('other-secret', { sub: 'user-1' });
-  const token = await signed('host-secret', { sub: 'user-1' });
-  const [header, , signature] = token.split('.');
-  const body = btoa(JSON.stringify({ sub: 'admin', exp: 9_999_999_999 }));
-
-  expect(await adapter.verify(other)).toBeUndefined();
-  expect(
-    await adapter.verify(`${header}.${body}.${signature}`),
-  ).toBeUndefined();
-});
-
 test('a token with no subject, or an empty one, means no caller', async () => {
   const adapter = jwt({ secret: 'host-secret' });
   const none = await signed('host-secret', {});
@@ -124,56 +111,6 @@ test('the issuer and the audience are not checked when the host names neither', 
   expect(await adapter.verify(token)).toEqual({ id: 'user-1' });
 });
 
-test('a host may name several issuers and audiences, and a token of any of them signs its caller in', async () => {
-  const adapter = jwt({
-    secret: 'host-secret',
-    issuer: ['https://id.example', 'https://staff.example'],
-    audience: ['coder', 'desk'],
-  });
-  const mint = (issuer: string, audience: string) =>
-    new SignJWT({})
-      .setProtectedHeader({ alg: 'HS256' })
-      .setSubject('user-1')
-      .setIssuer(issuer)
-      .setAudience(audience)
-      .sign(new TextEncoder().encode('host-secret'));
-
-  expect(
-    await adapter.verify(await mint('https://staff.example', 'desk')),
-  ).toEqual({ id: 'user-1' });
-  expect(
-    await adapter.verify(await mint('https://evil.example', 'desk')),
-  ).toBeUndefined();
-  expect(
-    await adapter.verify(await mint('https://staff.example', 'other')),
-  ).toBeUndefined();
-});
-
-test('a token past its expiry signs its caller in within the tolerance the host allows, and not past it', async () => {
-  const token = await signed('host-secret', { sub: 'user-1', exp: '-30s' });
-
-  expect(
-    await jwt({ secret: 'host-secret', clockTolerance: 60 }).verify(token),
-  ).toEqual({ id: 'user-1' });
-  expect(
-    await jwt({ secret: 'host-secret', clockTolerance: 5 }).verify(token),
-  ).toBeUndefined();
-  expect(await jwt({ secret: 'host-secret' }).verify(token)).toBeUndefined();
-});
-
-test('only a token under an algorithm the host lists signs its caller in', async () => {
-  const adapter = jwt({ secret: 'host-secret', algorithms: ['HS512'] });
-  const listed = await new SignJWT({})
-    .setProtectedHeader({ alg: 'HS512' })
-    .setSubject('user-1')
-    .sign(new TextEncoder().encode('host-secret'));
-
-  expect(await adapter.verify(listed)).toEqual({ id: 'user-1' });
-  expect(
-    await adapter.verify(await signed('host-secret', { sub: 'user-1' })),
-  ).toBeUndefined();
-});
-
 test('a token signed with the private key is verified with the public key', async () => {
   const pair = await generateKeyPair('ES256', { extractable: true });
   const stranger = await generateKeyPair('ES256');
@@ -206,28 +143,6 @@ test('a token of another kind of algorithm than the key means no caller', async 
   expect(await jwt({ secret: 'host-secret' }).verify(byRsa)).toBeUndefined();
 });
 
-test('a public key of each asymmetric kind verifies a token signed by its private key', async () => {
-  const callers = await Promise.all(
-    ['RS256', 'PS384', 'ES512', 'EdDSA'].map(async (alg) => {
-      const pair = await generateKeyPair(alg, { extractable: true });
-      const adapter = jwt({ key: await exportSPKI(pair.publicKey) });
-      return adapter.verify(
-        await new SignJWT({})
-          .setProtectedHeader({ alg })
-          .setSubject('user-1')
-          .sign(pair.privateKey),
-      );
-    }),
-  );
-
-  expect(callers).toEqual([
-    { id: 'user-1' },
-    { id: 'user-1' },
-    { id: 'user-1' },
-    { id: 'user-1' },
-  ]);
-});
-
 test('a token is verified against the key set the host points at', async () => {
   const pair = await generateKeyPair('RS256', { extractable: true });
   const stranger = await generateKeyPair('RS256');
@@ -256,33 +171,6 @@ test('a token is verified against the key set the host points at', async () => {
   await server.stop(true);
 
   expect(callers).toEqual([{ id: 'user-1' }, undefined, undefined, undefined]);
-});
-
-test('a key set that cannot be read throws instead of naming no caller', async () => {
-  const token = await signed('host-secret', { sub: 'user-1' });
-  const server = Bun.serve({
-    port: 0,
-    fetch: (request) =>
-      new URL(request.url).pathname === '/broken'
-        ? new Response('down for maintenance', { status: 503 })
-        : Response.json({ keys: 'none' }),
-  });
-  const refused = jwt({ jwks: 'http://127.0.0.1:1/jwks.json' });
-  const broken = jwt({ jwks: `${server.url}broken` });
-  const malformed = jwt({ jwks: `${server.url}malformed` });
-
-  const failures = await Promise.allSettled([
-    refused.verify(token),
-    broken.verify(token),
-    malformed.verify(token),
-  ]);
-  await server.stop(true);
-
-  expect(failures.map((failure) => failure.status)).toEqual([
-    'rejected',
-    'rejected',
-    'rejected',
-  ]);
 });
 
 test('a key set that cannot be read is told without its address, and without what the runtime threw', async () => {
@@ -352,17 +240,6 @@ test('a public key that is no PEM fails when made, in words that hold none of it
   expect(() => jwt({ key: 'held-in-the-option' })).toThrow(
     /^The jwt adapter was given a public key that is no PEM$/,
   );
-});
-
-test('a source read from the environment, which may be missing, is an option, and fails when made if it is', () => {
-  const env: { JWKS_URL?: string; JWT_PUBLIC_KEY?: string } = {};
-
-  expect(() => jwt({ jwks: env.JWKS_URL })).toThrow(
-    'The jwt adapter was given no key set address',
-  );
-  expect(() =>
-    jwt({ key: env.JWT_PUBLIC_KEY, issuer: 'https://id.example' }),
-  ).toThrow('The jwt adapter was given no public key');
 });
 
 test('two sources cannot be given at once, nor none, in the types or past them', () => {

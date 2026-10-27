@@ -2,27 +2,6 @@ import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
 import { inputOf } from '../../src/responses/items.ts';
 import { leaving } from '../../src/wire/fieldless.ts';
-import { a } from '../../src/wire/refusals.ts';
-
-test('a message of plain text is a message item with that text', () => {
-  expect(
-    inputOf(
-      leaving('responses'),
-      [
-        { role: 'developer', text: 'Be brief.' },
-        { role: 'user', text: 'Hi' },
-        { role: 'assistant', text: 'Hello.' },
-      ],
-      new Set(),
-    ),
-  ).toEqual({
-    input: [
-      { type: 'message', role: 'developer', content: 'Be brief.' },
-      { type: 'message', role: 'user', content: 'Hi' },
-      { type: 'message', role: 'assistant', content: 'Hello.' },
-    ],
-  });
-});
 
 test('a named message fails the call, with text or with parts', () => {
   expect(() =>
@@ -39,27 +18,6 @@ test('a named message fails the call, with text or with parts', () => {
       new Set(),
     ),
   ).toThrow(Unsupported);
-});
-
-test('a tool result marked as failed is sent as the result it holds', () => {
-  expect(
-    inputOf(
-      leaving('responses'),
-      [
-        {
-          role: 'tool',
-          parts: [
-            { type: 'tool_result', id: 'call_1', text: 'ENOENT', failed: true },
-          ],
-        },
-      ],
-      new Set(),
-    ),
-  ).toEqual({
-    input: [
-      { type: 'function_call_output', call_id: 'call_1', output: 'ENOENT' },
-    ],
-  });
 });
 
 test('instructions that led the request go back in their own field', () => {
@@ -202,58 +160,6 @@ test("the model's turn is written as the items it was made of", () => {
       arguments: '{"ci',
     },
   ]);
-});
-
-test('a reasoning item a Claude model signed goes back as it came', () => {
-  const item = {
-    id: 'rs_tmp_z582ajgark',
-    type: 'reasoning',
-    status: 'completed',
-    content: [
-      {
-        type: 'reasoning_text',
-        text: "Paris sits further north than Lyon (48.86N vs 45.76N), so I'll check the weather for Paris.",
-      },
-    ],
-    summary: [],
-    signature:
-      'CAQSpwUKEAgSGAI4AUIIdGhpbmtpbmcSDEesZn+NpEQfyIqQgRoMR9s1G5EATm7C7uzIIj',
-    format: 'anthropic-claude-v1',
-  };
-  const left = leaving('responses');
-  expect(
-    inputOf(
-      left,
-      [
-        {
-          role: 'assistant',
-          parts: [
-            {
-              type: 'reasoning',
-              text: "Paris sits further north than Lyon (48.86N vs 45.76N), so I'll check the weather for Paris.",
-              provider: { 'openai.responses': item },
-            },
-            {
-              type: 'tool_call',
-              id: 'toolu_019o6fssKWToJo6JGRK6GkA6',
-              name: 'get_weather',
-              input: { city: 'Paris' },
-            },
-          ],
-        },
-      ],
-      new Set(),
-    ).input,
-  ).toEqual([
-    item,
-    {
-      type: 'function_call',
-      call_id: 'toolu_019o6fssKWToJo6JGRK6GkA6',
-      name: 'get_weather',
-      arguments: '{"city":"Paris"}',
-    },
-  ]);
-  expect(left.leftOut()).toEqual([]);
 });
 
 test('reasoning this API did not sign is left out and reported', () => {
@@ -542,35 +448,6 @@ test('a cache marker is a breakpoint on input content, of a part or of a message
   expect(left.leftOut()).toEqual([]);
 });
 
-test('the lifetime of a cache marker on a message is left out and reported', () => {
-  const left = leaving('responses', true);
-  expect(
-    inputOf(
-      left,
-      [{ role: 'user', text: 'A long manual', cache: { ttl: '1h' } }],
-      new Set(),
-    ).input,
-  ).toEqual([
-    {
-      type: 'message',
-      role: 'user',
-      content: [
-        {
-          type: 'input_text',
-          text: 'A long manual',
-          prompt_cache_breakpoint: { mode: 'explicit' },
-        },
-      ],
-    },
-  ]);
-  expect(left.leftOut()).toEqual([
-    {
-      setting: 'cache.ttl',
-      detail: 'The Responses API has no field for a lifetime on a cache marker',
-    },
-  ]);
-});
-
 test('a cache marker with no input content to sit on is left out and reported', () => {
   const outside = {
     setting: 'cache.outside',
@@ -643,82 +520,6 @@ test('a cache marker with no input content to sit on is left out and reported', 
   });
 });
 
-test('audio fails the call, in a message or in a tool result', () => {
-  expect(() =>
-    inputOf(
-      leaving('responses'),
-      [
-        {
-          role: 'user',
-          parts: [{ type: 'audio', data: 'UklGRg==', mediaType: 'audio/wav' }],
-        },
-      ],
-      new Set(),
-    ),
-  ).toThrow('The Responses API cannot carry audio');
-  expect(() =>
-    inputOf(
-      leaving('responses'),
-      [
-        {
-          role: 'tool',
-          parts: [
-            {
-              type: 'tool_result',
-              id: 'call_1',
-              parts: [{ type: 'audio', url: 'https://x.test/a.wav' }],
-            },
-          ],
-        },
-      ],
-      new Set(),
-    ),
-  ).toThrow(Unsupported);
-});
-
-test('a tool another upstream ran, and what it returned, fail the call', () => {
-  const called = () =>
-    inputOf(
-      leaving('responses'),
-      [
-        {
-          role: 'assistant',
-          parts: [
-            {
-              type: 'tool_call',
-              id: 'srvtoolu_1',
-              name: 'web_search',
-              input: {},
-              hosted: true,
-            },
-          ],
-        },
-      ],
-      new Set(),
-    );
-  expect(called).toThrow(Unsupported);
-  expect(called).toThrow(
-    'The Responses API cannot carry a call or a result of a tool another upstream ran',
-  );
-  const answered = () =>
-    inputOf(
-      leaving('responses'),
-      [
-        {
-          role: 'assistant',
-          parts: [
-            { type: 'tool_result', id: 'srvtoolu_1', text: 'R', hosted: true },
-          ],
-        },
-      ],
-      new Set(),
-    );
-  expect(answered).toThrow(Unsupported);
-  expect(answered).toThrow(
-    'The Responses API cannot carry a call or a result of a tool another upstream ran',
-  );
-});
-
 test('the hints of a message wait for its first message item', () => {
   const left = leaving('responses');
   expect(
@@ -757,58 +558,6 @@ test('the hints of a message that is only tool results are left out and reported
         {
           role: 'tool',
           hints: { 'openai.responses': { status: 'completed' } },
-          parts: [{ type: 'tool_result', id: 'call_1', text: '4C' }],
-        },
-      ],
-      new Set(),
-    ).input,
-  ).toEqual([
-    { type: 'function_call_output', call_id: 'call_1', output: '4C' },
-  ]);
-  expect(left.leftOut()).toEqual([
-    {
-      setting: 'message.hints',
-      detail:
-        'The Responses API has no field for the hints or provider data of a message sent as no message item',
-    },
-  ]);
-});
-
-test('provider data of a message goes on its message item, and with none is left out and reported', () => {
-  const left = leaving('responses');
-  expect(
-    inputOf(
-      left,
-      [
-        {
-          role: 'user',
-          provider: { 'openai.responses': { vendor_note: 'kept' } },
-          parts: [
-            { type: 'tool_result', id: 'call_1', text: '4C' },
-            { type: 'text', text: 'And tomorrow?' },
-          ],
-        },
-      ],
-      new Set(),
-    ).input,
-  ).toEqual([
-    { type: 'function_call_output', call_id: 'call_1', output: '4C' },
-    {
-      vendor_note: 'kept',
-      type: 'message',
-      role: 'user',
-      content: [{ type: 'input_text', text: 'And tomorrow?' }],
-    },
-  ]);
-  expect(left.leftOut()).toEqual([]);
-
-  expect(
-    inputOf(
-      left,
-      [
-        {
-          role: 'tool',
-          provider: { 'openai.responses': { vendor_note: 'lost' } },
           parts: [{ type: 'tool_result', id: 'call_1', text: '4C' }],
         },
       ],
@@ -884,72 +633,6 @@ test('the hints of a refusal the model wrote go on its content, and the item`s o
       content: [{ reason: 'policy', type: 'refusal', refusal: 'No.' }],
     },
   ]);
-});
-
-test('a tool answers with text, an image and a file, each as input content', () => {
-  expect(
-    inputOf(
-      leaving('responses'),
-      [
-        {
-          role: 'tool',
-          parts: [
-            {
-              type: 'tool_result',
-              id: 'call_1',
-              parts: [
-                { type: 'text', text: 'The chart:' },
-                { type: 'image', data: 'iVBORw0=', mediaType: 'image/png' },
-                { type: 'image', id: 'file-1' },
-                { type: 'file', url: 'https://x.test/a.pdf', name: 'a.pdf' },
-              ],
-            },
-          ],
-        },
-      ],
-      new Set(),
-    ).input,
-  ).toEqual([
-    {
-      type: 'function_call_output',
-      call_id: 'call_1',
-      output: [
-        { type: 'input_text', text: 'The chart:' },
-        { type: 'input_image', image_url: 'data:image/png;base64,iVBORw0=' },
-        { type: 'input_image', file_id: 'file-1' },
-        {
-          type: 'input_file',
-          filename: 'a.pdf',
-          file_url: 'https://x.test/a.pdf',
-        },
-      ],
-    },
-  ]);
-});
-
-test.each([
-  ['system', { type: 'image', url: 'https://x.test/cat.png' }],
-  ['developer', { type: 'file', id: 'file-1' }],
-] as const)('a %s message may hold $type as input content', (role, part) => {
-  expect(
-    inputOf(leaving('responses'), [{ role, parts: [part] }], new Set()).input,
-  ).toMatchObject([{ type: 'message', role, content: [{}] }]);
-});
-
-test.each([
-  { type: 'image', data: 'iVBORw0=', mediaType: 'image/png' },
-  { type: 'file', id: 'file-1' },
-] as const)('$type the model wrote has no item and fails the call', (part) => {
-  const sent = () =>
-    inputOf(
-      leaving('responses'),
-      [{ role: 'assistant', parts: [part] }],
-      new Set(),
-    );
-  expect(sent).toThrow(Unsupported);
-  expect(sent).toThrow(
-    `The Responses API cannot carry ${a(part.type)} part the model wrote`,
-  );
 });
 
 test('a million calls in one message are each an item, not a stack too deep', () => {

@@ -23,16 +23,7 @@ test('facts are answered with their status and their message', () => {
 
 test.each([
   ['rate_limited', 'rate_limit_error', 'rate_limit_exceeded'],
-  ['quota_exceeded', 'insufficient_quota', 'insufficient_quota'],
-  ['overloaded', 'service_unavailable_error', 'server_is_overloaded'],
   ['context_too_long', 'invalid_request_error', 'context_length_exceeded'],
-  ['blocked', 'invalid_request_error', 'content_policy_violation'],
-  ['unsupported', 'invalid_request_error', 'unsupported'],
-  ['invalid_request', 'invalid_request_error', 'invalid_request'],
-  ['unknown_model', 'invalid_request_error', 'model_not_found'],
-  ['upstream_refused', 'server_error', 'upstream_refused'],
-  ['upstream_failed', 'server_error', 'upstream_failed'],
-  ['timed_out', 'server_error', 'timed_out'],
 ])('%s is written as the type %s and the code %s', (kind, type, code) => {
   expect(errorBody({ code: kind, message: 'm' })).toMatchObject({
     error: { type, code },

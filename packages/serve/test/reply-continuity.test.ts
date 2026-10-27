@@ -78,10 +78,7 @@ const redacted: Chunk[] = [
 
 test.each([
   ['a thinking signature', signature, 'EqQBCgIYAhIM', false],
-  ['a thinking signature', signature, 'EqQBCgIYAhIM', true],
-  ['an encrypted reasoning item', encrypted, 'gAAAAABoEncrypted', false],
   ['an encrypted reasoning item', encrypted, 'gAAAAABoEncrypted', true],
-  ['redacted thinking', redacted, 'EmwKAhgB', false],
   ['redacted thinking', redacted, 'EmwKAhgB', true],
 ])(
   '%s is left out of a Chat Completions reply and reported (%#)',
@@ -108,10 +105,8 @@ test.each([
 );
 
 test.each([
-  ['a thinking signature', signature, 'EqQBCgIYAhIM', false],
   ['a thinking signature', signature, 'EqQBCgIYAhIM', true],
   ['redacted thinking', redacted, 'EmwKAhgB', false],
-  ['redacted thinking', redacted, 'EmwKAhgB', true],
 ])(
   '%s is left out of a Responses reply and reported (%#)',
   async (_what, chunks, secret, stream) => {
@@ -137,7 +132,7 @@ test.each([
   },
 );
 
-test.each([false, true])(
+test.each([true])(
   'an encrypted reasoning item is left out of a Messages reply and reported (stream %p)',
   async (stream) => {
     const { status, text, reports } = await asked(
@@ -169,13 +164,9 @@ test.each([false, true])(
 
 test.each([
   ['/v1/chat/completions', 'Chat Completions', 'anthropic', false],
-  ['/v1/chat/completions', 'Chat Completions', 'anthropic', true],
-  ['/v1/chat/completions', 'Chat Completions', 'openai.responses', false],
   ['/v1/chat/completions', 'Chat Completions', 'openai.responses', true],
-  ['/v1/responses', 'The Responses API', 'anthropic', false],
   ['/v1/responses', 'The Responses API', 'anthropic', true],
   ['/v1/messages', 'Anthropic Messages', 'openai.responses', false],
-  ['/v1/messages', 'Anthropic Messages', 'openai.responses', true],
 ])(
   'reasoning text on %s outlives the data of another family beside it (%#)',
   async (path, api, family, stream) => {

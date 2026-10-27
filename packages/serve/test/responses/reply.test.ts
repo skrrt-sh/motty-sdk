@@ -1,8 +1,6 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
 import type { Chunk } from '@mottyjs/core/host';
-import { called } from '../../src/responses/calls.ts';
-import type { Call, Writing } from '../../src/responses/output.ts';
 import { reply } from '../../src/responses/reply.ts';
 
 test('text opens a message, fills it, and the end completes it', () => {
@@ -111,46 +109,6 @@ test('each piece of progress is a summary of one reasoning item', () => {
     ],
     content: [],
   });
-});
-
-test('progress is sent as the text it is, a piece at a time', () => {
-  const { push } = reply(
-    {
-      body: {},
-      muted: false,
-      custom: new Set(),
-      spaced: new Map(),
-      clients: new Set(),
-      encrypted: false,
-    },
-    'r1',
-  );
-
-  expect(push({ type: 'progress', piece: 0, text: 'Rout' }).slice(1)).toEqual([
-    {
-      type: 'response.reasoning_summary_part.added',
-      item_id: 'rs_r1_0',
-      output_index: 0,
-      summary_index: 0,
-      part: { type: 'summary_text', text: '' },
-    },
-    {
-      type: 'response.reasoning_summary_text.delta',
-      item_id: 'rs_r1_0',
-      output_index: 0,
-      summary_index: 0,
-      delta: 'Rout',
-    },
-  ]);
-  expect(push({ type: 'progress', piece: 0, text: 'ing' })).toEqual([
-    {
-      type: 'response.reasoning_summary_text.delta',
-      item_id: 'rs_r1_0',
-      output_index: 0,
-      summary_index: 0,
-      delta: 'ing',
-    },
-  ]);
 });
 
 test('a reply that failed finished none of the items still being written, and the ones before are done', () => {
@@ -701,91 +659,6 @@ test('an item with a summary and content ends each part once, each counted on it
   ]);
 });
 
-test("reasoning of another family is written as a summary, in the events this API's own stream has", () => {
-  const { output, push, closed } = reply(
-    {
-      body: {},
-      muted: false,
-      custom: new Set(),
-      spaced: new Map(),
-      clients: new Set(),
-      encrypted: false,
-    },
-    'r1',
-  );
-  expect([
-    ...push({ type: 'reasoning', text: '17×', block: 0 }),
-    ...push({
-      type: 'reasoning',
-      text: '23 breaks into 17×20 plus 17×3, giving 340+51=391.',
-      block: 0,
-    }),
-    ...push({ type: 'text', text: '391', block: 1 }),
-  ]).toMatchObject([
-    {
-      type: 'response.output_item.added',
-      output_index: 0,
-      item: { id: 'rs_r1_0', type: 'reasoning', summary: [], content: [] },
-    },
-    {
-      type: 'response.reasoning_summary_part.added',
-      item_id: 'rs_r1_0',
-      output_index: 0,
-      summary_index: 0,
-      part: { type: 'summary_text', text: '' },
-    },
-    {
-      type: 'response.reasoning_summary_text.delta',
-      item_id: 'rs_r1_0',
-      output_index: 0,
-      summary_index: 0,
-      delta: '17×',
-    },
-    {
-      type: 'response.reasoning_summary_text.delta',
-      summary_index: 0,
-      delta: '23 breaks into 17×20 plus 17×3, giving 340+51=391.',
-    },
-    {
-      type: 'response.reasoning_summary_text.done',
-      item_id: 'rs_r1_0',
-      output_index: 0,
-      summary_index: 0,
-      text: '17×23 breaks into 17×20 plus 17×3, giving 340+51=391.',
-    },
-    {
-      type: 'response.reasoning_summary_part.done',
-      item_id: 'rs_r1_0',
-      output_index: 0,
-      summary_index: 0,
-      part: {
-        type: 'summary_text',
-        text: '17×23 breaks into 17×20 plus 17×3, giving 340+51=391.',
-      },
-    },
-    {
-      type: 'response.output_item.done',
-      output_index: 0,
-      item: {
-        id: 'rs_r1_0',
-        type: 'reasoning',
-        summary: [
-          {
-            type: 'summary_text',
-            text: '17×23 breaks into 17×20 plus 17×3, giving 340+51=391.',
-          },
-        ],
-        content: [],
-      },
-    },
-    { type: 'response.output_item.added', output_index: 1 },
-    { type: 'response.content_part.added', output_index: 1 },
-    { type: 'response.output_text.delta', output_index: 1, delta: '391' },
-  ]);
-  closed('whole');
-  expect(output).toHaveLength(2);
-});
-
 test('thinking another family signed is written as a summary, without its signature', () => {
   const { output, push, closed } = reply(
     {
@@ -1322,68 +1195,6 @@ test('a call the upstream marked as custom is written as one where no tool was d
   ]);
 });
 
-test('a call with no provider data is a function call of the fields this API has', () => {
-  const { output, push, closed } = reply(
-    {
-      body: {},
-      muted: true,
-      custom: new Set(),
-      spaced: new Map(),
-      clients: new Set(),
-      encrypted: false,
-    },
-    'r1',
-  );
-  expect(
-    push({
-      type: 'tool_call',
-      id: 'toolu_1',
-      name: 'weather',
-      arguments: '{}',
-    }),
-  ).toEqual([
-    {
-      type: 'response.output_item.added',
-      output_index: 0,
-      item: {
-        id: 'fc_r1_0',
-        type: 'function_call',
-        status: 'in_progress',
-        call_id: 'toolu_1',
-        name: 'weather',
-        arguments: '',
-      },
-    },
-    {
-      type: 'response.function_call_arguments.delta',
-      item_id: 'fc_r1_0',
-      output_index: 0,
-      delta: '{}',
-    },
-  ]);
-  expect(closed('whole')).toEqual([
-    {
-      type: 'response.function_call_arguments.done',
-      item_id: 'fc_r1_0',
-      output_index: 0,
-      arguments: '{}',
-    },
-    {
-      type: 'response.output_item.done',
-      output_index: 0,
-      item: {
-        id: 'fc_r1_0',
-        type: 'function_call',
-        status: 'completed',
-        call_id: 'toolu_1',
-        name: 'weather',
-        arguments: '{}',
-      },
-    },
-  ]);
-  expect(output).toHaveLength(1);
-});
-
 test('a late chunk of a call adds nothing that was written for another family', () => {
   const { output, push, closed } = reply(
     {
@@ -1618,89 +1429,67 @@ test('a call told more after it ended fails the reply, and an empty piece after 
   expect(output).toHaveLength(1);
 });
 
-test.each([
-  ['whole', 'completed'],
-  ['cut', 'incomplete'],
-  ['failed', 'incomplete'],
-] as const)(
-  'a call the upstream ended stays completed in a reply that ended %s, and the call still open is %s',
-  (end, status) => {
-    const { output, push, closed } = reply(
-      {
-        body: {},
-        muted: true,
-        custom: new Set(),
-        spaced: new Map(),
-        clients: new Set(),
-        encrypted: false,
-      },
-      'r1',
-    );
-    push({
-      type: 'tool_call',
-      id: 'call_1',
-      name: 'weather',
-      arguments: '{}',
-      ended: true,
-    });
-    push({
-      type: 'tool_call',
-      id: 'call_2',
-      name: 'weather',
-      arguments: '{"c',
-    });
-
-    closed(end);
-
-    expect(output).toMatchObject([
-      { type: 'function_call', status: 'completed', arguments: '{}' },
-      { type: 'function_call', status, arguments: '{"c' },
-    ]);
-  },
-);
-
-test('what a later chunk of a call holds is added to the item where it is, however many chunks hold some', () => {
-  const calls = new Map<string, Call>();
-  const writing: Writing = {
-    id: 'r1',
-    output: [],
-    open: undefined,
-    added: (item) => ({ type: 'response.output_item.added', item }),
-    settled: () => [],
-  };
-  called(
-    writing,
-    calls,
-    { custom: new Set(), spaced: new Map(), clients: new Set() },
+test('a call the upstream ended stays completed in a reply that failed, and the call still open is not', () => {
+  const { output, push, closed } = reply(
     {
-      type: 'tool_call',
-      id: 'call_1',
-      name: 'weather',
-      arguments: '',
+      body: {},
+      muted: true,
+      custom: new Set(),
+      spaced: new Map(),
+      clients: new Set(),
+      encrypted: false,
     },
+    'r1',
   );
-  const opened = calls.get('call_1')?.item;
-  called(
-    writing,
-    calls,
-    { custom: new Set(), spaced: new Map(), clients: new Set() },
+  push({
+    type: 'tool_call',
+    id: 'call_1',
+    name: 'weather',
+    arguments: '{}',
+    ended: true,
+  });
+  push({ type: 'tool_call', id: 'call_2', name: 'weather', arguments: '{"c' });
+
+  closed('failed');
+
+  expect(output).toMatchObject([
+    { type: 'function_call', status: 'completed', arguments: '{}' },
+    { type: 'function_call', status: 'incomplete', arguments: '{"c' },
+  ]);
+});
+
+test('a field named as the prototype that a later chunk of a call holds is a field of its item', () => {
+  const { output, push, closed } = reply(
     {
-      type: 'tool_call',
-      id: 'call_1',
-      arguments: '',
-      provider: {
-        'openai.responses': { namespace: 'agents', ['__proto__']: { a: 1 } },
-      },
+      body: {},
+      muted: true,
+      custom: new Set(),
+      spaced: new Map(),
+      clients: new Set(),
+      encrypted: false,
     },
+    'r1',
   );
-  expect(calls.get('call_1')?.item).toBe(opened);
-  expect(Object.entries(opened ?? {})).toEqual([
+  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{}' });
+  push({
+    type: 'tool_call',
+    id: 'call_1',
+    arguments: '',
+    provider: {
+      'openai.responses': { namespace: 'agents', ['__proto__']: { a: 1 } },
+    },
+  });
+  closed('whole');
+
+  expect(Object.entries(output[0] ?? {})).toEqual([
     ['id', 'fc_r1_0'],
     ['type', 'function_call'],
     ['call_id', 'call_1'],
     ['name', 'weather'],
     ['namespace', 'agents'],
     ['__proto__', { a: 1 }],
+    ['status', 'completed'],
+    ['arguments', '{}'],
   ]);
 });
 

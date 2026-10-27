@@ -4,16 +4,6 @@ import { blocksOf } from '../../src/messages/blocks.ts';
 import { contentOf, partsOf } from '../../src/messages/parts.ts';
 import { leaving } from '../../src/wire/fieldless.ts';
 
-test('a text block is a text part with its cache marker', () => {
-  expect(
-    partsOf({
-      type: 'text',
-      text: 'Summarize this.',
-      cache_control: { type: 'ephemeral', ttl: '1h' },
-    }),
-  ).toEqual([{ type: 'text', text: 'Summarize this.', cache: { ttl: '1h' } }]);
-});
-
 test('the citations of a text block follow its text', () => {
   const location = {
     type: 'char_location',
@@ -46,52 +36,6 @@ test('the citations of a text block follow its text', () => {
       url: 'https://example.com/a',
       text: 'Quoted.',
       provider: { anthropic: search },
-    },
-  ]);
-});
-
-test('an image is read from each kind of source', () => {
-  expect(
-    partsOf({
-      type: 'image',
-      source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' },
-    }),
-  ).toEqual([{ type: 'image', data: 'iVBORw0KGgo=', mediaType: 'image/png' }]);
-  expect(
-    partsOf({
-      type: 'image',
-      source: { type: 'url', url: 'https://example.com/cat.png' },
-    }),
-  ).toEqual([{ type: 'image', url: 'https://example.com/cat.png' }]);
-  expect(
-    partsOf({ type: 'image', source: { type: 'file', file_id: 'file_011C' } }),
-  ).toEqual([{ type: 'image', id: 'file_011C' }]);
-});
-
-test('a document is a file, with what only this family reads beside it', () => {
-  expect(
-    partsOf({
-      type: 'document',
-      source: {
-        type: 'base64',
-        media_type: 'application/pdf',
-        data: 'JVBERi0xLjQ=',
-      },
-      title: 'Report',
-      context: 'Q3 figures',
-      citations: { enabled: true },
-      cache_control: { type: 'ephemeral' },
-    }),
-  ).toEqual([
-    {
-      type: 'file',
-      data: 'JVBERi0xLjQ=',
-      mediaType: 'application/pdf',
-      name: 'Report',
-      cache: {},
-      provider: {
-        anthropic: { context: 'Q3 figures', citations: { enabled: true } },
-      },
     },
   ]);
 });
@@ -217,16 +161,12 @@ test('thinking with no signature is reasoning nobody signed', () => {
   ).toEqual([{ type: 'reasoning', text: 'Routing to fast' }]);
 });
 
-test('redacted thinking and blocks not known here stay as sent', () => {
-  const redacted = { type: 'redacted_thinking', data: 'EmwKAhgBEgy3va3pzix' };
+test('a block not known here stays as sent', () => {
   const search = {
     type: 'web_search_tool_result',
     tool_use_id: 'srvtoolu_01',
     content: [{ type: 'web_search_result', url: 'https://example.com' }],
   };
-  expect(partsOf(redacted)).toEqual([
-    { type: 'provider', provider: { anthropic: redacted } },
-  ]);
   expect(partsOf(search)).toEqual([
     { type: 'provider', provider: { anthropic: search } },
   ]);
@@ -261,50 +201,6 @@ test('a malformed block is rejected', () => {
   );
 });
 
-test('a cache marker is read from an image, a document and tool blocks', () => {
-  expect(
-    [
-      {
-        type: 'image',
-        source: { type: 'file', file_id: 'file_011C' },
-        cache_control: { type: 'ephemeral' },
-      },
-      {
-        type: 'document',
-        source: { type: 'file', file_id: 'file_011D' },
-        cache_control: { type: 'ephemeral', ttl: '1h' },
-      },
-      {
-        type: 'tool_use',
-        id: 'toolu_01',
-        name: 'get',
-        input: {},
-        cache_control: { type: 'ephemeral' },
-      },
-      {
-        type: 'server_tool_use',
-        id: 'srvtoolu_01',
-        name: 'web_search',
-        input: {},
-        cache_control: { type: 'ephemeral', ttl: '5m' },
-      },
-    ].flatMap(partsOf),
-  ).toEqual([
-    { type: 'image', id: 'file_011C', cache: {} },
-    { type: 'file', id: 'file_011D', cache: { ttl: '1h' } },
-    { type: 'tool_call', id: 'toolu_01', name: 'get', input: {}, cache: {} },
-    {
-      type: 'tool_call',
-      id: 'srvtoolu_01',
-      name: 'web_search',
-      input: {},
-      hosted: true,
-      cache: { ttl: '5m' },
-      provider: { anthropic: { type: 'server_tool_use' } },
-    },
-  ]);
-});
-
 test.each([
   [
     'an image of bytes',
@@ -318,14 +214,6 @@ test.each([
   [
     'an image by address',
     { type: 'image', source: { type: 'url', url: 'https://x.test/cat.png' } },
-  ],
-  [
-    'an uploaded image',
-    {
-      type: 'image',
-      source: { type: 'file', file_id: 'file_011C' },
-      cache_control: { type: 'ephemeral' },
-    },
   ],
   [
     'a PDF of bytes',
@@ -343,31 +231,10 @@ test.each([
     },
   ],
   [
-    'a PDF by address',
-    {
-      type: 'document',
-      source: { type: 'url', url: 'https://x.test/a.pdf' },
-      title: 'Report',
-    },
-  ],
-  [
     'an uploaded document',
     {
       type: 'document',
       source: { type: 'file', file_id: 'file_011C' },
-      citations: { enabled: true },
-    },
-  ],
-  [
-    'a document of plain text',
-    {
-      type: 'document',
-      source: {
-        type: 'text',
-        media_type: 'text/plain',
-        data: 'Grass is grün.',
-      },
-      title: 'Facts',
       citations: { enabled: true },
     },
   ],

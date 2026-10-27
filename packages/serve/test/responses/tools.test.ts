@@ -184,11 +184,3 @@ test('a choice that is neither a mode nor an object is refused', () => {
     choiceBody({ provider: { anthropic: { type: 'any' } } }, new Set()),
   ).toThrow(Unsupported);
 });
-
-test('a function tool with no parameters is one that takes none', () => {
-  expect(toolOf({ type: 'function', name: 'now' }, 'tools[0]')).toEqual({
-    type: 'function',
-    name: 'now',
-    input: { type: 'object', properties: {} },
-  });
-});

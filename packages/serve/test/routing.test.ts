@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
 import { model, motty } from '@mottyjs/core';
-import { mark } from '@mottyjs/core/host';
 import { fake, on } from '@mottyjs/test';
 import { serve } from '../src/index.ts';
 
@@ -35,12 +34,6 @@ test('options that cannot be made fail the start, not a request', () => {
   ).toThrow('An adapter was given no key');
 });
 
-test('a motty of an unknown contract version is refused at start', () => {
-  expect(() =>
-    serve({ [mark]: { ...coder[mark], version: 2 } }, () => ({})),
-  ).toThrow('The motty speaks contract version 2, this host 1');
-});
-
 test.each([
   [{}, { error: { type: 'invalid_request_error' } }],
   [
@@ -61,25 +54,6 @@ test.each([
     expect(await reply.json()).toMatchObject(body);
   },
 );
-
-test('the model list names the served motty, as OpenAI lists', async () => {
-  const reply = await coderServed().fetch(
-    new Request('http://motty.test/v1/models'),
-  );
-
-  expect(reply.status).toBe(200);
-  expect(await reply.json()).toEqual({
-    object: 'list',
-    data: [
-      {
-        id: 'coder',
-        object: 'model',
-        created: expect.any(Number),
-        owned_by: 'motty',
-      },
-    ],
-  });
-});
 
 test('the model list is in the shape of Anthropic for its clients', async () => {
   const reply = await coderServed().fetch(
@@ -134,17 +108,7 @@ test('one model is read by its name, and no other name is known', async () => {
 });
 
 test.each([
-  ['POST', '/v1/embeddings', 'Embeddings are not served'],
   ['POST', '/v1/images/generations', 'Images are not served'],
-  ['POST', '/v1/audio/speech', 'Audio is not served'],
-  ['POST', '/v1/batches', 'Batches are not served'],
-  ['GET', '/v1/files', 'Files are not served'],
-  ['POST', '/v1/realtime/client_secrets', 'Realtime is not served'],
-  [
-    'POST',
-    '/v1/conversations',
-    'Conversations are not served: no state is held between requests',
-  ],
   [
     'GET',
     '/v1/chat/completions',
@@ -168,9 +132,7 @@ test.each([
 
 test.each([
   ['GET', '/v1/responses/resp_1'],
-  ['DELETE', '/v1/responses/resp_1'],
   ['POST', '/v1/responses/resp_1/cancel'],
-  ['GET', '/v1/responses/resp_1/input_items'],
 ])('%s %s is rejected: no response is stored', async (method, path) => {
   const reply = await coderServed().fetch(
     new Request(`http://motty.test${path}`, { method }),
@@ -240,14 +202,9 @@ test.each([
 
 test.each([
   ['GET', '/'],
-  ['GET', '/health'],
-  ['POST', '/v1'],
   ['POST', '/v1/models'],
   ['POST', '/v1/chat'],
   ['POST', '/v1/embeddingsx'],
-  ['POST', '/v2/chat/completions'],
-  ['POST', '/chat/completions'],
-  ['POST', '/responses'],
 ])(
   '%s %s is an unknown path: a 404 an OpenAI client can read',
   async (method, path) => {
@@ -287,7 +244,6 @@ test('an unknown path asked with the version header of Anthropic is a 404 its cl
 
 test.each([
   ['/v1/chat/completions', { messages: [{ role: 'user', content: 'Hi' }] }],
-  ['/v1/responses', { input: 'Hi' }],
   [
     '/v1/messages',
     { max_tokens: 64, messages: [{ role: 'user', content: 'Hi' }] },

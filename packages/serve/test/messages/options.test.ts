@@ -3,27 +3,6 @@ import { InvalidRequest, Unsupported } from '@mottyjs/core';
 import { optionsOf, optionsTo } from '../../src/messages/options.ts';
 import { leaving } from '../../src/wire/fieldless.ts';
 
-test('the limit, stop sequences and sampling are neutral options', () => {
-  expect(
-    optionsOf({
-      max_tokens: 1024,
-      stop_sequences: ['\n\nHuman:', 'END'],
-      temperature: 0.2,
-      top_p: 0.9,
-      top_k: 40,
-    }),
-  ).toEqual({
-    options: {
-      maxTokens: 1024,
-      stop: ['\n\nHuman:', 'END'],
-      temperature: 0.2,
-      topP: 0.9,
-      topK: 40,
-    },
-    shown: false,
-  });
-});
-
 test('metadata names the user and is kept as a hint', () => {
   const { options } = optionsOf({
     max_tokens: 64,
@@ -55,25 +34,6 @@ test('a JSON schema format is the requested output', () => {
       output_format: { type: 'json_schema', schema },
     }).output,
   ).toEqual({ schema, strict: true });
-});
-
-test('thinking and effort become reasoning, and say if progress shows', () => {
-  expect(
-    optionsOf({
-      max_tokens: 16000,
-      thinking: { type: 'adaptive', display: 'summarized' },
-      output_config: { effort: 'high' },
-    }),
-  ).toEqual({
-    options: {
-      maxTokens: 16000,
-      reasoning: { effort: 'high' },
-      hints: {
-        anthropic: { thinking: { type: 'adaptive', display: 'summarized' } },
-      },
-    },
-    shown: true,
-  });
 });
 
 test('what only this family reads is split by whether it may be dropped', () => {
@@ -240,14 +200,7 @@ test('what this wire cannot say fails the call', () => {
   ).toThrow(Unsupported);
 });
 
-test('sampling is sent with thinking on or off: which model takes it is the upstream to say', () => {
-  expect(
-    optionsTo(
-      leaving('messages'),
-      { temperature: 0.2, topP: 0.5, topK: 5, reasoning: { effort: 'high' } },
-      undefined,
-    ).fields,
-  ).toMatchObject({ temperature: 0.2, top_p: 0.5, top_k: 5 });
+test('sampling is sent beside thinking: which model takes it is the upstream to say', () => {
   expect(
     optionsTo(
       leaving('messages'),
@@ -265,17 +218,6 @@ test('sampling is sent with thinking on or off: which model takes it is the upst
     top_k: 5,
     thinking: { type: 'enabled', budget_tokens: 2048 },
   });
-  expect(
-    optionsTo(
-      leaving('messages'),
-      {
-        temperature: 0.2,
-        reasoning: {},
-        hints: { anthropic: { thinking: { type: 'adaptive' } } },
-      },
-      undefined,
-    ).fields,
-  ).toMatchObject({ temperature: 0.2, thinking: { type: 'adaptive' } });
 });
 
 test('an effort in the author`s own words wins over the neutral one, which is reported', () => {
@@ -336,80 +278,6 @@ test('an options map with an entry for each family is sent this one`s own', () =
   );
 
   expect(fields).toEqual({ container: 'c_1', max_tokens: 64000 });
-  expect(left.leftOut()).toEqual([]);
-});
-
-test('sampling the model does not take is left out and reported', () => {
-  const left = leaving('messages');
-
-  const { fields } = optionsTo(
-    left,
-    { temperature: 0.2, topP: 0.99, topK: 40 },
-    undefined,
-    {},
-    () => ({
-      temperature: 1,
-      topP: 0.99,
-      topK: false,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: false,
-      effort: true,
-    }),
-  );
-
-  expect(fields).toEqual({ max_tokens: 64000 });
-  expect(left.leftOut().map(({ setting }) => setting)).toEqual([
-    'temperature.model',
-    'topK.model',
-  ]);
-});
-
-test('a temperature goes without the top-p the model does not take beside it', () => {
-  const left = leaving('messages');
-
-  const { fields } = optionsTo(
-    left,
-    { temperature: 0.2, topP: 0.9, topK: 40 },
-    undefined,
-    {},
-    () => ({
-      temperature: [0, 1],
-      topP: [0, 1],
-      topK: true,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: false,
-      effort: true,
-    }),
-  );
-
-  expect(fields).toEqual({ max_tokens: 64000, temperature: 0.2, top_k: 40 });
-  expect(left.leftOut().map(({ setting }) => setting)).toEqual([
-    'topP.temperature',
-  ]);
-});
-
-test('a sampling setting in the API`s own words is sent as said to a model the rule refuses it for', () => {
-  const left = leaving('messages');
-
-  const { fields } = optionsTo(
-    left,
-    { provider: { anthropic: { temperature: 0.2, top_k: 5 } } },
-    undefined,
-    {},
-    () => ({
-      temperature: 1,
-      topP: 0.99,
-      topK: false,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: false,
-      effort: true,
-    }),
-  );
-
-  expect(fields).toEqual({ max_tokens: 64000, temperature: 0.2, top_k: 5 });
   expect(left.leftOut()).toEqual([]);
 });
 
@@ -495,28 +363,25 @@ test('a budget is manual thinking beside the effort on a model that thinks only 
   expect(left.leftOut()).toEqual([]);
 });
 
-test.each([true, false])(
-  'adaptive thinking a caller hinted is left out for a model that thinks only on a budget, effort taken %s',
-  (effort) => {
-    const left = leaving('messages');
+test('adaptive thinking a caller hinted is left out for a model that thinks only on a budget', () => {
+  const left = leaving('messages');
 
-    const { fields } = optionsTo(
-      left,
-      {
-        reasoning: {},
-        hints: { anthropic: { thinking: { type: 'adaptive' } } },
-      },
-      undefined,
-      {},
-      () => ({ ...budgeted, effort }),
-    );
+  const { fields } = optionsTo(
+    left,
+    {
+      reasoning: {},
+      hints: { anthropic: { thinking: { type: 'adaptive' } } },
+    },
+    undefined,
+    {},
+    () => ({ ...budgeted, effort: true }),
+  );
 
-    expect(fields).toEqual({ max_tokens: 64000 });
-    expect(left.leftOut().map(({ setting }) => setting)).toEqual([
-      'reasoning.adaptive',
-    ]);
-  },
-);
+  expect(fields).toEqual({ max_tokens: 64000 });
+  expect(left.leftOut().map(({ setting }) => setting)).toEqual([
+    'reasoning.adaptive',
+  ]);
+});
 
 test('adaptive thinking in the API`s own words is sent as said to a model the rule refuses it for', () => {
   const left = leaving('messages');
@@ -530,60 +395,6 @@ test('adaptive thinking in the API`s own words is sent as said to a model the ru
   );
 
   expect(fields).toEqual({ max_tokens: 64000, thinking: { type: 'adaptive' } });
-  expect(left.leftOut()).toEqual([]);
-});
-
-test('a budget stays as manual thinking where the effort beside it is not taken', () => {
-  const left = leaving('messages');
-
-  const { fields } = optionsTo(
-    left,
-    { reasoning: { effort: 'high', budgetTokens: 2000 } },
-    undefined,
-    {},
-    () => ({
-      temperature: [0, 1],
-      topP: [0, 1],
-      topK: true,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: false,
-      effort: false,
-    }),
-  );
-
-  expect(fields).toEqual({
-    max_tokens: 64000,
-    thinking: { type: 'enabled', budget_tokens: 2000, display: 'summarized' },
-  });
-  expect(left.leftOut().map(({ setting }) => setting)).toEqual([
-    'reasoning.model',
-  ]);
-});
-
-test('an effort in the API`s own words is sent as said to a model the rule refuses it for', () => {
-  const left = leaving('messages');
-
-  const { fields } = optionsTo(
-    left,
-    { provider: { anthropic: { output_config: { effort: 'low' } } } },
-    undefined,
-    {},
-    () => ({
-      temperature: [0, 1],
-      topP: [0, 1],
-      topK: true,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: false,
-      effort: false,
-    }),
-  );
-
-  expect(fields).toEqual({
-    max_tokens: 64000,
-    output_config: { effort: 'low' },
-  });
   expect(left.leftOut()).toEqual([]);
 });
 

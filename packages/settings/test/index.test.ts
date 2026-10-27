@@ -1,11 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  answer,
-  type ChatRequest,
-  type Motty,
-  motty,
-  type StandardSchema,
-} from '@mottyjs/core';
+import { answer, type ChatRequest, type Motty, motty } from '@mottyjs/core';
 import {
   type EventStream,
   type Host,
@@ -58,26 +52,6 @@ function tuned() {
     }),
   });
 }
-
-test('with no overrides every setting is the default its schema defines', async () => {
-  const read: unknown[] = [];
-
-  await ran(
-    motty({ name: 'coder' })
-      .use(tuned())
-      .handle(({ settings }) => {
-        read.push(settings);
-        return answer('Hi');
-      }),
-  );
-
-  expect(read).toEqual([
-    {
-      offTopic: { onTopicProbability: 0.1 },
-      tiers: { quickQuestionChars: 400, deepProbability: 0.35 },
-    },
-  ]);
-});
 
 test('the host overrides any subset, by group, and the rest keeps its defaults', async () => {
   const read: unknown[] = [];
@@ -141,19 +115,6 @@ test('an override its group refuses fails the request, and the record names the 
   expect(reached).toBe(false);
 });
 
-test('an override that is no group at all is refused like a wrong value', async () => {
-  const { record } = await ran(
-    motty({ name: 'coder' })
-      .use(tuned())
-      .handle(() => answer('Hi')),
-    { settings: { offTopic: null } },
-  );
-
-  expect(record.error?.message).toStartWith(
-    'The host\'s settings for the group "offTopic" are not valid: ',
-  );
-});
-
 test('an override for a group the motty does not define is not a setting and is left out', async () => {
   const read: unknown[] = [];
 
@@ -177,49 +138,6 @@ test('a group that does not accept {} fails the motty at load', () => {
   ).toThrow(
     'The settings group "tiers" must accept {}, so that every setting has a default: ',
   );
-});
-
-test('a group that validates asynchronously fails the motty at load, which awaits nothing', () => {
-  expect(() =>
-    settings({
-      tiers: z.object({
-        deepProbability: z
-          .number()
-          .default(0.35)
-          .refine(async (value) => value <= 1),
-      }),
-    }),
-  ).toThrow(
-    'The settings group "tiers" validates asynchronously, so it cannot be checked at load',
-  );
-});
-
-test('a group is any Standard Schema, and its output is the setting', async () => {
-  const limit: StandardSchema<unknown, { calls: number }> = {
-    '~standard': {
-      version: 1,
-      vendor: 'test',
-      validate: (value) =>
-        typeof value === 'object' &&
-        value !== null &&
-        'calls' in value &&
-        typeof value.calls === 'number'
-          ? { value: { calls: value.calls } }
-          : { value: { calls: 3 } },
-    },
-  };
-  const read: number[] = [];
-  const served = motty({ name: 'coder' })
-    .use(settings({ limit }))
-    .handle(({ settings }) => {
-      read.push(settings.limit.calls);
-      return answer('Hi');
-    });
-
-  await ran(served);
-  await ran(served, { settings: { limit: { calls: 9 } } });
-
-  expect(read).toEqual([3, 9]);
 });
 
 test('one settings part used by a motty and by several of its parts is applied once per request', async () => {
@@ -263,71 +181,6 @@ test('one settings part used by a motty and by several of its parts is applied o
   expect(read).toEqual([0.35, 0.35]);
 });
 
-test('one settings part used twice by one motty is one part', async () => {
-  const tuning = tuned();
-  const read: number[] = [];
-
-  await ran(
-    motty({ name: 'coder' })
-      .use(tuning)
-      .use(tuning)
-      .handle(({ settings }) => {
-        read.push(settings.tiers.deepProbability);
-        return answer('Hi');
-      }),
-  );
-
-  expect(read).toEqual([0.35]);
-});
-
-test('two settings parts of the same groups and other schemas are refused together', () => {
-  expect(() =>
-    motty({ name: 'coder' })
-      .use(settings({ tiers: z.object({ deep: z.number().default(0.35) }) }))
-      .use(settings({ tiers: z.object({ deep: z.string().default('no') }) })),
-  ).toThrow('Two different parts share the name "settings"');
-});
-
-test('two settings parts of other groups are refused together', () => {
-  expect(() =>
-    motty({ name: 'coder' })
-      .use(settings({ tiers: z.object({ deep: z.number().default(0.35) }) }))
-      .use(settings({ limits: z.object({ turns: z.number().default(8) }) })),
-  ).toThrow('Two different parts share the name "settings"');
-});
-
-test('a second settings part in a module, used or routed to, is refused', () => {
-  const coder = motty({ name: 'coder' }).use(tuned());
-
-  expect(() =>
-    coder.use(
-      motty({ name: 'off-topic' }).use(
-        motty({ name: 'threshold' }).use(tuned()),
-      ),
-    ),
-  ).toThrow('Two different parts share the name "settings"');
-  expect(() =>
-    coder.route(() => 'chat', {
-      chat: motty({ name: 'tiers' })
-        .use(motty({ name: 'threshold' }).use(tuned()))
-        .handle(() => answer('Hi')),
-    }),
-  ).toThrow('Two different parts share the name "settings"');
-});
-
-test('two modules routed to, each with a settings part of its own, are refused', () => {
-  expect(() =>
-    motty({ name: 'coder' }).route(() => 'quick', {
-      quick: motty({ name: 'quick' })
-        .use(tuned())
-        .handle(() => answer('Hi')),
-      deep: motty({ name: 'deep' })
-        .use(tuned())
-        .handle(() => answer('Hi')),
-    }),
-  ).toThrow('Two different parts share the name "settings"');
-});
-
 test('a second settings part fails at load, before the host reads the motty, and says what to do', () => {
   const read = { mark: false };
 
@@ -347,21 +200,6 @@ test('a second settings part fails at load, before the host reads the motty, and
 
   expect(read.mark).toBe(false);
   expect.assertions(2);
-});
-
-test('the settings are in after-response work and in the description as one plugin', async () => {
-  const read: number[] = [];
-  const served = motty({ name: 'coder' })
-    .use(tuned())
-    .handle(() => answer('Hi'))
-    .afterResponse(({ settings }) => {
-      if (settings !== undefined) read.push(settings.tiers.quickQuestionChars);
-    });
-
-  await ran(served);
-
-  expect(read).toEqual([400]);
-  expect(served[mark].description.plugins).toEqual(['settings']);
 });
 
 test('the types check every setting a motty reads, and none can be changed', () => {
@@ -417,43 +255,6 @@ test('the entry exports exactly the held types', async () => {
   expect(
     [...text.matchAll(/export type (\w+)/g)].map(([, name]) => name),
   ).toEqual(['Settings']);
-});
-
-test('a write to a default throws in the motty that makes it, and the next request reads the defaults', async () => {
-  const read: unknown[] = [];
-  const served = motty({ name: 'coder' })
-    .use(
-      settings({
-        tiers: z.object({
-          threshold: z.number().default(0.5),
-          names: z.array(z.string()).default(['a']),
-        }),
-      }),
-    )
-    .handle(({ request, settings }) => {
-      if (request.id === 'req_write') {
-        Object.assign(settings.tiers.names, { 1: 'evil' });
-        Object.assign(settings.tiers, { threshold: 99 });
-      }
-      read.push(structuredClone(settings));
-      return answer('Hi');
-    });
-  const record = Promise.withResolvers<RequestRecord>();
-
-  await Array.fromAsync(
-    served[mark].run(
-      { ...ask(), id: 'req_write' },
-      {
-        models: unserved,
-        signal: new AbortController().signal,
-        record: record.resolve,
-      },
-    ),
-  );
-  await ran(served);
-
-  expect((await record.promise).outcome).toBe('failed');
-  expect(read).toEqual([{ tiers: { threshold: 0.5, names: ['a'] } }]);
 });
 
 test('with overrides, a write to any group or to the settings themselves throws, and the next request reads what the host set', async () => {

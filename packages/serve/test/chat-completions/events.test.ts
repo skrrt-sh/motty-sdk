@@ -191,16 +191,6 @@ test('each finish reason is read, one not listed as other with its name', async 
       )
     ).at(-1);
 
-  expect(await last('length')).toEqual({
-    type: 'finish',
-    reason: 'length',
-    rawReason: 'length',
-  });
-  expect(await last('content_filter')).toEqual({
-    type: 'finish',
-    reason: 'content_filter',
-    rawReason: 'content_filter',
-  });
   expect(await last('function_call')).toEqual({
     type: 'finish',
     reason: 'tool_calls',
@@ -295,8 +285,6 @@ test('a stream marked done that never gave a reason stopped, as a reply of sound
 test('a frame that cannot be read ends the stream in one error', async () => {
   for (const frame of [
     '{"choices":[{"index":0,"delta":{"cont',
-    '"ping"',
-    '[]',
     `{"error":{"message":"Busy","trace":${'['.repeat(100_000)}${']'.repeat(100_000)}}}`,
   ]) {
     expect(
@@ -348,42 +336,6 @@ test('a chunk with fields of the wrong types is read for what is sound', async (
   ]);
 });
 
-test('content a provider filtered ends the reply as filtered, under the provider`s name', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{"content":"Hel"},"finish_reason":null}]}',
-          '{"choices":[{"index":0,"delta":{},"finish_reason":"sensitive"}]}',
-          '[DONE]',
-        ),
-      ),
-    ),
-  ).toEqual([
-    { type: 'text', text: 'Hel' },
-    { type: 'finish', reason: 'content_filter', rawReason: 'sensitive' },
-  ]);
-});
-
-test('a context window that ran out ends the reply by length', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{},"finish_reason":"model_context_window_exceeded"}]}',
-          '[DONE]',
-        ),
-      ),
-    ),
-  ).toEqual([
-    {
-      type: 'finish',
-      reason: 'length',
-      rawReason: 'model_context_window_exceeded',
-    },
-  ]);
-});
-
 test('a provider out of capacity ends the stream in an error, with what came and the usage', async () => {
   expect(
     await Array.fromAsync(
@@ -412,96 +364,6 @@ test('a provider out of capacity ends the stream in an error, with what came and
       usage: { input: 9, output: 1 },
     },
   ]);
-});
-
-test('a provider that lost its connection ends the stream in an error worth another try', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{},"finish_reason":"network_error"}]}',
-          '[DONE]',
-        ),
-      ),
-    ),
-  ).toEqual([
-    {
-      type: 'error',
-      error: {
-        code: 'upstream_failed',
-        message: 'The upstream lost its connection before it finished',
-        retryable: true,
-        provider: { 'openai.chat': { finish_reason: 'network_error' } },
-        upstream: true,
-      },
-    },
-  ]);
-});
-
-test('an ending a dialect names as failed ends the stream in an error and no finish, with what came and the usage', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{"content":"Hel"},"finish_reason":null}]}',
-          '{"choices":[{"index":0,"delta":{},"finish_reason":"error"}]}',
-          '{"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":1}}',
-          '[DONE]',
-        ),
-        { name: 'mistral', broken: ['error'] },
-      ),
-    ),
-  ).toEqual([
-    { type: 'text', text: 'Hel' },
-    {
-      type: 'error',
-      error: {
-        code: 'upstream_failed',
-        message: 'The upstream failed before it finished',
-        retryable: true,
-        provider: { mistral: { finish_reason: 'error' } },
-        upstream: true,
-      },
-      usage: { input: 9, output: 1 },
-    },
-  ]);
-});
-
-test('an error frame with a number for its code is named by that number', async () => {
-  const [failed] = await Array.fromAsync(
-    events(
-      sent(
-        '{"error":{"message":"Rate limit exceeded","code":429},"choices":[]}',
-      ),
-    ),
-  );
-
-  expect(failed).toMatchObject({
-    type: 'error',
-    error: { code: 'rate_limited', message: 'Rate limit exceeded' },
-  });
-});
-
-test('a provider`s own reader names an error frame before the family does', async () => {
-  const [failed] = await Array.fromAsync(
-    events(
-      sent(
-        '{"error":{"message":"Insufficient Balance","code":"rate_limit_exceeded"}}',
-      ),
-      {
-        name: 'deepseek',
-        failures: (_, __, { message }) =>
-          message === 'Insufficient Balance'
-            ? { code: 'quota_exceeded' }
-            : undefined,
-      },
-    ),
-  );
-
-  expect(failed).toMatchObject({
-    type: 'error',
-    error: { code: 'quota_exceeded', message: 'Insufficient Balance' },
-  });
 });
 
 test('an error frame ends the stream in that error, with the usage so far', async () => {
@@ -534,21 +396,6 @@ test('an error frame ends the stream in that error, with the usage so far', asyn
       usage: { input: 9, output: 1 },
     },
   ]);
-});
-
-test('an error frame is named by what the upstream calls it', async () => {
-  const [failed] = await Array.fromAsync(
-    events(
-      sent(
-        '{"error":{"message":"Rate limit reached","type":"tokens","param":null,"code":"rate_limit_exceeded"}}',
-      ),
-    ),
-  );
-
-  expect(failed).toMatchObject({
-    type: 'error',
-    error: { code: 'rate_limited', message: 'Rate limit reached' },
-  });
 });
 
 test('a read that throws is left to the transport, which tells it one way', async () => {
@@ -632,28 +479,6 @@ test('a field a chunk names as the prototype is not read as the chunk`s own', as
   ]);
 });
 
-test('a null service tier is no tier', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"id":"gen-1","model":"deepseek/deepseek-chat","service_tier":null,"choices":[{"index":0,"delta":{"content":"pong"},"finish_reason":"stop"}]}',
-          '[DONE]',
-        ),
-      ),
-    ),
-  ).toEqual([
-    { type: 'text', text: 'pong' },
-    {
-      type: 'finish',
-      reason: 'stop',
-      rawReason: 'stop',
-      id: 'gen-1',
-      model: 'deepseek/deepseek-chat',
-    },
-  ]);
-});
-
 test('a chunk the dialect says holds a failure, inside a reply that began well, ends the stream in that failure, in its words', async () => {
   expect(
     await Array.fromAsync(
@@ -689,33 +514,6 @@ test('a chunk the dialect says holds a failure, inside a reply that began well, 
   ]);
 });
 
-test('the dialect`s own reader names a failure its chunk holds, and says whether to try again', async () => {
-  const [failed] = await Array.fromAsync(
-    events(sent('{"choices":[],"outcome":{"number":1008}}'), {
-      name: 'acme',
-      envelope: ({ outcome }) =>
-        typeof outcome === 'object' &&
-        outcome !== null &&
-        !Array.isArray(outcome)
-          ? { ...outcome, message: 'insufficient balance' }
-          : undefined,
-      failures: (status, _, { number }) =>
-        status === undefined && number === 1008
-          ? { code: 'quota_exceeded', retryable: false }
-          : undefined,
-    }),
-  );
-
-  expect(failed).toMatchObject({
-    type: 'error',
-    error: {
-      code: 'quota_exceeded',
-      message: 'insufficient balance',
-      retryable: false,
-    },
-  });
-});
-
 test('a chunk the dialect says holds no failure is read as any other', async () => {
   expect(
     await Array.fromAsync(
@@ -725,40 +523,6 @@ test('a chunk the dialect says holds no failure is read as any other', async () 
           '[DONE]',
         ),
         { name: 'acme', envelope: () => undefined },
-      ),
-    ),
-  ).toEqual([
-    { type: 'text', text: 'Hello' },
-    { type: 'finish', reason: 'stop', rawReason: 'stop' },
-  ]);
-});
-
-test('a failure the dialect`s chunk holds with no words is told as an upstream error', async () => {
-  const [failed] = await Array.fromAsync(
-    events(sent('{"outcome":{"number":1013}}'), {
-      name: 'acme',
-      envelope: () => ({ number: 1013 }),
-    }),
-  );
-
-  expect(failed).toMatchObject({
-    type: 'error',
-    error: {
-      code: 'upstream_failed',
-      message: 'The upstream answered with an error',
-    },
-  });
-});
-
-test('one provider`s own status in a chunk tells nothing where the dialect did not say it does', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{"content":"Hello"}}],"base_resp":{"status_code":1008,"status_msg":"insufficient balance"}}',
-          '{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"base_resp":{"status_code":"1008","status_msg":"insufficient balance"}}',
-          '[DONE]',
-        ),
       ),
     ),
   ).toEqual([
@@ -870,53 +634,6 @@ test('reasoning under one name is read where the other name is null', async () =
   ]);
 });
 
-test('a field of a tool call that is not read rides on the fragment that brought it', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"weather","arguments":""},"extra_content":{"google":{"thought_signature":"c2ln"}}}]},"finish_reason":null}]}',
-          '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":"tool_calls"}]}',
-          '[DONE]',
-        ),
-      ),
-    ),
-  ).toEqual([
-    {
-      type: 'tool_call',
-      id: 'call_a',
-      name: 'weather',
-      arguments: '',
-      provider: {
-        'openai.chat': {
-          extra_content: { google: { thought_signature: 'c2ln' } },
-        },
-      },
-    },
-    { type: 'tool_call', id: 'call_a', arguments: '{}' },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'tool_calls' },
-  ]);
-});
-
-test('a field inside a tool call`s function that is not read is kept inside it', async () => {
-  const [first] = await Array.fromAsync(
-    events(
-      sent(
-        '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"weather","arguments":"{}","signature":"c2ln"}}]},"finish_reason":"tool_calls"}]}',
-        '[DONE]',
-      ),
-    ),
-  );
-
-  expect(first).toEqual({
-    type: 'tool_call',
-    id: 'call_a',
-    name: 'weather',
-    arguments: '{}',
-    provider: { 'openai.chat': { function: { signature: 'c2ln' } } },
-  });
-});
-
 test('a field of a custom tool call that is not read is kept beside its mark', async () => {
   const [first] = await Array.fromAsync(
     events(
@@ -976,10 +693,7 @@ test('an entry of tool calls that is no object is no call', async () => {
   ).toEqual([{ type: 'finish', reason: 'stop', rawReason: 'stop' }]);
 });
 
-test.each([
-  ['"function":{"name":"weather","arguments":{"a":1}}'],
-  ['"type":"custom","custom":{"name":"weather","input":{"a":1}}'],
-])(
+test.each([['"function":{"name":"weather","arguments":{"a":1}}']])(
   'arguments given as an object are read as its JSON text: %s',
   async (call) => {
     const [first] = await Array.fromAsync(

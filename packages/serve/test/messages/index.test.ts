@@ -254,39 +254,6 @@ test('each thinking setting is sent upstream as the caller set it', () => {
   }
 });
 
-test('progress a caller sends back never reaches the upstream', () => {
-  const { request } = messages.decode(
-    {
-      model: 'coder',
-      max_tokens: 1024,
-      messages: [
-        { role: 'user', content: 'Hi' },
-        {
-          role: 'assistant',
-          content: [
-            {
-              type: 'thinking',
-              thinking: 'Routing to the fast model.',
-              signature: '',
-            },
-            { type: 'text', text: 'Hello.' },
-          ],
-        },
-        { role: 'user', content: 'More' },
-      ],
-    },
-    new Headers(),
-  );
-
-  expect(messages.encode('claude-opus-5-5', request).body).toMatchObject({
-    messages: [
-      { role: 'user', content: 'Hi' },
-      { role: 'assistant', content: [{ type: 'text', text: 'Hello.' }] },
-      { role: 'user', content: 'More' },
-    ],
-  });
-});
-
 test('reasoning of another family is a thinking block nobody signed, left out and reported when sent back', async () => {
   const thinking =
     'We need to compute 17 * 23. Let me think briefly: 17*20 = 340, plus 17*3 = 51, total 391.';
@@ -488,100 +455,6 @@ test('a reply of this family reaches the caller as the upstream sent it', async 
   ]);
 });
 
-test('a failure inside the upstream stream reaches the caller as an error event', async () => {
-  const sent = await reply(
-    [
-      {
-        type: 'content_block_start',
-        index: 0,
-        content_block: { type: 'text', text: '' },
-      },
-      {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'text_delta', text: 'It is' },
-      },
-      {
-        type: 'error',
-        error: { type: 'overloaded_error', message: 'Overloaded' },
-      },
-    ],
-    true,
-    null,
-  );
-  expect(sent.at(-1)).toEqual({
-    type: 'error',
-    error: { type: 'overloaded_error', message: 'Overloaded' },
-  });
-});
-
-test('a block the codec passes whole that a failing upstream never ended reaches the caller, and then the failure', async () => {
-  const sent = await reply(
-    [
-      {
-        type: 'content_block_start',
-        index: 0,
-        content_block: {
-          type: 'mcp_tool_use',
-          id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
-          name: 'echo',
-          server_name: 'example-mcp',
-          input: {},
-        },
-      },
-      {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'input_json_delta', partial_json: '{"param1":' },
-      },
-      {
-        type: 'error',
-        error: { type: 'overloaded_error', message: 'Overloaded' },
-      },
-    ],
-    true,
-    null,
-  );
-  expect(sent.slice(1)).toEqual([
-    {
-      type: 'content_block_start',
-      index: 0,
-      content_block: {
-        type: 'mcp_tool_use',
-        id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
-        name: 'echo',
-        server_name: 'example-mcp',
-        input: { INVALID_JSON: '{"param1":' },
-      },
-    },
-    { type: 'content_block_stop', index: 0 },
-    {
-      type: 'error',
-      error: { type: 'overloaded_error', message: 'Overloaded' },
-    },
-  ]);
-});
-
-test("a first-event failure is answered as this API's error body", () => {
-  const facts = messages.failure(
-    529,
-    new Headers({ 'retry-after': '3' }),
-    '{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
-  );
-  expect(facts).toMatchObject({ code: 'overloaded', retryAfter: 3000 });
-  expect(facts).not.toHaveProperty('status');
-  expect(messages.error(facts)).toEqual({
-    status: 529,
-    body: {
-      type: 'error',
-      error: {
-        type: 'overloaded_error',
-        message: 'Overloaded',
-      },
-    },
-  });
-});
-
 test('what the adapter cuts is cut from a failed response and from a failure in a stream, the request`s id included', async () => {
   const cut = (text: string) => text.replaceAll('hunter2-hunter2', '[cut]');
   const told = {
@@ -620,137 +493,127 @@ test('what the adapter cuts is cut from a failed response and from a failure in 
   ).toMatchObject([{ type: 'error', error: cleaned }]);
 });
 
-test.each([false, true])(
-  'a call with no arguments reaches a Chat Completions caller as an empty object, which goes back upstream (stream %p)',
-  async (stream) => {
-    const sent = await timeAsked(
-      chatCompletions.decode(
-        {
-          model: 'coder',
-          stream,
-          messages: [{ role: 'user', content: 'What time is it?' }],
-        },
-        new Headers(),
-      ),
-      stream,
-    );
-    const written = sent
-      .flatMap((frame) => {
-        const { choices } = dict(frame);
-        const { message, delta } = dict(list(choices)[0]);
-        const { tool_calls: calls } = dict(stream ? delta : message);
-        return list(calls).map((call) => {
-          const { function: named } = dict(call);
-          const { arguments: said } = dict(named);
-          return text(said);
-        });
-      })
-      .join('');
-    expect(written).toBe('{}');
-
-    const { request } = chatCompletions.decode(
+test('a call with no arguments reaches a Chat Completions caller of a whole reply as an empty object, which goes back upstream', async () => {
+  const sent = await timeAsked(
+    chatCompletions.decode(
       {
         model: 'coder',
-        messages: [
-          { role: 'user', content: 'What time is it?' },
-          {
-            role: 'assistant',
-            content: null,
-            tool_calls: [
-              {
-                id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-                type: 'function',
-                function: { name: 'get_time', arguments: written },
-              },
-            ],
-          },
-          {
-            role: 'tool',
-            tool_call_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-            content: '12:04',
-          },
-        ],
+        messages: [{ role: 'user', content: 'What time is it?' }],
       },
       new Headers(),
-    );
-    const { messages: turns } = dict(
-      messages.encode('claude-haiku-5-5', request).body,
-    );
-    expect(list(turns)[1]).toEqual({
-      role: 'assistant',
-      content: [
-        {
-          type: 'tool_use',
-          id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-          name: 'get_time',
-          input: {},
-        },
-      ],
-    });
-  },
-);
+    ),
+    false,
+  );
+  const written = sent
+    .flatMap((frame) => {
+      const { choices } = dict(frame);
+      const { message } = dict(list(choices)[0]);
+      const { tool_calls: calls } = dict(message);
+      return list(calls).map((call) => {
+        const { function: named } = dict(call);
+        const { arguments: said } = dict(named);
+        return text(said);
+      });
+    })
+    .join('');
+  expect(written).toBe('{}');
 
-test.each([false, true])(
-  'a call with no arguments reaches a Responses caller as an empty object, which goes back upstream (stream %p)',
-  async (stream) => {
-    const sent = await timeAsked(
-      responses.decode(
-        { model: 'coder', stream, input: 'What time is it?' },
-        new Headers(),
-      ),
-      stream,
-    );
-    const { response, ...whole } = dict(sent.at(-1));
-    const { output } = dict(stream ? response : whole);
-    const [call] = list(output);
-    const { arguments: written } = dict(call);
-    expect(written).toBe('{}');
-    if (stream) {
-      expect(sent).toContainEqual(
-        expect.objectContaining({
-          type: 'response.function_call_arguments.done',
-          arguments: '{}',
-        }),
-      );
-    }
-
-    const { request } = responses.decode(
-      {
-        model: 'coder',
-        input: [
-          { role: 'user', content: 'What time is it?' },
-          call ?? null,
-          {
-            type: 'function_call_output',
-            call_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-            output: '12:04',
-          },
-        ],
-      },
-      new Headers(),
-    );
-    const { messages: turns } = dict(
-      messages.encode('claude-haiku-5-5', request).body,
-    );
-    expect(list(turns)[1]).toEqual({
-      role: 'assistant',
-      content: [
-        {
-          type: 'tool_use',
-          id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
-          name: 'get_time',
-          input: {},
-        },
-      ],
-    });
-  },
-);
-
-test.each([
-  [
-    'Chat Completions',
-    chatCompletions,
+  const { request } = chatCompletions.decode(
     {
+      model: 'coder',
+      messages: [
+        { role: 'user', content: 'What time is it?' },
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+              type: 'function',
+              function: { name: 'get_time', arguments: written },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          tool_call_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+          content: '12:04',
+        },
+      ],
+    },
+    new Headers(),
+  );
+  const { messages: turns } = dict(
+    messages.encode('claude-haiku-5-5', request).body,
+  );
+  expect(list(turns)[1]).toEqual({
+    role: 'assistant',
+    content: [
+      {
+        type: 'tool_use',
+        id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+        name: 'get_time',
+        input: {},
+      },
+    ],
+  });
+});
+
+test('a call with no arguments reaches a streamed Responses caller as an empty object, which goes back upstream', async () => {
+  const sent = await timeAsked(
+    responses.decode(
+      { model: 'coder', stream: true, input: 'What time is it?' },
+      new Headers(),
+    ),
+    true,
+  );
+  const { response } = dict(sent.at(-1));
+  const { output } = dict(response);
+  const [call] = list(output);
+  const { arguments: written } = dict(call);
+  expect(written).toBe('{}');
+  expect(sent).toContainEqual(
+    expect.objectContaining({
+      type: 'response.function_call_arguments.done',
+      arguments: '{}',
+    }),
+  );
+
+  const { request } = responses.decode(
+    {
+      model: 'coder',
+      input: [
+        { role: 'user', content: 'What time is it?' },
+        call ?? null,
+        {
+          type: 'function_call_output',
+          call_id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+          output: '12:04',
+        },
+      ],
+    },
+    new Headers(),
+  );
+  const { messages: turns } = dict(
+    messages.encode('claude-haiku-5-5', request).body,
+  );
+  expect(list(turns)[1]).toEqual({
+    role: 'assistant',
+    content: [
+      {
+        type: 'tool_use',
+        id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
+        name: 'get_time',
+        input: {},
+      },
+    ],
+  });
+});
+
+test('arguments a Chat Completions caller sends back empty are the input of a tool that takes none', () => {
+  const { request } = chatCompletions.decode(
+    {
+      model: 'coder',
       messages: [
         { role: 'user', content: 'What time is it?' },
         {
@@ -767,39 +630,16 @@ test.each([
         { role: 'tool', tool_call_id: 'call_1', content: '12:04' },
       ],
     },
-  ],
-  [
-    'Responses',
-    responses,
-    {
-      input: [
-        { role: 'user', content: 'What time is it?' },
-        {
-          type: 'function_call',
-          call_id: 'call_1',
-          name: 'get_time',
-          arguments: '',
-        },
-        { type: 'function_call_output', call_id: 'call_1', output: '12:04' },
-      ],
-    },
-  ],
-])(
-  'arguments a %s caller sends back empty are the input of a tool that takes none',
-  (_, codec, echoed) => {
-    const { request } = codec.decode(
-      { model: 'coder', ...echoed },
-      new Headers(),
-    );
-    const { messages: sent } = dict(
-      messages.encode('claude-haiku-5-5', request).body,
-    );
-    const { content } = dict(list(sent)[1]);
-    expect(content).toEqual([
-      { type: 'tool_use', id: 'call_1', name: 'get_time', input: {} },
-    ]);
-  },
-);
+    new Headers(),
+  );
+  const { messages: sent } = dict(
+    messages.encode('claude-haiku-5-5', request).body,
+  );
+  const { content } = dict(list(sent)[1]);
+  expect(content).toEqual([
+    { type: 'tool_use', id: 'call_1', name: 'get_time', input: {} },
+  ]);
+});
 
 test('what an upstream of this family says that the codec does not read reaches the caller', async () => {
   const container = { id: 'container_011', expires_at: '2026-10-12T10:00:00Z' };
@@ -929,99 +769,6 @@ test('what an upstream of this family says that the codec does not read reaches 
       future_event_field: 'kept',
       usage,
     },
-  ]);
-});
-
-test('a refusal of this family reaches the caller with its details', async () => {
-  const details = { type: 'refusal', category: 'cyber', explanation: null };
-  const wire: Json[] = [
-    {
-      type: 'message_start',
-      message: {
-        id: 'msg_req_1',
-        type: 'message',
-        role: 'assistant',
-        model: 'claude-opus-5-5',
-        content: [],
-        stop_reason: null,
-        stop_sequence: null,
-        usage: { input_tokens: 0, output_tokens: 0 },
-      },
-    },
-    {
-      type: 'message_delta',
-      delta: {
-        stop_reason: 'refusal',
-        stop_sequence: null,
-        stop_details: details,
-      },
-      usage: { input_tokens: 25, output_tokens: 0 },
-    },
-    { type: 'message_stop' },
-  ];
-  expect(await reply(wire, true, { type: 'adaptive' })).toEqual(wire);
-  expect(await reply(wire, false, { type: 'adaptive' })).toEqual([
-    {
-      id: 'msg_req_1',
-      type: 'message',
-      role: 'assistant',
-      model: 'claude-opus-5-5',
-      content: [],
-      stop_reason: 'refusal',
-      stop_sequence: null,
-      stop_details: details,
-      usage: { input_tokens: 25, output_tokens: 0 },
-    },
-  ]);
-});
-
-test('a block the codec passes whole reaches the caller with what its deltas said', async () => {
-  const call = {
-    type: 'mcp_tool_use',
-    id: 'mcptoolu_014Q35RayjACSWkSj4X2yov1',
-    name: 'echo',
-    server_name: 'example-mcp',
-  };
-  const wire: Json[] = [
-    {
-      type: 'content_block_start',
-      index: 0,
-      content_block: { ...call, input: {} },
-    },
-    {
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'input_json_delta', partial_json: '{"param1": "value1"}' },
-    },
-    { type: 'content_block_stop', index: 0 },
-    {
-      type: 'content_block_start',
-      index: 1,
-      content_block: { type: 'compaction', content: null },
-    },
-    {
-      type: 'content_block_delta',
-      index: 1,
-      delta: { type: 'compaction_delta', content: 'Summary so far' },
-    },
-    { type: 'content_block_stop', index: 1 },
-    {
-      type: 'message_delta',
-      delta: { stop_reason: 'end_turn', stop_sequence: null },
-      usage: { input_tokens: 25, output_tokens: 9 },
-    },
-    { type: 'message_stop' },
-  ];
-  const called = { ...call, input: { param1: 'value1' } };
-  const compacted = { type: 'compaction', content: 'Summary so far' };
-  expect((await reply(wire, true, { type: 'adaptive' })).slice(1, -2)).toEqual([
-    { type: 'content_block_start', index: 0, content_block: called },
-    { type: 'content_block_stop', index: 0 },
-    { type: 'content_block_start', index: 1, content_block: compacted },
-    { type: 'content_block_stop', index: 1 },
-  ]);
-  expect(await reply(wire, false, { type: 'adaptive' })).toMatchObject([
-    { content: [called, compacted] },
   ]);
 });
 

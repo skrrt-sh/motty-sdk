@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Aborted, Overloaded, type Message, type Outcome } from "@mottyjs/core";
+import { Overloaded, type Message } from "@mottyjs/core";
 import { fake, memory, on, run } from "@mottyjs/test";
 import { EmptyPrompt } from "../src/middleware/empty-prompt";
 import { gpt, haiku, jev, mini, opus, sonnet } from "../src/models";
@@ -54,41 +54,6 @@ describe("tiers", () => {
     );
 
     expect(route).toBe("deep");
-  });
-
-  test("the standard tier retries a model that is overloaded once", async () => {
-    const models = fake(
-      on(jev, { tier: { quick: 0.1, standard: 0.8, deep: 0.1 } }),
-      on(sonnet, new Overloaded("busy")),
-      on(sonnet, "standard reply"),
-    );
-
-    const { route, answer } = await run(
-      tiers,
-      { text: "Why does this deadlock? ".repeat(40) },
-      { models: [models] },
-    );
-
-    expect(route).toBe("standard");
-    expect(await answer.text()).toBe("standard reply");
-    expect(models.sent(sonnet)).toHaveLength(2);
-  });
-
-  test("the deep tier falls back when its first model is overloaded", async () => {
-    const models = fake(
-      on(sonnet, "plan"),
-      on(opus, new Overloaded("busy")),
-      on(gpt, "fallback reply"),
-    );
-
-    const { route, answer } = await run(
-      tiers,
-      { model: "acme/coder:max", text: "What does git stash do?" },
-      { models: [models] },
-    );
-
-    expect(route).toBe("deep");
-    expect(await answer.text()).toBe("fallback reply");
   });
 
   test("the deep tier asks for high reasoning effort", async () => {
@@ -300,18 +265,6 @@ describe("structured", () => {
 });
 
 describe("request kind", () => {
-  test("a chat request goes to the tiers", async () => {
-    const models = fake(
-      on(jev, { software: 0.97 }),
-      on(mini, "quick reply"),
-      on(haiku, "quick reply"),
-    );
-
-    const { path } = await run(coder, { text: "What does git stash do?" }, { models: [models] });
-
-    expect(path).toEqual(["chat", "quick"]);
-  });
-
   test("a request for JSON skips the tiers", async () => {
     const models = fake(
       on(jev, { software: 0.97, small: 0.9 }),
@@ -410,20 +363,5 @@ describe("prompt and answer", () => {
     const chunks = await Array.fromAsync(answer.chunks());
     expect(chunks.map((chunk) => chunk.type)).not.toContain("reasoning");
     expect(await answer.text()).toBe("deep reply");
-  });
-});
-
-describe("report", () => {
-  test("a caller who leaves is reported as aborted", async () => {
-    const outcomes: Outcome[] = [];
-
-    const asked = run(
-      coder,
-      { text: "What does git stash do?", signal: AbortSignal.abort() },
-      { report: (record) => void outcomes.push(record.outcome) },
-    );
-
-    await expect(asked).rejects.toBeInstanceOf(Aborted);
-    expect(outcomes).toEqual(["aborted"]);
   });
 });

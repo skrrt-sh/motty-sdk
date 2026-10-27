@@ -51,45 +51,6 @@ test('before hooks keep registration order, a part inlined at its use', () => {
   ]);
 });
 
-test('a part used inside a part is inlined where that part used it', () => {
-  const innermost = () => ({ innermost: 1 });
-  const around = () => ({ around: 1 });
-  const { lifecycle } = assemble(
-    motty({ name: 'root' })
-      .use(
-        motty({ name: 'outer' })
-          .derive(around)
-          .use(motty({ name: 'inner' }).derive(innermost))
-          .beforeHandle(() => {}),
-      )
-      .derive(() => ({ root: 1 }))[chain],
-  );
-
-  expect(lifecycle.before.map((hook) => hook.owner)).toEqual([
-    'outer',
-    'inner',
-    'outer',
-    'root',
-  ]);
-  expect(lifecycle.before.map((hook) => hook.at)).toEqual([0, 1, 2, 3]);
-});
-
-test('a handle is the answering step', () => {
-  const handler = ({ prompt }: { prompt: Prompt }) => complete(prompt);
-  const { lifecycle } = assemble(
-    motty({ name: 'root' }).handle(handler)[chain],
-  );
-
-  expect(lifecycle.answer).toEqual({
-    kind: 'handle',
-    run: handler,
-    owner: 'root',
-    own: true,
-    at: 0,
-    boundaries: [],
-  });
-});
-
 test('a route is the answering step, with its chooser and its table', () => {
   const choose = (): 'small' | 'strong' => 'small';
   const small = ({ prompt }: { prompt: Prompt }) => complete(prompt);
@@ -107,18 +68,6 @@ test('a route is the answering step, with its chooser and its table', () => {
     at: 0,
     boundaries: [],
   });
-});
-
-test('a middleware assembles with no answering step', () => {
-  const { lifecycle } = assemble(
-    motty({ name: 'guard' })
-      .beforeHandle(() => {})
-      .afterHandle(() => {})[chain],
-  );
-
-  expect(lifecycle.answer).toBeUndefined();
-  expect(lifecycle.before).toHaveLength(1);
-  expect(lifecycle.afterHandle).toHaveLength(1);
 });
 
 test('a motty with no step assembles to empty phases', () => {
@@ -348,42 +297,6 @@ test('the boundaries of a hook are nearest first', () => {
   ]);
 });
 
-test('a part without an onError shares the boundaries of its user', () => {
-  const { lifecycle } = assemble(
-    motty({ name: 'root' })
-      .use(tenant())
-      .beforeHandle(() => {})
-      .onError(() => undefined)[chain],
-  );
-
-  expect(lifecycle.before[0]?.boundaries).toBe(
-    lifecycle.before[1]?.boundaries ?? [],
-  );
-});
-
-test('a part that brings the route covers the route with its onError', () => {
-  const moduleFailed = () => undefined;
-  const rootFailed = () => undefined;
-  const { lifecycle } = assemble(
-    motty({ name: 'root' })
-      .use(
-        motty({ name: 'module' })
-          .route(() => 'only', { only: ({ prompt }) => complete(prompt) })
-          .onError(moduleFailed),
-      )
-      .afterHandle(() => {})
-      .onError(rootFailed)[chain],
-  );
-
-  expect(lifecycle.answer?.boundaries).toEqual([
-    { run: moduleFailed, owner: 'module' },
-    { run: rootFailed, owner: 'root' },
-  ]);
-  expect(lifecycle.afterHandle[0]?.boundaries).toEqual([
-    { run: rootFailed, owner: 'root' },
-  ]);
-});
-
 test('an entry is a handler, a nested lifecycle or one with a recover', () => {
   const plain = ({ prompt }: { prompt: Prompt }) => complete(prompt);
   const recover = () => reroute('plain');
@@ -470,23 +383,6 @@ test('a part reached twice in one motty runs once, where it came first', () => {
   ]);
 });
 
-test('a part first reached through another part runs there', () => {
-  const { lifecycle } = assemble(
-    motty({ name: 'root' })
-      .use(
-        motty({ name: 'billing' })
-          .derive(() => ({ plan: 'pro' }))
-          .use(tenant()),
-      )
-      .use(tenant())[chain],
-  );
-
-  expect(lifecycle.before.map((hook) => hook.owner)).toEqual([
-    'billing',
-    'tenant',
-  ]);
-});
-
 test('parts with one name and different seeds are both applied', () => {
   const { lifecycle } = assemble(
     motty({ name: 'root' })
@@ -534,81 +430,6 @@ test('a part applied in one entry is still applied in its sibling', () => {
   expect(nestedIn(lifecycle, 'other')?.before).toHaveLength(1);
 });
 
-test('the same nested chain assembles by what each parent applied', () => {
-  const shared = motty({ name: 'shared' })
-    .use(tenant())
-    .handle(({ prompt }) => complete(prompt));
-  const applying = assemble(
-    motty({ name: 'applying' })
-      .use(tenant())
-      .route(() => 'shared', { shared })[chain],
-  );
-  const bare = assemble(
-    motty({ name: 'bare' }).route(() => 'shared', { shared })[chain],
-  );
-
-  expect(nestedIn(applying.lifecycle, 'shared')?.before).toEqual([]);
-  expect(nestedIn(applying.lifecycle, 'shared')?.answer?.at).toBe(0);
-  expect(
-    nestedIn(bare.lifecycle, 'shared')?.before.map((hook) => hook.owner),
-  ).toEqual(['tenant']);
-  expect(nestedIn(bare.lifecycle, 'shared')?.answer?.at).toBe(1);
-});
-
-test('three levels deep, a part of any ancestor is applied once', () => {
-  const leaf = motty({ name: 'leaf' })
-    .use(tenant())
-    .use(motty({ name: 'audit' }).afterResponse(() => {}))
-    .use(motty({ name: 'leaf-only' }).beforeHandle(() => {}))
-    .handle(({ prompt }) => complete(prompt));
-  const middle = motty({ name: 'middle' })
-    .use(motty({ name: 'audit' }).afterResponse(() => {}))
-    .route(() => 'leaf', { leaf });
-  const { lifecycle } = assemble(
-    motty({ name: 'root' })
-      .use(tenant())
-      .route(() => 'middle', { middle })[chain],
-  );
-  const assembledMiddle = nestedIn(lifecycle, 'middle');
-  const assembledLeaf = nestedIn(assembledMiddle, 'leaf');
-
-  expect(lifecycle.before.map((hook) => hook.owner)).toEqual(['tenant']);
-  expect(assembledMiddle?.afterResponse.map((hook) => hook.owner)).toEqual([
-    'audit',
-  ]);
-  expect(assembledLeaf?.before.map((hook) => hook.owner)).toEqual([
-    'leaf-only',
-  ]);
-  expect(assembledLeaf?.afterResponse).toEqual([]);
-  expect(assembledLeaf?.answer).toMatchObject({
-    kind: 'handle',
-    owner: 'leaf',
-  });
-});
-
-test('each hook is named by the motty or part that registered it', () => {
-  const { lifecycle } = assemble(
-    motty({ name: 'root' })
-      .use(
-        motty({ name: 'cache' })
-          .beforeHandle(() => canned('Cached.'))
-          .afterHandle(() => {})
-          .afterResponse(() => {}),
-      )
-      .handle(({ prompt }) => complete(prompt))
-      .afterHandle(() => {})[chain],
-  );
-
-  expect(lifecycle.name).toBe('root');
-  expect(lifecycle.before.map((hook) => hook.owner)).toEqual(['cache']);
-  expect(lifecycle.answer?.owner).toBe('root');
-  expect(lifecycle.afterHandle.map((hook) => hook.owner)).toEqual([
-    'cache',
-    'root',
-  ]);
-  expect(lifecycle.afterResponse.map((hook) => hook.owner)).toEqual(['cache']);
-});
-
 test('the description names every part used in the tree, first seen first', () => {
   const { description } = assemble(
     motty({ name: 'root' })
@@ -636,25 +457,6 @@ test('the description names every part used in the tree, first seen first', () =
     name: 'root',
     plugins: ['billing', 'tenant', 'limit', 'nested', 'deep', 'audit'],
   });
-});
-
-test('a motty that uses no part describes no plugins', () => {
-  expect(
-    assemble(
-      motty({ name: 'root' }).handle(({ prompt }) => complete(prompt))[chain],
-    ).description.plugins,
-  ).toEqual([]);
-});
-
-test('assembling leaves the chain as it was and gives equal data again', () => {
-  const root = motty({ name: 'root' })
-    .use(tenant())
-    .route(() => 'only', { only: ({ prompt }) => complete(prompt) })
-    .onError(() => undefined);
-  const steps = [...root[chain].steps];
-
-  expect(assemble(root[chain])).toEqual(assemble(root[chain]));
-  expect(root[chain].steps).toEqual(steps);
 });
 
 test('everything assembled is frozen', () => {

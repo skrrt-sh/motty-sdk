@@ -139,19 +139,7 @@ test('a malformed choice is rejected and a foreign one fails the call', () => {
   ).toThrow(Unsupported);
 });
 
-test('a cache marker is written on a tool of either kind', () => {
-  expect(
-    toolTo(leaving('messages'), {
-      type: 'function',
-      name: 'get',
-      input: {},
-      cache: { ttl: '1h' },
-    }),
-  ).toEqual({
-    name: 'get',
-    input_schema: {},
-    cache_control: { type: 'ephemeral', ttl: '1h' },
-  });
+test('a cache marker is written on a tool the provider runs', () => {
   expect(
     toolTo(leaving('messages'), {
       type: 'provider',

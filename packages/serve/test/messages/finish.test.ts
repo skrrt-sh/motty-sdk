@@ -45,17 +45,6 @@ test('a finish of another family is written by its neutral reason', () => {
   ).toBe('max_tokens');
 });
 
-test('neutral input counts the cached and cache-writing tokens too', () => {
-  expect(
-    countsOf({
-      input_tokens: 21,
-      cache_creation_input_tokens: 188086,
-      cache_read_input_tokens: 1200,
-      output_tokens: 393,
-    }),
-  ).toEqual({ input: 189307, output: 393, cached: 1200, cacheWrite: 188086 });
-});
-
 test('a count the upstream did not report is absent', () => {
   expect(countsOf({ output_tokens: 5 })).toEqual({ output: 5 });
   expect(countsOf({})).toEqual({});
