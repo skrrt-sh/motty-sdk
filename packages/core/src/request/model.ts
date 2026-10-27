@@ -125,11 +125,22 @@ function entering(result: IteratorResult<unknown>): StreamEvent | string {
   );
 }
 
-// A finish is given whole: its entry takes the id and the warnings by name.
+// Named one by one: a field a host put beside the usage is no count, and a
+// finish has no code.
 function usageAndCode(last: Terminal) {
-  return last.type === 'error'
-    ? { ...last.usage, code: last.error.code, message: last.error.message }
-    : { ...last.usage, ...last };
+  if (last.type === 'error') {
+    return {
+      ...last.usage,
+      code: last.error.code,
+      message: last.error.message,
+    };
+  }
+  const { usage, id, warnings } = last;
+  return {
+    ...usage,
+    ...(id === undefined ? {} : { id }),
+    ...(warnings === undefined ? {} : { warnings }),
+  };
 }
 
 export function model(name: string): NamedModel {

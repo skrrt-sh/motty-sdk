@@ -250,6 +250,34 @@ test('a reader of chunks waits under the signal in force for it: one in a reques
   expect(closed).toBe(0);
 }, 1_000);
 
+test('a reader of chunks stopped while it waited on no read ends with Aborted at its next wait', async () => {
+  const first = Promise.withResolvers<void>();
+  const canned = answer(
+    (async function* (): AsyncIterable<Chunk> {
+      await first.promise;
+      yield { type: 'text', text: 'Half' };
+      await new Promise(() => {});
+    })(),
+  );
+  const stop = new AbortController();
+
+  const stopped = await enter(
+    stubHost({}, { signal: stop.signal }),
+    async () => {
+      const reader = canned.chunks()[Symbol.asyncIterator]();
+      const read = reader.next();
+      await Bun.sleep(1);
+      first.resolve();
+      await read;
+      stop.abort();
+      await Bun.sleep(1);
+      return reader.next().catch((thrown: unknown) => thrown);
+    },
+  );
+
+  expect(stopped).toBeInstanceOf(Aborted);
+}, 1_000);
+
 test('the error the host gave as the reason of its stop is the one a waiting reader of chunks ends with', async () => {
   const canned = answer(
     (async function* (): AsyncIterable<Chunk> {

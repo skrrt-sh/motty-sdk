@@ -182,6 +182,9 @@ export function reader(
 } {
   const unwatch =
     signal === undefined ? undefined : onAbort(signal, onGiveUp, 'afterTurn');
+  // Ended once: a read that settles after the source was given up would end
+  // it, and close it, again.
+  let ended = false;
   return {
     read: (took, threw) => {
       if (signal?.aborted) return onGiveUp();
@@ -192,6 +195,8 @@ export function reader(
       }
     },
     end: (readOut) => {
+      if (ended) return;
+      ended = true;
       unwatch?.();
       if (!readOut) close(source);
     },

@@ -2425,6 +2425,28 @@ test('usage counts of the wrong type from a host are left out, and the rest of t
   expect(outcome.calls.total).toStrictEqual({ input: 3 });
 });
 
+test('fields a host put on a finish beside its usage are neither counted nor taken as a failure', async () => {
+  const calls = await enter(
+    {
+      ...stubHost(),
+      models: async function* () {
+        yield JSON.parse(
+          '{"type":"finish","reason":"stop","usage":{"input":3,"output":2},"output":900,"cost":7,"code":"rate_limited","message":"Slow down"}',
+        );
+      },
+    },
+    async () => {
+      await Array.fromAsync(await asked());
+      return current().calls;
+    },
+  );
+
+  expect(calls.total).toStrictEqual({ input: 3, output: 2 });
+  expect(calls.made).toStrictEqual([
+    { model: 'acme/small', time: expect.any(Object), input: 3, output: 2 },
+  ]);
+});
+
 test.each([
   [
     'type',

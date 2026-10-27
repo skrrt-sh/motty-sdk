@@ -1,5 +1,4 @@
-import { stopReason } from '../data/errors.ts';
-import { onAbort } from './wait.ts';
+import { wait } from './wait.ts';
 
 type BufferState =
   | { readonly at: 'arriving' | 'finished' }
@@ -17,29 +16,7 @@ export async function* replayed<Item>(
 ): AsyncGenerator<Item, undefined> {
   let read = 0;
   let wake: (() => void) | undefined;
-  let giveUp: ((stop: unknown) => void) | undefined;
   let unfollow: (() => void) | undefined;
-  const park = (resolve: () => void, reject: (stop: unknown) => void) => {
-    wake = resolve;
-    giveUp = reject;
-  };
-
-  function follow(): () => void {
-    const unsubscribe = onArrival(() => wake?.());
-    const unwatch =
-      signal === undefined
-        ? undefined
-        : onAbort(
-            signal,
-            () => giveUp?.(stopReason(signal.reason)),
-            'afterTurn',
-          );
-    return () => {
-      unsubscribe();
-      unwatch?.();
-    };
-  }
-
   try {
     while (true) {
       const item = buffer[read];
@@ -51,8 +28,13 @@ export async function* replayed<Item>(
       const now = state();
       if (now.at === 'finished') return;
       if (now.at === 'failed') throw now.error();
-      unfollow ??= follow();
-      await new Promise<void>(park);
+      unfollow ??= onArrival(() => wake?.());
+      // Each wait follows the signal itself: a stop told while no read
+      // waited would be lost to the next one.
+      const arrived = new Promise<void>((resolve) => {
+        wake = resolve;
+      });
+      await (signal === undefined ? arrived : wait(arrived, signal));
     }
   } finally {
     unfollow?.();

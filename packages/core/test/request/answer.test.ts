@@ -1170,6 +1170,41 @@ test('a stream made by hand that keeps giving chunks after the signal fired is c
   expect([read, reads, closed]).toEqual([3, 3, 1]);
 });
 
+test.each([
+  ['a chunk', '{"type":"text","text":"Late"}'],
+  ['something that is no chunk', '42'],
+])(
+  'a stream made by hand whose pending read settles with %s after it was given up is closed once and not read again',
+  async (_, value) => {
+    const stop = new AbortController();
+    const late = Promise.withResolvers<IteratorResult<Chunk>>();
+    let reads = 0;
+    let closed = 0;
+
+    const reply = enter(stubHost({}, { signal: stop.signal }), () =>
+      answer({
+        [Symbol.asyncIterator]: () => ({
+          next: () => {
+            reads += 1;
+            return late.promise;
+          },
+          return: async () => {
+            closed += 1;
+            return { done: true, value: undefined };
+          },
+        }),
+      }),
+    );
+    stop.abort();
+    const thrown = await reply.text().catch((raised: unknown) => raised);
+    late.resolve({ done: false, value: JSON.parse(value) });
+    await Bun.sleep(1);
+
+    expect(thrown).toBeInstanceOf(Aborted);
+    expect([reads, closed]).toEqual([1, 1]);
+  },
+);
+
 test('a stream made by hand whose stop is told by the host with an error of its own fails the answer with that error', async () => {
   const stop = new AbortController();
   const reason = new TimedOut('The host gave the request two minutes');
