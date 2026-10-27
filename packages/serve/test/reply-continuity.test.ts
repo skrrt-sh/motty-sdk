@@ -131,7 +131,7 @@ test.each([
       {
         setting: 'reasoning',
         detail:
-          'The Responses API has no form for what a model goes on from its reasoning with',
+          'The Responses API has no form for what a model goes on from its reasoning with, which the request did not include',
       },
     ]);
   },
@@ -209,7 +209,9 @@ test.each([
     expect(reports[0]?.warnings).toEqual([
       {
         setting: 'reasoning',
-        detail: `${api} has no form for what a model goes on from its reasoning with`,
+        detail: `${api} has no form for what a model goes on from its reasoning with${
+          path === '/v1/responses' ? ', which the request did not include' : ''
+        }`,
       },
     ]);
   },
@@ -235,6 +237,33 @@ test.each([
 
     expect(status).toBe(200);
     expect(text).toContain(secret);
+    expect(reports[0]).not.toHaveProperty('warnings');
+  },
+);
+
+test.each([
+  ['a thinking signature', signature, 'EqQBCgIYAhIM', false],
+  ['a thinking signature', signature, 'EqQBCgIYAhIM', true],
+  ['redacted thinking', redacted, 'EmwKAhgB', false],
+  ['redacted thinking', redacted, 'EmwKAhgB', true],
+])(
+  '%s reaches a Responses caller who includes encrypted reasoning, in the item it sends back (%#)',
+  async (_what, chunks, secret, stream) => {
+    const { status, text, reports } = await asked(
+      '/v1/responses',
+      {
+        stream,
+        input: 'Is it safe?',
+        reasoning: { summary: 'auto' },
+        include: ['reasoning.encrypted_content'],
+      },
+      chunks,
+    );
+
+    expect(status).toBe(200);
+    expect(text).toContain('encrypted_content');
+    expect(text).toContain(secret);
+    expect(reports).toMatchObject([{ outcome: 'completed' }]);
     expect(reports[0]).not.toHaveProperty('warnings');
   },
 );

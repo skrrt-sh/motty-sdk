@@ -4,6 +4,7 @@ import { unsupported } from '../wire/refusals.ts';
 import { called, given } from './calls.ts';
 import { api, held } from './family.ts';
 import { field } from './fields.ts';
+import type { Spaced } from './namespaces.ts';
 import {
   type Call,
   callItem,
@@ -22,6 +23,10 @@ export type Asked = {
   body: Dict;
   muted: boolean;
   custom: ReadonlySet<string>;
+  spaced: Spaced;
+  clients: ReadonlySet<string>;
+  // Whether the caller asked for what a model goes on from its reasoning with.
+  encrypted: boolean;
 };
 
 export function reply(asked: Asked, id: string) {
@@ -84,15 +89,21 @@ export function reply(asked: Asked, id: string) {
           kind === 'summary_text' || kind === 'reasoning_text'
             ? undefined
             : own;
+        // Another family's data is the caller's to send back when it asked.
+        const carried =
+          own === undefined && asked.encrypted ? event.provider : undefined;
         // Muted, the model's reasoning is still handed back when it is this
         // API's own item: the caller returns it for the model to go on from.
         // The content that item holds is streamed, so the two agree.
-        if (asked.muted && own === undefined) return [];
+        if (asked.muted && own === undefined && carried === undefined) {
+          return [];
+        }
         const shown = !asked.muted || kind === 'reasoning_text';
         return thought(writing, shown ? event.text : '', {
           part: kind === 'reasoning_text' ? 'content' : 'summary',
           ...(event.block === undefined ? {} : { block: event.block }),
           ...(item === undefined ? {} : { item }),
+          ...(carried === undefined ? {} : { carried }),
         });
       }
       case 'text':
@@ -110,7 +121,7 @@ export function reply(asked: Asked, id: string) {
             `${api} cannot write a tool call that was told more after it ended`,
           );
         }
-        const sent = called(writing, calls, asked.custom, event);
+        const sent = called(writing, calls, asked, event);
         const call = event.ended === true ? calls.get(event.id) : undefined;
         if (call === undefined) return sent;
         // Only a call said to have ended is done here, as pieces of calls
@@ -118,7 +129,7 @@ export function reply(asked: Asked, id: string) {
         calls.delete(event.id);
         over.add(event.id);
         sent.push(
-          given(call, 'completed'),
+          ...given(call, 'completed'),
           done(call.index, callItem(call, 'completed')),
         );
         return sent;
@@ -144,7 +155,7 @@ export function reply(asked: Asked, id: string) {
     const sent = settled(open === undefined ? undefined : status(open.index));
     for (const call of calls.values()) {
       sent.push(
-        given(call, status(call.index)),
+        ...given(call, status(call.index)),
         done(call.index, callItem(call, status(call.index))),
       );
     }

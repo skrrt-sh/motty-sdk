@@ -1,18 +1,19 @@
-import type { ProviderData } from '@mottyjs/core/host';
+import type { ProviderData, ReadonlyJson } from '@mottyjs/core/host';
 import type { LeftOut } from '../codec.ts';
-import { copied, type Dict, dict, isDict, without } from './json.ts';
+import { copied, type Dict, dict, without } from './json.ts';
 import { unsupported } from './refusals.ts';
 
 // A null, an empty list and an empty object say what leaving the field out
 // says, so none of them is worth failing a call of another family for.
+function says(value: ReadonlyJson): boolean {
+  if (value === null) return false;
+  if (typeof value !== 'object') return true;
+  return Object.keys(value).length > 0;
+}
+
 export function meant(fields: Dict): Dict {
   return Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => {
-      const empty = Array.isArray(value)
-        ? value.length === 0
-        : isDict(value) && Object.keys(value).length === 0;
-      return value !== null && !empty;
-    }),
+    Object.entries(fields).filter(([, value]) => says(value)),
   );
 }
 
@@ -44,9 +45,12 @@ export function providerData(
   }
 
   // The fields are named so an author knows what to take out, and by name
-  // alone, since a value may be a secret. A long list ends in a count.
+  // alone, since a value may be a secret. A long list ends in a count. An
+  // entry that says nothing, as one an author emptied, carries nothing.
   function refused(data: ProviderData | undefined, what: string): void {
-    const [other] = Object.keys(data ?? {});
+    const [other] = Object.keys(data ?? {}).filter((name) =>
+      says(data?.[name] ?? null),
+    );
     if (other === undefined) return;
     const fields = data?.[other];
     const names =

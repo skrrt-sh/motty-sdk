@@ -87,7 +87,7 @@ test("another wire's hint is dropped and its own is kept under", () => {
       'a part',
     ),
   ).toEqual({ detail: 'low', b: 2 });
-  expect(() => carried({ provider: { gemini: {} } }, 'a part')).toThrow(
+  expect(() => carried({ provider: { gemini: { a: 1 } } }, 'a part')).toThrow(
     Unsupported,
   );
 });

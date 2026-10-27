@@ -11,7 +11,14 @@ async function* run(...events: (StreamEvent | Progress)[]) {
 test('a stream starts the response, numbers every event and completes it', async () => {
   const sent = await Array.fromAsync(
     streamed(
-      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      {
+        body: { model: 'coder' },
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       run(
         { type: 'text', text: 'Hello.' },
         {
@@ -77,7 +84,14 @@ test('an answer cut short by length or by a filter is incomplete, with its reaso
     (
       await Array.fromAsync(
         streamed(
-          { body: {}, muted: true, custom: new Set() },
+          {
+            body: {},
+            muted: true,
+            custom: new Set(),
+            spaced: new Map(),
+            clients: new Set(),
+            encrypted: false,
+          },
           run({ type: 'text', text: 'Hel' }, { type: 'finish', reason }),
           'r1',
         ),
@@ -104,7 +118,14 @@ test('every other end is a completed response', () => {
   for (const reason of ['stop', 'tool_calls', 'pause', 'other'] as const) {
     expect(
       collected(
-        { body: {}, muted: true, custom: new Set() },
+        {
+          body: {},
+          muted: true,
+          custom: new Set(),
+          spaced: new Map(),
+          clients: new Set(),
+          encrypted: false,
+        },
         [],
         {
           type: 'finish',
@@ -119,7 +140,14 @@ test('every other end is a completed response', () => {
 test('an error after the stream started ends it as a failed response', async () => {
   const sent = await Array.fromAsync(
     streamed(
-      { body: {}, muted: true, custom: new Set() },
+      {
+        body: {},
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       run(
         { type: 'text', text: 'Hel' },
         {
@@ -166,7 +194,14 @@ test('an error after the stream started ends it as a failed response', async () 
 test('a collected reply that was cut off says which item did not finish', () => {
   expect(
     collected(
-      { body: {}, muted: true, custom: new Set() },
+      {
+        body: {},
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       [
         { type: 'text', text: 'Checking.' },
         { type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{"c' },
@@ -186,7 +221,14 @@ test('a collected reply that was cut off says which item did not finish', () => 
 test("a caller's own mistake is described in the failed response", async () => {
   const sent = await Array.fromAsync(
     streamed(
-      { body: {}, muted: true, custom: new Set() },
+      {
+        body: {},
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       run({
         type: 'error',
         error: { code: 'empty_prompt', status: 400, message: 'Say something' },
@@ -206,6 +248,9 @@ test('a collected reply holds progress as reasoning, then the answer', () => {
         body: { model: 'coder', reasoning: { summary: 'auto' } },
         muted: false,
         custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
       },
       [
         { type: 'progress', piece: 0, text: 'Routing' },
@@ -263,6 +308,9 @@ test('the response echoes what was asked, and usage not reported is null', () =>
         },
         muted: false,
         custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
       },
       [],
       { type: 'finish', reason: 'stop' },
@@ -286,7 +334,14 @@ test('the response echoes what was asked, and usage not reported is null', () =>
   });
   expect(
     collected(
-      { body: {}, muted: true, custom: new Set() },
+      {
+        body: {},
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       [],
       {
         type: 'finish',
@@ -312,7 +367,14 @@ test.each([
 ])('the cost in usage %j is written under its name as %p', (usage, cost) => {
   expect(
     collected(
-      { body: { model: 'coder' }, muted: false, custom: new Set() },
+      {
+        body: { model: 'coder' },
+        muted: false,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       [],
       { type: 'finish', reason: 'stop', usage },
       'r1',
@@ -324,7 +386,14 @@ test.each([
     parsed(
       JSON.stringify(
         collected(
-          { body: { model: 'coder' }, muted: false, custom: new Set() },
+          {
+            body: { model: 'coder' },
+            muted: false,
+            custom: new Set(),
+            spaced: new Map(),
+            clients: new Set(),
+            encrypted: false,
+          },
           [],
           { type: 'finish', reason: 'stop', usage },
           'r1',
@@ -337,7 +406,14 @@ test.each([
 test('a field of a call that this API does not name reaches the caller, streamed and collected', async () => {
   const sent = await Array.fromAsync(
     streamed(
-      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      {
+        body: { model: 'coder' },
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       run(
         {
           type: 'tool_call',
@@ -367,7 +443,14 @@ test('a field of a call that this API does not name reaches the caller, streamed
   ]);
   expect(
     collected(
-      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      {
+        body: { model: 'coder' },
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       [
         {
           type: 'tool_call',
@@ -433,7 +516,14 @@ test('what a chunk carries never stands beside a field this API writes of a call
   ];
   const sent = await Array.fromAsync(
     streamed(
-      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      {
+        body: { model: 'coder' },
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       run(...chunks, { type: 'finish', reason: 'tool_calls' }),
       'r1',
     ),
@@ -484,7 +574,14 @@ test('what a chunk carries never stands beside a field this API writes of a call
   expect(
     field(
       collected(
-        { body: { model: 'coder' }, muted: true, custom: new Set() },
+        {
+          body: { model: 'coder' },
+          muted: true,
+          custom: new Set(),
+          spaced: new Map(),
+          clients: new Set(),
+          encrypted: false,
+        },
         chunks,
         { type: 'finish', reason: 'tool_calls' },
         'r1',
@@ -515,7 +612,14 @@ test('a field of a call told after its opening is in the item as done, streamed 
   ];
   const sent = await Array.fromAsync(
     streamed(
-      { body: { model: 'coder' }, muted: true, custom: new Set() },
+      {
+        body: { model: 'coder' },
+        muted: true,
+        custom: new Set(),
+        spaced: new Map(),
+        clients: new Set(),
+        encrypted: false,
+      },
       run(...chunks, { type: 'finish', reason: 'tool_calls' }),
       'r1',
     ),
@@ -547,7 +651,14 @@ test('a field of a call told after its opening is in the item as done, streamed 
   expect(
     field(
       collected(
-        { body: { model: 'coder' }, muted: true, custom: new Set() },
+        {
+          body: { model: 'coder' },
+          muted: true,
+          custom: new Set(),
+          spaced: new Map(),
+          clients: new Set(),
+          encrypted: false,
+        },
         chunks,
         { type: 'finish', reason: 'tool_calls' },
         'r1',
@@ -579,6 +690,9 @@ test('of what a finish carries, only the turn`s end is written on the response, 
     body: { model: 'coder' },
     muted: true,
     custom: new Set<string>(),
+    spaced: new Map(),
+    clients: new Set<string>(),
+    encrypted: false,
   };
   const sent = await Array.fromAsync(streamed(asked, run(finish), 'r1'));
   expect(sent.at(-1)?.event).toBe('response.completed');
@@ -597,7 +711,14 @@ test('of what a finish carries, only the turn`s end is written on the response, 
 });
 
 test('a call told more after it ended fails the reply, streamed and collected', async () => {
-  const asked = { body: {}, muted: true, custom: new Set<string>() };
+  const asked = {
+    body: {},
+    muted: true,
+    custom: new Set<string>(),
+    spaced: new Map(),
+    clients: new Set<string>(),
+    encrypted: false,
+  };
   const chunks: Chunk[] = [
     { type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' },
     { type: 'tool_call', id: 'a', arguments: '', ended: true },
@@ -623,7 +744,14 @@ test('a call told more after it ended fails the reply, streamed and collected', 
 });
 
 test('text that is empty and holds nothing for this API opens no message, streamed and collected', async () => {
-  const asked = { body: {}, muted: true, custom: new Set<string>() };
+  const asked = {
+    body: {},
+    muted: true,
+    custom: new Set<string>(),
+    spaced: new Map(),
+    clients: new Set<string>(),
+    encrypted: false,
+  };
   const chunks: Chunk[] = [
     { type: 'text', text: '', block: 0 },
     { type: 'tool_call', id: 'a', name: 'f', arguments: '{}', block: 1 },
@@ -667,7 +795,14 @@ test.each([
   async (family, reason, event, details) => {
     const sent = await Array.fromAsync(
       streamed(
-        { body: {}, muted: true, custom: new Set() },
+        {
+          body: {},
+          muted: true,
+          custom: new Set(),
+          spaced: new Map(),
+          clients: new Set(),
+          encrypted: false,
+        },
         run(
           { type: 'text', text: 'Hel' },
           {

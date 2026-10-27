@@ -188,12 +188,6 @@ test('a meaning-changing entry of another family fails the call', () => {
       messages: [{ ...user, provider: { 'openai.chat': { audio: {} } } }],
     }),
   ).toThrow(Unsupported);
-  expect(() =>
-    encode('claude-opus-5-5', {
-      messages: [user],
-      tools: [{ type: 'custom', name: 'shell' }],
-    }),
-  ).toThrow(Unsupported);
 });
 
 test('an instruction between turns is sent where the API takes one', () => {

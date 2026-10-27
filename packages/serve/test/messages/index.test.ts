@@ -1097,3 +1097,73 @@ test('every header of this API`s own but its version reaches the upstream, and n
     'anthropic-not-known-yet': 'on',
   });
 });
+
+test('what a cache marker says beside its kind and lifetime reaches an upstream of this family and no other', () => {
+  const body = {
+    model: 'claude-opus-5-5',
+    max_tokens: 1024,
+    system: [
+      {
+        type: 'text',
+        text: 'You are a careful analyst.',
+        cache_control: { type: 'ephemeral', scope: 'global' },
+      },
+    ],
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Weather?',
+            cache_control: { type: 'ephemeral', ttl: '1h', scope: 'global' },
+          },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'get_weather',
+            input: { location: 'Paris' },
+            cache_control: { type: 'ephemeral', scope: 'global' },
+          },
+        ],
+      },
+    ],
+    tools: [
+      {
+        name: 'get_weather',
+        input_schema: { type: 'object' },
+        cache_control: { type: 'ephemeral', scope: 'global' },
+      },
+    ],
+    stream: true,
+  };
+  const { request } = messages.decode(body, new Headers());
+
+  expect(messages.encode('claude-opus-5-5', request).body).toEqual(body);
+  expect(
+    JSON.stringify(responses.encode('gpt-5.5', request).body),
+  ).not.toContain('scope');
+  expect(
+    messages.encode('claude-opus-5-5', {
+      messages: [
+        {
+          role: 'user',
+          parts: [
+            {
+              type: 'text',
+              text: 'Weather?',
+              hints: { anthropic: { cache_control: { scope: 'global' } } },
+            },
+          ],
+        },
+      ],
+    }).body,
+  ).toMatchObject({
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'Weather?' }] }],
+  });
+});

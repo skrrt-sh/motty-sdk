@@ -12,8 +12,8 @@ import {
 } from '../wire/json.ts';
 import { parameterless } from '../wire/openai-tools.ts';
 import { invalid } from '../wire/refusals.ts';
-import { carried, family, marked, own } from './family.ts';
-import { field } from './fields.ts';
+import { carried, family, hinted, marked, mine, own } from './family.ts';
+import { clientRun, field } from './fields.ts';
 
 type Tools = NonNullable<Prompt['tools']>;
 
@@ -63,11 +63,32 @@ export function toolOf(raw: Json, at: string): Tool {
       };
     }
   }
+  // To another family it is a function, named for its type.
+  const run = clientRun(raw);
+  if (run !== undefined && isDict(parameters)) {
+    return {
+      type: 'function',
+      name: run,
+      ...described,
+      input: parameters,
+      hints: { [family]: without(raw, ['description', 'parameters']) },
+    };
+  }
   return {
     type: 'provider',
     ...(typeof name === 'string' ? { name } : {}),
     provider: { [family]: raw },
   };
+}
+
+export function clientNames(tools: readonly Tool[]): Set<string> {
+  return new Set(
+    tools.flatMap((tool) =>
+      tool.type === 'function' && clientRun(mine(tool.hints)) !== undefined
+        ? [tool.name]
+        : [],
+    ),
+  );
 }
 
 function named(tool: Json): string | undefined {
@@ -99,6 +120,13 @@ export function toolBody(left: Leaving, tool: Tools[number]): Dict {
   if (tool.type !== 'custom') left.without('tool.cache', tool.cache);
   switch (tool.type) {
     case 'function':
+      if (clientRun(hinted(tool.hints)) !== undefined) {
+        return {
+          ...carried(tool, 'a tool option'),
+          ...given({ description: tool.description }),
+          parameters: copied(tool.input),
+        };
+      }
       return {
         ...carried(tool, 'a tool option'),
         type: 'function',
@@ -121,6 +149,39 @@ export function toolBody(left: Leaving, tool: Tools[number]): Dict {
     default:
       return tool satisfies never;
   }
+}
+
+// Tools declared in one namespace go back in it, where the first of them
+// was declared.
+export function toolsBody(left: Leaving, tools: readonly Tools[number][]) {
+  const sent: Dict[] = [];
+  const spaces = new Map<string, Dict[]>();
+  for (const tool of tools) {
+    const { namespace, name, found, ...hints } = hinted(tool.hints);
+    // This API holds what a search found in the search's own output.
+    if (found === true) continue;
+    const { name: space } = dict(namespace);
+    if (
+      tool.type === 'provider' ||
+      typeof space !== 'string' ||
+      typeof name !== 'string'
+    ) {
+      sent.push(toolBody(left, tool));
+      continue;
+    }
+    const member = toolBody(left, {
+      ...tool,
+      name,
+      hints: { [family]: hints },
+    });
+    const members = spaces.get(space);
+    if (members !== undefined) members.push(member);
+    else {
+      spaces.set(space, [member]);
+      sent.push({ ...dict(namespace), tools: spaces.get(space) ?? [] });
+    }
+  }
+  return sent;
 }
 
 export function choiceBody(

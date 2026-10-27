@@ -5,9 +5,7 @@ import {
   type RunStream,
   toFacts,
 } from '@mottyjs/core/host';
-import type { Codec, LeftOut } from '../codec.ts';
-
-type Formless = Codec['formless'];
+import type { Formless, LeftOut } from '../codec.ts';
 
 type Kind = Chunk['type'];
 

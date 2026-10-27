@@ -1,4 +1,4 @@
-import type { Codec } from '../codec.ts';
+import type { Formless } from '../codec.ts';
 import { formlessIn } from '../wire/formless.ts';
 import { api, held } from './family.ts';
 import { field } from './fields.ts';
@@ -8,7 +8,10 @@ const { answer, note } = formlessIn(api);
 
 // An output item of this API is a message, reasoning, a call for the caller
 // to answer, a picture, or an item this API wrote itself.
-export const formless: Codec['formless'] = (chunk) => {
+export function formless(
+  chunk: Parameters<Formless>[0],
+  encrypted = false,
+): ReturnType<Formless> {
   switch (chunk.type) {
     case 'file':
       return imageItem('', chunk) === undefined
@@ -20,10 +23,16 @@ export const formless: Codec['formless'] = (chunk) => {
       return chunk.hosted === true
         ? answer('tool_call', 'a call to a tool the upstream ran')
         : undefined;
+    // Another family's goes where this API's own is encrypted, when asked.
     case 'reasoning':
-      return chunk.provider === undefined || held(chunk.provider) !== undefined
+      return chunk.provider === undefined ||
+        held(chunk.provider) !== undefined ||
+        encrypted
         ? undefined
-        : note('reasoning', 'what a model goes on from its reasoning with');
+        : note(
+            'reasoning',
+            'what a model goes on from its reasoning with, which the request did not include',
+          );
     case 'provider':
       return typeof field(held(chunk.provider), 'type') === 'string'
         ? undefined
@@ -35,4 +44,4 @@ export const formless: Codec['formless'] = (chunk) => {
     default:
       return undefined;
   }
-};
+}

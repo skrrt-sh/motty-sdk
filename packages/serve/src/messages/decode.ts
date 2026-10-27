@@ -65,6 +65,7 @@ export function decode(body: Json, headers: Headers): Decoded {
       ...(output === undefined ? {} : { output }),
     },
     stream: stream === true,
+    formless,
     streamed: (events, id) =>
       streamed(formed(events, formless), id, model, shown),
     collected: (events, finish, id) =>

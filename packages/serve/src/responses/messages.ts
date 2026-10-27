@@ -1,6 +1,7 @@
 import type { Json, Message, Part } from '@mottyjs/core/host';
 import {
   type Dict,
+  dict,
   isDict,
   list,
   parsed,
@@ -10,7 +11,9 @@ import {
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { partsOf } from './content.ts';
 import { family, hinted, noted } from './family.ts';
-import { callNeutral, field, isCustom } from './fields.ts';
+import { callNeutral, clientRun, field, isCustom } from './fields.ts';
+import { flat } from './namespaces.ts';
+import { unsealed } from './reasoning.ts';
 
 // An item's id and state matter to this API alone; any other field this
 // codec does not read still reaches the model.
@@ -42,12 +45,51 @@ function spoken(item: Dict, at: string): Part[] {
   return [{ ...first, hints }, ...rest];
 }
 
-function callOf(item: Dict, at: string): Part {
-  const { call_id: id, name, arguments: source, input } = item;
-  if (typeof id !== 'string' || typeof name !== 'string') {
+type Named = (namespace: string, name: string) => string;
+
+// What a search found is told to another family by the names it calls the
+// tools by, since those are declared to it from then on.
+function foundText(tools: Json | undefined, named: Named): string {
+  const line = (name: string, said: Json | undefined) =>
+    typeof said === 'string' ? `${name}: ${said}` : name;
+  return list(tools)
+    .flatMap((tool) => {
+      const { type, name, description, tools: inside } = dict(tool);
+      if (typeof name !== 'string') return [];
+      if (type !== 'namespace') return [line(name, description)];
+      return list(inside).flatMap((member) => {
+        const { name: own, description: said } = dict(member);
+        return typeof own === 'string' ? [line(named(name, own), said)] : [];
+      });
+    })
+    .join('\n');
+}
+
+// The call and the output of a tool the caller runs are told by their types.
+function ranOf(item: Dict, type: string, named: Named): Part | undefined {
+  const { call_id: id, arguments: input = {}, tools } = item;
+  if (clientRun(item) === undefined || typeof id !== 'string') return undefined;
+  const more = noted(without(item, ['call_id', 'arguments']));
+  if (type.endsWith('_call')) {
+    const name = type.slice(0, -'_call'.length);
+    return { type: 'tool_call', id, name, input, ...more };
+  }
+  if (!type.endsWith('_output')) return undefined;
+  return { type: 'tool_result', id, text: foundText(tools, named), ...more };
+}
+
+function callOf(item: Dict, at: string, named: Named): Part {
+  const { call_id: id, name: own, arguments: source, input, namespace } = item;
+  if (typeof id !== 'string' || typeof own !== 'string') {
     invalid(`${at} needs a call_id and a name`);
   }
-  const more = extra(item, callNeutral);
+  // Named as its tool is, with the name it has in its namespace kept.
+  const spaced = typeof namespace === 'string';
+  const name = spaced ? named(namespace, own) : own;
+  const more = noted({
+    ...without(item, ['type', ...callNeutral]),
+    ...(spaced ? { name: own } : {}),
+  });
   if (isCustom(item)) {
     return { type: 'tool_call', id, name, input: text(input) ?? '', ...more };
   }
@@ -77,10 +119,12 @@ function resultOf(item: Dict, at: string): Part {
   return { type: 'tool_result', id, parts, ...more };
 }
 
-// The item goes back whole: what it was signed with is the model's own, and
-// only its text is what another reader can use.
-function reasoningOf(item: Dict): Part {
-  const { summary, content } = item;
+// The item goes back whole, and another family's data in it is that family's
+// alone. A signature is bound to the tools its model was shown, so once a
+// search found more, what came before is its text alone.
+function reasoningOf(item: Dict, stale: boolean): Part {
+  const { summary, content, encrypted_content: sealed } = item;
+  const other = unsealed(sealed);
   const said = [...list(summary), ...list(content)].flatMap((part) =>
     isDict(part) && typeof field(part, 'text') === 'string'
       ? [field(part, 'text')]
@@ -89,7 +133,11 @@ function reasoningOf(item: Dict): Part {
   return {
     type: 'reasoning',
     text: said.join('\n\n'),
-    provider: { [family]: item },
+    ...(other === undefined
+      ? { provider: { [family]: item } }
+      : stale
+        ? {}
+        : { provider: other }),
   };
 }
 
@@ -120,17 +168,34 @@ function joined(
 
 // One turn of the model is several items here and one message there, and
 // so are the results of its calls. An item of no known kind keeps its place.
-export function messagesOf(input: Json | undefined): Message[] {
+export function messagesOf(
+  input: Json | undefined,
+  named: Named = flat,
+): Message[] {
   if (typeof input === 'string') return [{ role: 'user', text: input }];
   if (!Array.isArray(input)) {
     invalid('input must be a string or a list of items');
   }
   const messages: Message[] = [];
   let turn: Turn | undefined;
+  const searched = input.findLastIndex((item) => {
+    const { type, tools } = dict(item);
+    const output = typeof type === 'string' && type.endsWith('_output');
+    return (
+      output && clientRun(dict(item)) !== undefined && list(tools).length > 0
+    );
+  });
   for (const [index, item] of input.entries()) {
     const at = `input[${index}]`;
     if (!isDict(item)) invalid(`${at} must be an object`);
     const { type = 'message' } = item;
+    const ran = typeof type === 'string' ? ranOf(item, type, named) : undefined;
+    if (ran !== undefined) {
+      const role = ran.type === 'tool_call' ? 'assistant' : 'tool';
+      turn = joined(messages, turn, role);
+      turn.parts.push(ran);
+      continue;
+    }
     switch (type) {
       case 'message': {
         const role = roleOf(field(item, 'role'), at);
@@ -152,7 +217,7 @@ export function messagesOf(input: Json | undefined): Message[] {
       case 'function_call':
       case 'custom_tool_call':
         turn = joined(messages, turn, 'assistant');
-        turn.parts.push(callOf(item, at));
+        turn.parts.push(callOf(item, at, named));
         break;
       case 'function_call_output':
       case 'custom_tool_call_output':
@@ -161,7 +226,7 @@ export function messagesOf(input: Json | undefined): Message[] {
         break;
       case 'reasoning':
         turn = joined(messages, turn, 'assistant');
-        turn.parts.push(reasoningOf(item));
+        turn.parts.push(reasoningOf(item, index < searched));
         break;
       case 'item_reference':
         return unsupported(

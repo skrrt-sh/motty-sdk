@@ -1,11 +1,11 @@
 import type { Json, Message, Part } from '@mottyjs/core/host';
 import type { Leaving } from '../wire/fieldless.ts';
-import { type Dict, text, without } from '../wire/json.ts';
+import { copied, type Dict, text, without } from '../wire/json.ts';
 import { breakpoint } from '../wire/openai-cache.ts';
 import { a, unsupported } from '../wire/refusals.ts';
 import { inputContent } from './content.ts';
 import { carried, held, hinted, mine, own } from './family.ts';
-import { callNeutral, field } from './fields.ts';
+import { callNeutral, clientRun, field } from './fields.ts';
 
 type Call = Part & { type: 'tool_call' };
 type Result = Part & { type: 'tool_result' };
@@ -13,10 +13,19 @@ type Result = Part & { type: 'tool_result' };
 function callItem(left: Leaving, part: Call, custom: boolean): Dict {
   left.without('hosted', part.hosted);
   const written = part.raw ?? JSON.stringify(part.input);
+  const carried = { ...hinted(part.hints), ...mine(part.provider) };
+  if (clientRun(carried) !== undefined) {
+    const { input } = part;
+    const told = input === undefined ? written : copied(input);
+    return { ...carried, call_id: part.id, arguments: told };
+  }
+  // A call in a namespace is named apart from it everywhere but here.
+  const { namespace, name } = carried;
+  const spaced = typeof namespace === 'string' && typeof name === 'string';
   return {
-    ...without({ ...hinted(part.hints), ...mine(part.provider) }, callNeutral),
+    ...without(carried, callNeutral),
     call_id: part.id,
-    name: part.name,
+    name: spaced ? name : part.name,
     ...(custom
       ? {
           type: 'custom_tool_call',
@@ -29,8 +38,10 @@ function callItem(left: Leaving, part: Call, custom: boolean): Dict {
 function resultItem(left: Leaving, part: Result, custom: boolean): Dict {
   left.without('hosted', part.hosted);
   left.without('tool_result.failed', part.failed);
+  const kept = carried(part, 'a tool result');
+  if (clientRun(kept) !== undefined) return { ...kept, call_id: part.id };
   return {
-    ...carried(part, 'a tool result'),
+    ...kept,
     type: custom ? 'custom_tool_call_output' : 'function_call_output',
     call_id: part.id,
     output: part.text ?? part.parts.map((inner) => inputContent(left, inner)),
@@ -224,14 +235,16 @@ export function inputOf(
       continue;
     }
     const { text: said, cache } = message;
+    // Text stays a string unless a marker is written on it.
+    const marker = outside ? {} : breakpoint(left, cache);
     input.push({
       ...more,
       type: 'message',
       role: message.role,
       content:
-        outside || cache === undefined
+        Object.keys(marker).length === 0
           ? said
-          : [{ type: 'input_text', text: said, ...breakpoint(left, cache) }],
+          : [{ type: 'input_text', text: said, ...marker }],
     });
   }
   return { ...(instructions === undefined ? {} : { instructions }), input };

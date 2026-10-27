@@ -104,7 +104,7 @@ export async function chat(
   const { id } = asked.request;
   const events = watched(
     serving.run(asked.request, asked.host)[Symbol.asyncIterator](),
-    codec.formless,
+    decoded.formless,
     asked,
   );
   if (!decoded.stream) return whole(codec, decoded, events, id);

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
 import type { RunStream } from '@mottyjs/core/host';
-import type { Codec } from '../../src/codec.ts';
+import type { Formless } from '../../src/codec.ts';
 import {
   formed,
   formedWhole,
@@ -11,7 +11,7 @@ import {
 
 const { answer, note } = formlessIn('This API');
 
-const formless: Codec['formless'] = (chunk) => {
+const formless: Formless = (chunk) => {
   if (chunk.type === 'file') return answer('file', 'a file the model made');
   if (chunk.type === 'citation') return note('citation', 'a citation');
   if (chunk.type === 'reasoning' && chunk.provider !== undefined) {

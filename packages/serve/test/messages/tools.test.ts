@@ -60,10 +60,20 @@ test('a malformed tool is rejected', () => {
   expect(() => toolOf({ type: 5, name: 'x' })).toThrow(InvalidRequest);
 });
 
-test('a tool this wire cannot say fails the call', () => {
-  expect(() =>
+test('a free-form tool is one that takes its text in one field', () => {
+  expect(
     toolTo(leaving('messages'), { type: 'custom', name: 'shell' }),
-  ).toThrow(Unsupported);
+  ).toEqual({
+    name: 'shell',
+    input_schema: {
+      type: 'object',
+      properties: { input: { type: 'string' } },
+      required: ['input'],
+    },
+  });
+});
+
+test('a tool this wire cannot say fails the call', () => {
   expect(() =>
     toolTo(leaving('messages'), {
       type: 'provider',

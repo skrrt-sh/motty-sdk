@@ -3,7 +3,6 @@ import { decode } from './decode.ts';
 import { encode } from './encode.ts';
 import { error, failure } from './errors.ts';
 import { events } from './events.ts';
-import { formless } from './formless.ts';
 
 export const messages: Codec = {
   paths: ['/v1/messages'],
@@ -12,7 +11,6 @@ export const messages: Codec = {
   decode,
   error,
   encode,
-  formless,
   events,
   failure,
 };

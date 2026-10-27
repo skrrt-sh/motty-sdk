@@ -405,17 +405,6 @@ test('an option of another family fails the call, wherever it is', () => {
       messages: [],
       tools: [
         {
-          type: 'provider',
-          provider: { anthropic: { type: 'bash_20250124' } },
-        },
-      ],
-    }),
-  ).toThrow(Unsupported);
-  expect(() =>
-    encode('gpt-x', {
-      messages: [],
-      tools: [
-        {
           type: 'function',
           name: 'weather',
           input: {},
@@ -1116,14 +1105,6 @@ test('below the options the provider`s key is read for a hint alone', () => {
 });
 
 test.each([
-  [
-    'a provider tool',
-    {
-      tools: [
-        { type: 'provider', provider: { openai: { type: 'web_search' } } },
-      ],
-    },
-  ],
   [
     'a tool option',
     {

@@ -160,7 +160,22 @@ export const fieldless = {
     said: 'a choice among only some of the tools',
     messages: 'meaning',
   },
-  'tool.custom': { said: 'a free-form custom tool', messages: 'meaning' },
+  'tool.custom': {
+    said: 'a free-form custom tool, sent as a tool that takes its text in one field',
+    messages: 'hint',
+  },
+  'tool.offered': {
+    said: 'a tool only another API runs',
+    chat: 'hint',
+    responses: 'hint',
+    messages: 'hint',
+  },
+  'tool.chosen': {
+    said: 'a tool only another API runs, which the tool choice names',
+    chat: 'meaning',
+    responses: 'meaning',
+    messages: 'meaning',
+  },
   'tool.cache': {
     said: 'a cache marker on a tool, a tool call or a tool result',
     chat: 'hint',

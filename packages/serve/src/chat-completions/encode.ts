@@ -10,6 +10,7 @@ import type { Codec } from '../codec.ts';
 import { carrying } from '../wire/carried.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given } from '../wire/json.ts';
+import { offered } from '../wire/offered.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
 import {
   asked,
@@ -19,7 +20,7 @@ import {
   switched,
 } from './dialect.ts';
 import { wireMessages } from './encode-messages.ts';
-import { addressed, hinted, own } from './family.ts';
+import { addressed, family, hinted, own } from './family.ts';
 import { toolFields, withUnread } from './unread.ts';
 
 function tool(left: Leaving, wanted: Tool): Dict {
@@ -150,14 +151,16 @@ export function encode(
   const custom = new Set(
     tools.flatMap((each) => (each.type === 'custom' ? [each.name] : [])),
   );
+  const shown = offered(left, family, tools, toolChoice).map((each) =>
+    tool(left, each),
+  );
   const body = {
     ...preset,
     // A hint first and an option after, so neither outranks a typed field.
     ...hints,
     ...provider,
     ...given({
-      tools:
-        tools.length === 0 ? undefined : tools.map((each) => tool(left, each)),
+      tools: shown.length === 0 ? undefined : shown,
       tool_choice:
         toolChoice === undefined ? undefined : choice(toolChoice, custom),
       parallel_tool_calls: options.parallelToolCalls,

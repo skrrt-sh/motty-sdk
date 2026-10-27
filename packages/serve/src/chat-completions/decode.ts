@@ -187,6 +187,7 @@ export function decode(body: Json): Decoded {
       ...(output === undefined ? {} : { output }),
     },
     stream: flagOf(stream, 'stream') === true,
+    formless,
     streamed: (events, id) =>
       streamed(formed(events, formless), {
         id,

@@ -2,10 +2,11 @@ import type { Json, Message } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { type Dict, dict, given } from '../wire/json.ts';
+import { offered } from '../wire/offered.ts';
 import { unsupported } from '../wire/refusals.ts';
 import { unsampled } from '../wire/taken.ts';
 import { blocksOf } from './blocks.ts';
-import { hinted, own } from './family.ts';
+import { family, hinted, own } from './family.ts';
 import { optionsTo } from './options.ts';
 import { unsaid } from './reasoning.ts';
 import { toolTo } from './tools.ts';
@@ -163,9 +164,12 @@ export function encode(
     defaults,
     takes && ((reasons) => takes(model, reasons)),
   );
-  const tools = (prompt.tools ?? []).flatMap(
-    (tool) => toolTo(left, tool) ?? [],
-  );
+  const tools = offered(
+    left,
+    family,
+    prompt.tools,
+    prompt.options?.toolChoice,
+  ).flatMap((tool) => toolTo(left, tool) ?? []);
   for (const { name } of prompt.messages) left.without('message.name', name);
   const system = systemTo(left, prompt.messages.slice(0, start));
   const turns = prompt.messages

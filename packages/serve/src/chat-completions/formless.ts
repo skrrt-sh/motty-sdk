@@ -1,4 +1,4 @@
-import type { Codec } from '../codec.ts';
+import type { Formless } from '../codec.ts';
 import { formlessIn } from '../wire/formless.ts';
 import { isDict } from '../wire/json.ts';
 import { api, hinted } from './family.ts';
@@ -8,7 +8,7 @@ const { answer, note } = formlessIn(api);
 
 // An assistant message of this API holds text, a refusal, calls for the
 // caller to answer, annotations with an address, sound, and pictures.
-export const formless: Codec['formless'] = (chunk) => {
+export const formless: Formless = (chunk) => {
   switch (chunk.type) {
     case 'file':
       return pictured(chunk) === undefined

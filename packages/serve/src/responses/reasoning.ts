@@ -1,8 +1,39 @@
-import type { Chunk, Json } from '@mottyjs/core/host';
-import { type Dict, list, text } from '../wire/json.ts';
+import type { Chunk, Json, ProviderData } from '@mottyjs/core/host';
+import {
+  copied,
+  type Dict,
+  dict,
+  isDict,
+  list,
+  parsed,
+  text,
+} from '../wire/json.ts';
 import { family } from './family.ts';
 import { field } from './fields.ts';
 import { ended, type Sent, thoughtItem, type Writing } from './output.ts';
+
+// What a model of another family goes on from its reasoning with is held
+// where this API's own is encrypted, as that family's data: the caller sends
+// the item back whole, and only that family reads it.
+export function unsealed(value: Json | undefined): Dict | undefined {
+  if (typeof value !== 'string' || !value.startsWith('{')) return undefined;
+  const data = parsed(value);
+  if (!isDict(data)) return undefined;
+  const entries = Object.entries(data);
+  return entries.length > 0 &&
+    entries.every(([key, fields]) => key !== family && isDict(fields))
+    ? data
+    : undefined;
+}
+
+function sealed(item: Dict, more: ProviderData): Dict {
+  const { encrypted_content: before } = item;
+  const held = unsealed(before) ?? {};
+  for (const [key, fields] of Object.entries(more)) {
+    held[key] = { ...dict(held[key]), ...dict(copied(fields)) };
+  }
+  return { ...item, encrypted_content: JSON.stringify(held) };
+}
 
 // A summary and the reasoning itself are two kinds of part of one item, each
 // with its own events and its own count.
@@ -14,6 +45,7 @@ export function thought(
     block?: number;
     piece?: number;
     item?: Dict;
+    carried?: ProviderData;
   },
 ): Sent[] {
   const sent: Sent[] = [];
@@ -41,6 +73,7 @@ export function thought(
     writing.open = now;
     sent.push(writing.added(thoughtItem(now)));
   } else if (from.item !== undefined) now.item = from.item;
+  if (from.carried !== undefined) now.item = sealed(now.item, from.carried);
   if (said === '') return sent;
   const { part } = from;
   const at = { item_id: now.id, output_index: now.index };

@@ -215,6 +215,21 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
     messages: [{ role: 'user', text: 'Hi' }],
     tools: [{ type: 'custom', name: 'shell' }],
   },
+  'tool.offered': {
+    messages: [{ role: 'user', text: 'Hi' }],
+    tools: [{ type: 'provider', provider: { gemini: { google_search: {} } } }],
+  },
+  'tool.chosen': {
+    messages: [{ role: 'user', text: 'Hi' }],
+    tools: [
+      {
+        type: 'provider',
+        name: 'search',
+        provider: { gemini: { google_search: {} } },
+      },
+    ],
+    options: { toolChoice: { tool: 'search' } },
+  },
   'tool.cache': {
     messages: [{ role: 'user', text: 'Hi' }],
     tools: [

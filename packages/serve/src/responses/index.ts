@@ -6,7 +6,6 @@ import { decode } from './decode.ts';
 import { encode } from './encode.ts';
 import { events } from './events.ts';
 import { family } from './family.ts';
-import { formless } from './formless.ts';
 
 // What an upstream takes beside what OpenAI's own does: a cache breakpoint
 // on input content, which most of OpenAI's own models refuse. A provider
@@ -23,7 +22,6 @@ export function responsesIn(
     error,
     encode: (model, prompt, defaults, takes) =>
       encode(model, prompt, defaults, upstream.breakpoints, takes),
-    formless,
     events: (messages, clean) =>
       events(messages, byProvider, upstream.cuts, clean),
     failure: (status, headers, body, clean) =>

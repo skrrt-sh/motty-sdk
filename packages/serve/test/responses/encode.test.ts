@@ -801,14 +801,6 @@ test('below the options the provider`s key is read for a hint alone', () => {
 
 test.each([
   [
-    'a tool',
-    {
-      tools: [
-        { type: 'provider', provider: { openai: { type: 'web_search' } } },
-      ],
-    },
-  ],
-  [
     'a tool option',
     {
       tools: [

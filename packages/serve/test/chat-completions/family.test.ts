@@ -17,7 +17,7 @@ test('this wire reads and writes under its own key alone', () => {
     detail: 'low',
   });
   expect(hinted({ 'openai.responses': { detail: 'low' } })).toEqual({});
-  expect(() => own({ 'openai.responses': {} }, 'an option')).toThrow(
+  expect(() => own({ 'openai.responses': { a: 1 } }, 'an option')).toThrow(
     'Chat Completions cannot carry an option of openai.responses',
   );
 });

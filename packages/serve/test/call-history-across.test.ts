@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { Unsupported } from '@mottyjs/core';
 import { chatCompletions, messages, responses } from '../src/index.ts';
 
 async function* sse(...sent: { type: string; [field: string]: unknown }[]) {
@@ -30,7 +29,7 @@ test.each([
     },
   ],
   [
-    'Chat Completions, with no namespace',
+    'Chat Completions, under a flat name',
     chatCompletions,
     {
       model: 'model-x',
@@ -43,7 +42,7 @@ test.each([
             {
               id: 'call_1',
               type: 'function',
-              function: { name: 'now', arguments: '{"city":"Oslo"}' },
+              function: { name: 'time__now', arguments: '{"city":"Oslo"}' },
             },
           ],
         },
@@ -54,7 +53,7 @@ test.each([
     },
   ],
   [
-    'Anthropic Messages, with no namespace',
+    'Anthropic Messages, under a flat name',
     messages,
     {
       max_tokens: 64000,
@@ -67,7 +66,7 @@ test.each([
             {
               type: 'tool_use',
               id: 'call_1',
-              name: 'now',
+              name: 'time__now',
               input: { city: 'Oslo' },
             },
           ],
@@ -193,7 +192,7 @@ test.each([
   },
 );
 
-test('a call with free text for input a Responses caller echoed is refused by Anthropic Messages', () => {
+test('a call with free text for input a Responses caller echoed goes on to Anthropic Messages as the one field of an object', () => {
   const { request } = responses.decode(
     {
       model: 'coder',
@@ -211,13 +210,30 @@ test('a call with free text for input a Responses caller echoed is refused by An
     new Headers(),
   );
 
-  expect(() =>
-    messages.encode('model-x', { messages: request.messages }),
-  ).toThrow(
-    new Unsupported(
-      'Anthropic Messages cannot carry a tool call whose input is free text',
-    ),
-  );
+  expect(
+    messages.encode('model-x', { messages: request.messages }).body,
+  ).toMatchObject({
+    messages: [
+      { role: 'user', content: 'List the files.' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'call_2',
+            name: 'shell',
+            input: { input: 'ls -la' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'call_2', content: 'a.txt' },
+        ],
+      },
+    ],
+  });
 });
 
 test.each([

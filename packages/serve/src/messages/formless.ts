@@ -1,17 +1,17 @@
-import type { Codec } from '../codec.ts';
+import type { Formless } from '../codec.ts';
 import { apis } from '../wire/fieldless.ts';
 import { formlessIn } from '../wire/formless.ts';
 import { hinted } from './family.ts';
 
 const { answer, note } = formlessIn(apis.messages);
 
-function own(chunk: Parameters<Codec['formless']>[0]): boolean {
+function own(chunk: Parameters<Formless>[0]): boolean {
   return Object.keys(hinted(chunk.provider)).length > 0;
 }
 
 // An assistant message of this API holds text, thinking, calls, and blocks
 // this API wrote itself: a tool's result and a citation are among those.
-export const formless: Codec['formless'] = (chunk) => {
+export const formless: Formless = (chunk) => {
   switch (chunk.type) {
     case 'file':
       return answer('file', 'a file the model made');

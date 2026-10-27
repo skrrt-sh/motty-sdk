@@ -1,4 +1,10 @@
-import type { Json, JsonOutput, Message, Options } from '@mottyjs/core/host';
+import type {
+  Chunk,
+  Json,
+  JsonOutput,
+  Message,
+  Options,
+} from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
 import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
@@ -7,6 +13,7 @@ import {
   given as defined,
   dict,
   isDict,
+  list,
   text,
   without,
 } from '../wire/json.ts';
@@ -18,8 +25,9 @@ import { family, marked, noted } from './family.ts';
 import { field } from './fields.ts';
 import { formless } from './formless.ts';
 import { messagesOf } from './messages.ts';
+import { foundIn, spacesOf } from './namespaces.ts';
 import { collected, streamed } from './response.ts';
-import { choiceOf, toolOf } from './tools.ts';
+import { choiceOf, clientNames, toolOf } from './tools.ts';
 
 function given(body: Dict, key: string): Json | undefined {
   const { [key]: value } = body;
@@ -112,6 +120,7 @@ function optionsOf(body: Dict): Options {
   if (user !== undefined) options.user = user;
   // What may be left out when another family answers, then what may not.
   const dropped = [
+    'client_metadata',
     'include',
     'metadata',
     'prompt_cache_key',
@@ -172,6 +181,24 @@ function led(instructions: Json | undefined): Message[] {
   ];
 }
 
+function cached(message: Message): boolean {
+  if (message.cache !== undefined) return true;
+  return (message.parts ?? []).some(
+    (part) => part.type !== 'provider' && part.cache !== undefined,
+  );
+}
+
+// A caller who keys its cache asks for one, and an upstream that caches only
+// where it is told is told so at the end of the conversation, as a marker
+// the author sees and may move. One the caller placed itself says where.
+function keyed(messages: Message[], key: Json | undefined): Message[] {
+  const last = messages.at(-1);
+  if (key === undefined || last === undefined || messages.some(cached)) {
+    return messages;
+  }
+  return [...messages.slice(0, -1), { ...last, cache: {} }];
+}
+
 export function decode(body: Json): Decoded {
   if (!isDict(body)) {
     invalid('The body must be a JSON object');
@@ -187,8 +214,10 @@ export function decode(body: Json): Decoded {
     invalid('tools must be a list');
   }
   refused(body);
-  const tools = (listed ?? []).map((tool, index) =>
-    toolOf(tool, `tools[${index}]`),
+  const { tools, spaced, named } = spacesOf(
+    listed ?? [],
+    foundIn(field(body, 'input')),
+    toolOf,
   );
   const options = optionsOf(body);
   const output = outputOf(field(given(body, 'text'), 'format'));
@@ -197,21 +226,31 @@ export function decode(body: Json): Decoded {
     // A caller who gets no reasoning from a model gets no progress either.
     muted: options.reasoning?.exclude === true || !('reasoning' in options),
     custom: customNames(tools),
+    spaced,
+    clients: clientNames(tools),
+    encrypted: list(given(body, 'include')).includes(
+      'reasoning.encrypted_content',
+    ),
   };
+  const shaped = (chunk: Chunk) => formless(chunk, asked.encrypted);
   return {
     request: {
       model,
-      messages: [
-        ...led(given(body, 'instructions')),
-        ...messagesOf(field(body, 'input')),
-      ],
+      messages: keyed(
+        [
+          ...led(given(body, 'instructions')),
+          ...messagesOf(field(body, 'input'), named),
+        ],
+        given(body, 'prompt_cache_key'),
+      ),
       tools,
       options,
       ...(output === undefined ? {} : { output }),
     },
     stream: stream === true,
-    streamed: (events, id) => streamed(asked, formed(events, formless), id),
+    formless: shaped,
+    streamed: (events, id) => streamed(asked, formed(events, shaped), id),
     collected: (events, finish, id) =>
-      collected(asked, formedWhole(events, formless), finish, id),
+      collected(asked, formedWhole(events, shaped), finish, id),
   };
 }

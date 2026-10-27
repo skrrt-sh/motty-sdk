@@ -139,7 +139,7 @@ export function chat(upstream: Upstream): ModelAdapter {
       try {
         // The body is the call's to end, so leaving the stream cancels none.
         const stream = parsed(body.values({ preventCancel: true }));
-        for await (const event of codec.events(stream, clean)) {
+        for await (const event of codec.events(stream, clean, prompt.tools)) {
           ended = event.type === 'finish' || event.type === 'error';
           if (ended) signal.removeEventListener('abort', stop);
           // What the prompt lost on its way out is said where the call ends,

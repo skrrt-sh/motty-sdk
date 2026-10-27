@@ -21,9 +21,9 @@ test('the other API of one provider is another wire', () => {
   expect(hinted({ openai: { a: 1 }, 'openai.responses': { b: 1 } })).toEqual(
     {},
   );
-  expect(() => own({ 'openai.responses': {} }, 'an option')).toThrow(
-    Unsupported,
-  );
+  expect(() =>
+    own({ 'openai.responses': { truncation: 'auto' } }, 'an option'),
+  ).toThrow(Unsupported);
 });
 
 test('what is read is a copy the body may hold', () => {
@@ -43,8 +43,8 @@ test('a map with no entry for this wire fails the call', () => {
     own({ anthropic: { thinking: { type: 'enabled' } } }, 'an option'),
   ).toThrow(Unsupported);
   expect(() =>
-    own({ anthropic: {}, 'openai.responses': {} }, 'an option'),
-  ).toThrow('Chat Completions cannot carry an option of anthropic');
+    own({ anthropic: {}, 'openai.responses': { a: 1 } }, 'an option'),
+  ).toThrow('Chat Completions cannot carry an option of openai.responses: a');
 });
 
 test('a refusal names the fields that cannot be carried, never what they hold', () => {
@@ -70,14 +70,16 @@ test('a refusal names the fields that cannot be carried, never what they hold', 
   );
 });
 
-test.each([[{ anthropic: {} }], [{ anthropic: 'not an object' }]])(
-  'a refusal of an entry with no field names the family alone',
-  (data) => {
-    expect(() => own(data, 'an option')).toThrow(
-      new Unsupported('Chat Completions cannot carry an option of anthropic'),
-    );
-  },
-);
+test('a refusal of an entry with no field names the family alone', () => {
+  expect(() => own({ anthropic: 'not an object' }, 'an option')).toThrow(
+    new Unsupported('Chat Completions cannot carry an option of anthropic'),
+  );
+});
+
+test('an empty entry for another wire carries nothing and fails no call', () => {
+  expect(own({ 'openai.responses': {} }, 'options')).toEqual({});
+  expect(own({ anthropic: {}, 'openai.responses': [] }, 'a part')).toEqual({});
+});
 
 test('a refusal names five fields and counts the rest', () => {
   expect(() =>
@@ -191,11 +193,16 @@ test('the provider`s entry, even an empty one, is an entry for this API`s option
     }).provider,
   ).toEqual({});
   expect(() =>
-    chat.addressed({ provider: { 'openai.responses': {} } }),
-  ).toThrow('Chat Completions cannot carry an option of openai.responses');
-  expect(() => chat.addressed({ provider: { anthropic: {} } })).toThrow(
-    Unsupported,
+    chat.addressed({
+      provider: { 'openai.responses': { truncation: 'auto' } },
+    }),
+  ).toThrow(
+    'Chat Completions cannot carry an option of openai.responses: truncation',
   );
+  expect(
+    chat.addressed({ provider: { 'openai.responses': {}, anthropic: {} } })
+      .provider,
+  ).toEqual({});
 });
 
 test('below the options the provider`s entry is no entry: its APIs share no shape there', () => {

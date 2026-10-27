@@ -194,20 +194,39 @@ test("signed reasoning's own fields are never replaced by what rides with it", (
   ).toEqual([{ type: 'thinking', thinking: 'Step one.', signature: 'EqQB' }]);
 });
 
-test.each([
-  ['*** Begin Patch', 'free text'],
-  [[1], 'not an object'],
-  [null, 'not an object'],
-])('a tool call whose input is %j fails the call', (input, cause) => {
-  expect(() =>
+test.each([[[1]], [null]])(
+  'a tool call whose input is %j fails the call',
+  (input) => {
+    expect(() =>
+      blocksOf(leaving('messages'), [
+        { type: 'tool_call', id: 'call_1', name: 'apply_patch', input },
+      ]),
+    ).toThrow(
+      new Unsupported(
+        'Anthropic Messages cannot carry a tool call whose input is not an object',
+      ),
+    );
+  },
+);
+
+test('a tool call whose input is free text is sent as the one field of an object', () => {
+  expect(
     blocksOf(leaving('messages'), [
-      { type: 'tool_call', id: 'call_1', name: 'apply_patch', input },
+      {
+        type: 'tool_call',
+        id: 'call_1',
+        name: 'apply_patch',
+        input: '*** Begin Patch',
+      },
     ]),
-  ).toThrow(
-    new Unsupported(
-      `Anthropic Messages cannot carry a tool call whose input is ${cause}`,
-    ),
-  );
+  ).toEqual([
+    {
+      type: 'tool_use',
+      id: 'call_1',
+      name: 'apply_patch',
+      input: { input: '*** Begin Patch' },
+    },
+  ]);
 });
 
 test('a tool call and its result are written back', () => {
