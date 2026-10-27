@@ -1383,6 +1383,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   so no prompt with provider options could be given to a `fallback` across families. Rejected:
   one map, where an adapter had to know every family's vocabulary to tell them apart, and a
   flat map of unknown options, which reached whatever upstream the request was routed to.
+- **An empty entry for another family carries nothing and fails no call.** Only an entry that
+  says something is refused. Cause: an author who deleted a caller's fields from the entry for
+  its own family left `{}` behind, and an upstream of another family still refused the request.
 - **A provider with two APIs has one more key, which both read.** `openai` is read beside
   `openai.chat` and `openai.responses` in a request's options, and for a hint on a message or
   a part: the entry an upstream is sent is the shared one merged with its API's own, and
@@ -1404,6 +1407,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   field under an API's own key is the author addressing that API, sent unchecked; a caller's
   unknown fields are still decoded under the key of the API it spoke. Cause: every comparable
   SDK that shares one key drops such a field silently.
+- **What a Responses caller sends only to observe its request is a hint:** `metadata`,
+  `client_metadata`, the cache key and the safety identifier among others, left out by another
+  family. Cause: Codex sends `client_metadata` on every request, and as provider data it made an
+  Anthropic upstream refuse the first one.
 - **Across families the common set is translated:** messages, tools and tool choice, structured
   output, reasoning effort, stop, max tokens, sampling, finish reason, usage.
 - **Nothing that changes the meaning is dropped.** It fails that call with `Unsupported`, so
@@ -1521,6 +1528,21 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   400 to `prompt_cache_breakpoint`, so a hint failed the call, and they cache by themselves.
   Rejected: writing it always, which is that; never, which lost explicit caching through a router
   that honours it.
+- **A Responses caller that keys its cache and marks none asks for a marker on the last
+  message.** The decoder puts the neutral marker there, so an upstream that caches only where it
+  is told, as Anthropic does, is told, and the author sees the marker and may move or remove it.
+  One marker is within Anthropic's limit of four. A request that sends the Responses API's own
+  key is cached by it, so a marker left out of it is not reported. Cause: Codex sends
+  `prompt_cache_key` on every turn and no marker, so every turn to Claude paid its 13,000 tokens
+  of prompt again, and with one marker live, 98 of each 100 were read from the cache. Rejected:
+  the Anthropic encoder reading the key, a hint of another family, which the author could not see
+  or change; a marker on the system prompt alone, which leaves the conversation uncached.
+- **What a `cache_control` says beside its kind and lifetime is a hint of the Messages
+  family.** A `scope` or a field named later reaches an Anthropic upstream under the marker it
+  came with, and another family leaves it out. A marker taken away takes it along. Cause: it was
+  dropped as it was read, so an Anthropic caller relayed to an Anthropic upstream lost it.
+  Rejected: provider data, which would make a request with such a marker fail on every other
+  family.
 - **A router's `cache_control` on a Chat Completions content part is the neutral cache marker,**
   lifetime included, as the API's own breakpoint is. Cause: it was kept as a hint of that API, so
   it reached no Anthropic upstream and nothing said so.
@@ -1561,9 +1583,16 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   custom is written as custom, and one echoed in a caller's history with text for input goes
   back as custom, with no tool list consulted. Cause: Codex declares its tools inside an input
   item for some models, so the request named no custom tool, and its shell call came back as a
-  function call and went up again with its input quoted as JSON. Towards Anthropic Messages,
-  which takes only an object, such a call is refused. Cause: it was written there as a string,
-  which that API rejects.
+  function call and went up again with its input quoted as JSON.
+- **A free-form custom tool goes to Anthropic Messages as a tool that takes its text in one
+  field,** `input`, its grammar told in its description, and the request reports it. A call to
+  it is read back to its text whole, at the end of its block, and a call echoed in history goes
+  back wrapped in the same object. So the reader of a reply is told the tools the request was
+  sent with. Cause: Codex declares `apply_patch` as a grammar tool for every model of its
+  catalog, so no request of it reached Claude. Rejected: refusing the tool, which ended every
+  such session on its first request; writing the call's JSON as its text, which Codex read as a
+  patch that did not begin with its first line; streaming the text as it comes, which would
+  stream the wrapper.
 - **What an upstream says of a tool call beyond what a codec reads reaches the caller, and what
   the caller echoes of it goes back.** On the way down it rides on the call's chunk as its
   family's own; in a caller's history it is a hint, so an upstream of the same family is sent
@@ -1574,6 +1603,23 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   put on a call was lost the same way on Chat Completions, and the next turn refused.
   Rejected: an echoed call's fields as what changes the meaning, with which a conversation
   begun on one family failed on its first turn with another.
+- **A tool in a Responses namespace is a tool of its own to every other family,** named
+  `namespace__name`. A name another tool has, or one Anthropic or Chat Completions would refuse,
+  is made apart by a hash, and is the same on every turn. A call under that name reaches the
+  Responses caller with its namespace and its own name, and a call echoed in history goes on
+  under the name its tool has. To a Responses upstream the namespace is sent as it came. Cause:
+  Codex declares each MCP server and its subagent tools as a namespace, which every other family
+  refused, and a call with no namespace Codex answers as unsupported. Rejected: a namespace on
+  the neutral tool, a field of the core for what one API has.
+- **A tool of a type of its own that the caller runs is a function to another family.** Codex's
+  `tool_search` runs on the client and has parameters, so it goes elsewhere as a function named
+  for its type, and the call comes back as a `tool_search_call` with its arguments as an object,
+  written whole. The tools a search found are declared from then on, from the output the caller
+  echoes, and told to the model by the names it calls them by. A Responses upstream is sent the
+  items as they came and none of the found tools, which it holds itself. Cause: for a model of
+  its catalog Codex declares its MCP and subagent tools only through the search, so with the
+  search left out no MCP tool and no subagent could be reached. Rejected: leaving the search
+  out as a tool only another API runs, which live reached no MCP tool.
 - **A `tool_call` chunk may say that its call has ended, and a Responses caller is written the
   call done then, otherwise when the reply ends.** A reader says so only where the upstream
   showed the call whole, so an item marked incomplete, or the last block of an Anthropic
@@ -1669,10 +1715,21 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **What a model goes on from its reasoning with is not the answer.** A signature, an encrypted
   reasoning item and redacted thinking reach a caller of the same family unchanged. To a caller
   whose API has no form for them they are left out and reported as a warning, whole and streamed
-  alike. So a tool loop from a caller of one family to a model of another loses the model's
-  reasoning between turns, and the report says so each time. Cause: one kind of data was treated
-  three ways, two dropped silently and one failing the reply. Rejected: failing the reply, which
-  threw away a complete answer over data the caller could not have used.
+  alike. Cause: one kind of data was treated three ways, two dropped silently and one failing the
+  reply. Rejected: failing the reply, which threw away a complete answer over data the caller
+  could not have used.
+- **A Responses caller that includes encrypted reasoning is given another family's in it.** What
+  the model goes on from is written in the item's `encrypted_content` as that family's own data,
+  keyed by the family, and read back from the item the caller echoes, so a Claude model's thinking
+  goes back to it signed. Such an item is never sent to a Responses upstream. Which chunks a reply
+  has no form for depends on what the caller asked, so it is said by the decoded request. Cause:
+  Codex asks for the content and echoes the item, and every turn of it to Claude dropped the
+  model's thinking. Rejected: an opaque encoding of our own, which a reader could not tell from
+  OpenAI's.
+- **Thinking signed before a search found more tools goes back as its text alone, and is
+  reported.** Anthropic binds a signature to the tool list it was made with, and the found tools
+  change that list. Cause: the first turn after a search failed live on that check. Rejected:
+  Anthropic's beta setting that drops such a block upstream, unasked and unreported.
 - **Reasoning is written to Responses as a summary,** whole and streamed alike, whichever API the
   model answered in. Thinking from Anthropic Messages is a summary that API made. A Responses
   upstream's own item is passed on as it came. Cause: written
@@ -1680,6 +1737,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   own API writes only summaries, and those are what clients read. Rejected: content for a
   model's own words from Chat Completions, the more exact name, which most clients never show
   to a caller who asked to see reasoning.
+- **A tool only another API runs is offered, not required.** Towards an API that cannot carry
+  it, it is left out and reported, since a model never shown a tool cannot call it. A tool choice
+  that names it requires it, and fails the call as before. Cause: Codex declares OpenAI's web
+  search on every request, and every request of it to Claude failed. Rejected: refusing the
+  request, which is that.
 - **A reply's content is classed as a request's is.** What fails a call when sent to an upstream
   of another API ends a reply to a caller of another API: a hosted tool call, a provider part.
 - **The codec writes the honest reply; the edge tells the request.** The edge stops the request

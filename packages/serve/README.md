@@ -112,6 +112,22 @@ name sharing a storage keep apart when each is given its own namespace. `report`
 A caller of the Responses API through the AI SDK sets `providerOptions.openai.store` to `false`,
 since a motty holds no Responses state on the server and refuses an `item_reference`.
 
+Claude Code traffic through a motty with an Anthropic upstream is billed to the host's key as
+Claude Code usage. An Anthropic key that is refused for interactive Claude Code works when the
+harness is started with `CLAUDE_CODE_ENTRYPOINT=sdk-cli`.
+
+Codex reaches a motty whose upstream is not OpenAI through a provider of its own that speaks the
+Responses API, in its `config.toml`:
+
+```toml
+model = "gpt-5.5"
+model_provider = "motty"
+[model_providers.motty]
+base_url = "http://127.0.0.1:3000/v1"
+wire_api = "responses"
+env_key = "MOTTY_KEY"
+```
+
 The SDK as a whole is described in the
 [root README](https://github.com/skrrt-sh/motty-sdk#readme), and the reasons behind its design in
 [ARCHITECTURE.md](https://github.com/skrrt-sh/motty-sdk/blob/main/ARCHITECTURE.md).

@@ -105,6 +105,8 @@ bun examples/fleet/src/serve.ts
 
 Claude Code needs only the address and a key that is no key. The `ANTHROPIC_API_KEY` here is for
 the agent, which will not start without one, and the host never reads it.
+Do not map `ANTHROPIC_DEFAULT_HAIKU_MODEL` to `fleet`, or Claude Code's side queries go to the
+lead's model.
 
 ```sh
 ANTHROPIC_BASE_URL=http://localhost:3000 ANTHROPIC_API_KEY=not-a-key \
