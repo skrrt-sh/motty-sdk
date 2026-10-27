@@ -43,18 +43,27 @@ async function received(
   arrived: () => void,
   from: FromHost,
 ) {
-  const body = await bodyOf(codec, request, bounds);
-  if (body instanceof Response) return body;
-  arrived();
-  const decoded = codec.decode(body, request.headers);
-  const leftOut = new Map<string, LeftOut>();
-  let reported: string | undefined;
+  // In flight from here, so that a shutdown waits for a body still on its
+  // way. A request refused before it was let in has no record: it lands at
+  // once, or once the report of what the host's auth threw is delivered.
+  const flight = begin();
   const told = toldBy(from);
-  // A request refused here was never in flight, so a report of it is the
-  // host's to wait for. The record comes only once the motty has run, and
-  // the flight has begun by then.
-  let { delivered } = told;
+  let reported: string | undefined;
+  let refusal = Promise.resolve();
+  let delivered = (work: Promise<void>): void => {
+    refusal = work;
+    told.delivered(work);
+  };
+  const refused = (reply: Response): Response => {
+    flight.land(refusal);
+    return reply;
+  };
   try {
+    const body = await bodyOf(codec, request, bounds, flight.stopped);
+    if (body instanceof Response) return refused(body);
+    arrived();
+    const decoded = codec.decode(body, request.headers);
+    const leftOut = new Map<string, LeftOut>();
     const admitted = await admit({
       ...told,
       request: decoded.request,
@@ -68,12 +77,15 @@ async function received(
         reported = id;
       },
     });
-    const flight = begin(admitted.stop);
     delivered = flight.land;
     told.delivered(flight.over);
+    const { stopped } = flight;
+    const stop = () => admitted.stop(stopped.reason);
+    if (stopped.aborted) stop();
+    else stopped.addEventListener('abort', stop);
     return { decoded, leftOut, ...admitted };
   } catch (thrown) {
-    return failed(codec, thrown, reported);
+    return refused(failed(codec, thrown, reported));
   }
 }
 
@@ -86,9 +98,7 @@ export async function chat(
   arrived: () => void,
   from: FromHost,
 ): Promise<Response> {
-  const asked = await received(serving, codec, request, arrived, from).catch(
-    (thrown: unknown) => failed(codec, thrown),
-  );
+  const asked = await received(serving, codec, request, arrived, from);
   if (asked instanceof Response) return asked;
   const { decoded, stop } = asked;
   const { id } = asked.request;

@@ -456,6 +456,179 @@ test('shutdown gives up on a record whose delivery outlasts the wait', async () 
   expect(performance.now() - began).toBeLessThan(2_000);
 });
 
+// A chat request whose body has not all come yet, and the end of that body.
+function arriving(): { request: Request; rest: () => void } {
+  const encoder = new TextEncoder();
+  const [head, tail] = [
+    '{"model":"coder","messages":[{"role":"user",',
+    '"content":"Why does this deadlock?"}]}',
+  ];
+  let sending: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const request = new Request('http://motty.test/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        sending = controller;
+        controller.enqueue(encoder.encode(head));
+      },
+    }),
+  });
+  return {
+    request,
+    rest: () => {
+      sending?.enqueue(encoder.encode(tail));
+      sending?.close();
+    },
+  };
+}
+
+test('a request whose body is still arriving when shutdown begins is waited for, and answered once its body is in', async () => {
+  const reports: Report[] = [];
+  const works: Promise<unknown>[] = [];
+  const served = mount(coder, () => ({
+    models: [fake(on(gpt, 'Use a mutex.'))],
+    report: (report) => reports.push(report),
+  }));
+  const { request, rest } = arriving();
+  const replying = served.fetch(request, undefined, {
+    waitUntil: (work) => works.push(work),
+  });
+  await Bun.sleep(10);
+
+  let stopped = false;
+  const stopping = served.close().then(() => {
+    stopped = true;
+  });
+  await Bun.sleep(30);
+  expect(stopped).toBe(false);
+
+  rest();
+  const reply = await replying;
+  expect(reply.status).toBe(200);
+  expect(await reply.json()).toMatchObject({
+    choices: [{ message: { content: 'Use a mutex.' } }],
+  });
+  await stopping;
+  expect(reports).toMatchObject([{ outcome: 'completed' }]);
+  expect(works).toHaveLength(1);
+});
+
+test('a body still arriving when the drain is over is cut with the shutdown refusal, and nothing is reported or handed over', async () => {
+  const reports: Report[] = [];
+  const works: Promise<unknown>[] = [];
+  const served = mount(
+    coder,
+    () => ({
+      models: [fake(on(gpt, 'Use a mutex.'))],
+      report: (report) => reports.push(report),
+    }),
+    { drain: 40 },
+  );
+  const replying = served.fetch(arriving().request, undefined, {
+    waitUntil: (work) => works.push(work),
+  });
+  await Bun.sleep(10);
+
+  const began = performance.now();
+  await served.close();
+  expect(performance.now() - began).toBeLessThan(1_000);
+
+  const reply = await replying;
+  expect(reply.status).toBe(503);
+  expect(reply.headers.get('connection')).toBe('close');
+  expect(await reply.json()).toMatchObject({
+    error: {
+      code: 'server_is_overloaded',
+      message: 'The server is shutting down',
+    },
+  });
+  expect(reports).toEqual([]);
+  expect(works).toEqual([]);
+});
+
+test('a request still being let in when the drain is over is stopped with the shutdown refusal, and its record says so', async () => {
+  const verified = Promise.withResolvers<void>();
+  const reports: Report[] = [];
+  const served = mount(
+    motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
+    () => ({
+      auth: {
+        verify: async (token) => {
+          await verified.promise;
+          return { id: token };
+        },
+      },
+      report: (report) => reports.push(report),
+    }),
+    { drain: 40 },
+  );
+  const replying = served.fetch(
+    new Request('http://motty.test/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer sk-ada',
+      },
+      body: JSON.stringify({
+        model: 'coder',
+        messages: [{ role: 'user', content: 'Why does this deadlock?' }],
+      }),
+    }),
+  );
+  await Bun.sleep(10);
+
+  const began = performance.now();
+  const stopping = served.close();
+  await Bun.sleep(80);
+  verified.resolve();
+  await stopping;
+  expect(performance.now() - began).toBeLessThan(1_000);
+
+  const reply = await replying;
+  expect(reply.status).toBe(503);
+  expect(await reply.json()).toMatchObject({
+    error: { message: 'The server is shutting down' },
+  });
+  expect(reports).toMatchObject([
+    { outcome: 'aborted', error: { code: 'overloaded' } },
+  ]);
+});
+
+test('shutdown waits for the report of a request the auth adapter failed on', async () => {
+  const order: string[] = [];
+  const served = mount(coder, () => ({
+    auth: {
+      verify: () => {
+        throw new Error('The key server timed out');
+      },
+    },
+    report: async () => {
+      await Bun.sleep(40);
+      order.push('delivered');
+    },
+  }));
+
+  const reply = await served.fetch(
+    new Request('http://motty.test/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer sk-ada',
+      },
+      body: JSON.stringify({
+        model: 'coder',
+        messages: [{ role: 'user', content: 'Why does this deadlock?' }],
+      }),
+    }),
+  );
+  expect(reply.status).toBe(500);
+  await served.close();
+  order.push('stopped');
+
+  expect(order).toEqual(['delivered', 'stopped']);
+});
+
 test("the host is handed the delivery of a request's record, which settles only once an async report has", async () => {
   const sent = Promise.withResolvers<void>();
   const order: string[] = [];
