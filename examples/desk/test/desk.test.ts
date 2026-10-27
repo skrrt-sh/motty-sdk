@@ -100,6 +100,23 @@ describe("routes", () => {
     expect(models.sent(gemini)[0]?.messages.at(-1)?.parts).toContainEqual(attachment);
   });
 
+  test("a picture sent without words is read, not asked for again", async () => {
+    const models = fake(on(gemini, "The receipt shows one charge."));
+
+    const { path, answer } = await run(
+      desk,
+      {
+        messages: [
+          { role: "user", parts: [{ type: "image", url: "https://example.com/receipt.png" }] },
+        ],
+      },
+      { models: [models] },
+    );
+
+    expect(path).toEqual(["conversation", "attachment"]);
+    expect(await answer.text()).toBe("The receipt shows one charge.");
+  });
+
   test("a voice message is refused in the desk's own words", async () => {
     const models = fake(on(jev, { abuse: 0.01, category: { other: 1 }, urgency: 0 }));
 

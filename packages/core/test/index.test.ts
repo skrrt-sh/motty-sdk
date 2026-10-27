@@ -29,6 +29,7 @@ test('the author entry exports exactly the held values', () => {
     'race',
     'reroute',
     'retry',
+    'said',
     'think',
     'timeout',
   ]);

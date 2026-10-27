@@ -568,6 +568,17 @@ describe("gates", () => {
     expect(calls).toEqual([]);
   });
 
+  test("a greeting sent as parts, as the Responses and Messages APIs send it, is answered by hand", async () => {
+    const { answer, calls } = await run(council, {
+      messages: [{ role: "user", parts: [{ type: "text", text: "Hello!" }] }],
+    });
+
+    expect(await answer.text()).toBe(
+      "Hello. Ask me something hard and I will put it to the council.",
+    );
+    expect(calls).toEqual([]);
+  });
+
   test("a request with tools is refused", async () => {
     const asked = run(council, {
       text: "What is the capital of Australia?",

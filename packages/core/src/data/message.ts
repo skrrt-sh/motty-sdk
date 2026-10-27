@@ -220,6 +220,24 @@ export type ChatRequest = Closed<{
   output?: JsonOutput;
 }> & { readonly headers: Headers };
 
+// A coding agent puts its own notes in text parts ahead of the user's words, so a message
+// says its last text part. Only the fields read are typed: checking a request's read-only
+// message against `Message` cost the type-check far more than the function itself.
+export function said(
+  message:
+    | {
+        text?: string;
+        parts?: readonly { type: Part['type']; text?: string }[];
+      }
+    | undefined,
+): string {
+  return (
+    message?.text ??
+    message?.parts?.findLast((part) => part.type === 'text')?.text ??
+    ''
+  );
+}
+
 // A function holds keys as an object does: some validator libraries make
 // their schemas callable.
 export function keyed(value: unknown): value is object {

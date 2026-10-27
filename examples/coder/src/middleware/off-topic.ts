@@ -1,4 +1,4 @@
-import { answer, motty, type ChatRequest } from "@mottyjs/core";
+import { answer, motty, said, type ChatRequest } from "@mottyjs/core";
 import { noul } from "@mottyjs/decision";
 import { jev } from "../models";
 import { tuning } from "../settings";
@@ -10,7 +10,7 @@ const REPLY = "I only answer questions about software and codebases.";
 const openingOf = ({ messages }: ChatRequest) =>
   messages.some((message) => message.role === "assistant")
     ? undefined
-    : messages.findLast((message) => message.role === "user")?.text;
+    : said(messages.findLast((message) => message.role === "user"));
 
 async function isOnTopic(opening: string, onTopicProbability: number): Promise<boolean> {
   try {

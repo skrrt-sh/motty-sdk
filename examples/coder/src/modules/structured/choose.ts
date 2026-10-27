@@ -1,4 +1,4 @@
-import type { ChatRequest } from "@mottyjs/core";
+import { said, type ChatRequest } from "@mottyjs/core";
 import { noul } from "@mottyjs/decision";
 import { jev } from "../../models";
 import type { Tuning } from "../../settings";
@@ -9,7 +9,7 @@ export async function sizeOf(
   request: ChatRequest,
   { smallProbability }: Tuning["structured"],
 ): Promise<"small" | "strong"> {
-  const question = request.messages.findLast((message) => message.role === "user")?.text;
+  const question = said(request.messages.findLast((message) => message.role === "user"));
   try {
     const { small } = await jev.decide(
       { schema: request.output, question },

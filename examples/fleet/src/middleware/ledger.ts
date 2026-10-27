@@ -1,4 +1,4 @@
-import { motty, type Message } from "@mottyjs/core";
+import { motty, said } from "@mottyjs/core";
 import { store } from "@mottyjs/store";
 import { z } from "zod";
 import { seat } from "./seat";
@@ -47,12 +47,6 @@ export async function rows() {
   );
   return found.flat(2);
 }
-
-// An agent puts its own notes ahead of what it was asked, so the last text is the task
-const said = (message: Message | undefined) =>
-  message?.text ??
-  message?.parts?.flatMap((part) => (part.type === "text" ? [part.text] : [])).at(-1) ??
-  "";
 
 // A seat is numbered the first time it is seen, so the board can list what it cannot search for
 export const ledger = motty({ name: "ledger" })

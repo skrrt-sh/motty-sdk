@@ -14,6 +14,7 @@ import type {
   Tool,
   ToolChoice,
 } from '../../src/data/message.ts';
+import { said } from '../../src/data/message.ts';
 
 function request(): ChatRequest {
   return {
@@ -654,4 +655,47 @@ test('a prompt takes a Standard Schema inside the object form, and what crosses 
   };
 
   expect([stated, crossing]).toHaveLength(2);
+});
+
+test("a request's message sent as text says that text", () => {
+  expect(said(request().messages.at(-1))).toBe('Why does this deadlock?');
+});
+
+test("a message sent as parts says its last text part, past an agent's notes ahead of it", () => {
+  const message: Message = {
+    role: 'user',
+    parts: [
+      {
+        type: 'text',
+        text: '<system-reminder>Keep it short</system-reminder>',
+      },
+      { type: 'text', text: 'Why does this deadlock?' },
+    ],
+  };
+
+  expect(said(message)).toBe('Why does this deadlock?');
+});
+
+test('reasoning, refusals, tool results and media are not what a message says', () => {
+  const message: Message = {
+    role: 'user',
+    parts: [
+      { type: 'reasoning', text: 'The user wants a fix' },
+      { type: 'text', text: 'See the diff' },
+      { type: 'image', url: 'https://example.com/diff.png' },
+      { type: 'tool_result', id: 'call_1', text: 'fn main() {}' },
+      { type: 'refusal', text: 'I cannot help with that' },
+    ],
+  };
+
+  expect(said(message)).toBe('See the diff');
+});
+
+test('a message with no text parts, or no message, says nothing', () => {
+  const message: Message = {
+    role: 'user',
+    parts: [{ type: 'tool_result', id: 'call_1', text: 'fn main() {}' }],
+  };
+
+  expect([said(message), said(undefined)]).toEqual(['', '']);
 });

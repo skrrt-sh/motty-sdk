@@ -1,4 +1,4 @@
-import { think, type ChatRequest } from "@mottyjs/core";
+import { said, think, type ChatRequest } from "@mottyjs/core";
 import { choice } from "@mottyjs/decision";
 import { store } from "@mottyjs/store";
 import { jev } from "../../models";
@@ -41,8 +41,9 @@ function tierKey(request: ChatRequest): string | undefined {
   return conversation ? `tier:${conversation}` : undefined;
 }
 
+// A user turn that holds only a tool's result is the agent's, and says nothing of the question
 function questionOf({ messages }: ChatRequest): string {
-  return messages.findLast((message) => message.role === "user")?.text ?? "";
+  return said(messages.findLast((message) => message.role === "user" && said(message) !== ""));
 }
 
 function obviousTier(
