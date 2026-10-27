@@ -334,6 +334,61 @@ test('a caller the host gives is the caller, and the adapter is not asked', asyn
   expect(tokens).toEqual([]);
 });
 
+test('a caller the adapter answers with an empty id is no caller, and the next credential header is tried', async () => {
+  const tokens: string[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        tokens.push(token);
+        return { id: token === 'sk-ada' ? 'ada' : '' };
+      },
+    },
+  });
+
+  const signed = await admit(
+    asked({ 'x-api-key': 'sk-blank', authorization: 'Bearer sk-ada' }),
+  );
+  const blank = await admit(asked({ 'x-api-key': 'sk-blank' }));
+  const unasked = await admit({
+    headers: new Headers({ 'x-api-key': 'sk-blank' }),
+    credentials: ['x-api-key'],
+  });
+
+  expect(signed.host.caller).toEqual({ id: 'ada' });
+  expect(blank.host).not.toHaveProperty('caller');
+  expect(unasked).toBeUndefined();
+  expect(tokens).toEqual(['sk-blank', 'sk-ada', 'sk-blank', 'sk-blank']);
+});
+
+test('a caller the host gives with an empty id is refused before the adapter is asked or anything reported', async () => {
+  const tokens: string[] = [];
+  const reports: Report[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        tokens.push(token);
+        return { id: 'ada' };
+      },
+    },
+    report: (report) => reports.push(report),
+  });
+
+  const refused = await admit({
+    ...asked({ 'x-api-key': 'sk-ada' }),
+    caller: { id: '' },
+  }).catch((thrown: unknown) => thrown);
+  const unasked = await admit({
+    headers: new Headers({ 'x-api-key': 'sk-ada' }),
+    credentials: ['x-api-key'],
+    caller: { id: '' },
+  }).catch((thrown: unknown) => thrown);
+
+  expect(refused).toEqual(new Error('The caller the host gave has no id'));
+  expect(unasked).toEqual(new Error('The caller the host gave has no id'));
+  expect(tokens).toEqual([]);
+  expect(reports).toEqual([]);
+});
+
 test('every credential header is removed when the host gives the caller, those of the other APIs too', async () => {
   const { request } = await hosting(echo(), {
     auth: { verify: () => ({ id: 'eve' }) },
@@ -2056,16 +2111,13 @@ test('what one request writes into the overrides, the limits or its caller is re
     auth: { verify: () => known },
   });
   const first = await admit(asked({ 'x-api-key': 'sk-ada' }));
+  const { tiers } = first.host.settings ?? {};
 
   expect(() =>
     Object.assign(Object(first.host.settings), { planted: 1 }),
   ).toThrow();
-  expect(() =>
-    Object.assign(Object(first.host.settings?.['tiers']), { deep: 1 }),
-  ).toThrow();
-  expect(() =>
-    Object(Object(first.host.settings?.['tiers']).models).push('acme/huge'),
-  ).toThrow();
+  expect(() => Object.assign(Object(tiers), { deep: 1 })).toThrow();
+  expect(() => Object(Object(tiers).models).push('acme/huge')).toThrow();
   expect(() =>
     Object.assign(Object(first.host.limits), { calls: 99 }),
   ).toThrow();
@@ -2322,8 +2374,7 @@ test.each([
     'holds itself',
     () => {
       const tiers: { [name: string]: Json } = { deep: 0.5 };
-      tiers['again'] = tiers;
-      return tiers;
+      return Object.assign(tiers, { again: tiers });
     },
   ],
   ['holds a function', () => Object({ deep: 0.5, pick: () => 'sk-live' })],

@@ -198,7 +198,7 @@ test('token counting is rejected in the format of its API', async () => {
   expect(await anthropic.json()).toEqual({
     type: 'error',
     error: {
-      type: 'invalid_request_error',
+      type: 'not_found_error',
       message: 'Token counting is not served yet',
     },
   });
@@ -233,7 +233,7 @@ test.each([
     expect(reply.status).toBe(404);
     expect(await reply.json()).toEqual({
       type: 'error',
-      error: { type: 'invalid_request_error', message },
+      error: { type: 'not_found_error', message },
     });
   },
 );
@@ -279,7 +279,7 @@ test('an unknown path asked with the version header of Anthropic is a 404 its cl
   expect(await reply.json()).toEqual({
     type: 'error',
     error: {
-      type: 'invalid_request_error',
+      type: 'not_found_error',
       message: 'Nothing is served at this path: every endpoint is under /v1',
     },
   });

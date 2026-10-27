@@ -109,17 +109,27 @@ export function mount<
     from: FromHost,
   ): Promise<Response> {
     if (guarded) {
+      // In flight until the report of what the host's auth threw is
+      // delivered, as a chat request refused there is.
+      const flight = begin();
+      const told = toldBy(from);
+      let refusal = Promise.resolve();
       let reported: string | undefined;
       const caller = await serving
         .admit({
-          ...toldBy(from),
+          ...told,
           headers: request.headers,
           credentials: format.credentials,
+          delivered: (work) => {
+            refusal = work;
+            told.delivered(work);
+          },
           reported: (id) => {
             reported = id;
           },
         })
         .catch((thrown: unknown) => failed(format, thrown, reported));
+      flight.land(refusal);
       if (caller instanceof Response) return caller;
       if (caller === undefined) {
         throw new Unauthenticated(

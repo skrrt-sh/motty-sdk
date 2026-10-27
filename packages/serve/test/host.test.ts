@@ -137,6 +137,22 @@ test('a caller the adapter does not know is refused by the motty that asks for o
   });
 });
 
+test('a caller the adapter answers with an empty id is refused by the motty that asks for one, and by its model list', async () => {
+  const served = serve(whoAsked, () => ({
+    auth: { verify: () => ({ id: '' }) },
+  }));
+
+  const reply = await served.fetch(ask({ authorization: 'Bearer sk-ada' }));
+  const list = await served.fetch(
+    new Request('http://motty.test/v1/models', {
+      headers: { authorization: 'Bearer sk-ada' },
+    }),
+  );
+
+  expect(reply.status).toBe(401);
+  expect(list.status).toBe(401);
+});
+
 test('a credential the adapter throws on is refused in the format of the path', async () => {
   const served = serve(whoAsked, () => ({ auth: keys }));
 
@@ -483,9 +499,10 @@ test('what one request writes into the overrides is refused, and the next reques
   const served = mount(
     motty({ name: 'coder' }).handle(() => {
       const { settings } = hosted();
+      const { routing } = settings ?? {};
       const read = JSON.stringify(settings);
       try {
-        Object.assign(Object(settings?.['routing']), { tier: 'planted' });
+        Object.assign(Object(routing), { tier: 'planted' });
       } catch {
         return answer(`${read}, and the write was refused`);
       }
@@ -1126,6 +1143,51 @@ test.each([
     sent.resolve();
     await settled;
     expect(order).toEqual(['report', 'work']);
+  },
+);
+
+test.each([
+  ['/v1/chat/completions', { messages: [] }],
+  ['/v1/models', undefined],
+])(
+  'a close waits for the report made when the auth adapter throws: %s',
+  async (path, body) => {
+    const sent = Promise.withResolvers<void>();
+    const order: string[] = [];
+    const served = mount(whoAsked, () => ({
+      auth: {
+        verify: () => {
+          throw new Error('The key set is gone');
+        },
+      },
+      report: async () => {
+        await sent.promise;
+        order.push('report');
+      },
+    }));
+
+    const reply = await served.fetch(
+      new Request(`http://motty.test${path}`, {
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer sk-ada',
+        },
+        ...(body === undefined
+          ? {}
+          : {
+              method: 'POST',
+              body: JSON.stringify({ model: 'coder', ...body }),
+            }),
+      }),
+    );
+    const closed = served.close().then(() => order.push('closed'));
+    await Bun.sleep(10);
+    expect(order).toEqual([]);
+    sent.resolve();
+    await closed;
+
+    expect(reply.status).toBe(500);
+    expect(order).toEqual(['report', 'closed']);
   },
 );
 

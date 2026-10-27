@@ -418,6 +418,11 @@ export function hosting(motty: Marked, options: HostOptions) {
     asked: Signed & Partial<Asked>,
   ): Promise<Admitted | Caller | undefined> {
     const id = givenId(asked.id) ?? crypto.randomUUID();
+    // The host's own mistake, as an id it may not give: told no caller, the
+    // motty would ask the caller to sign in for what the host got wrong.
+    if (asked.caller?.id === '') {
+      throw new Error('The caller the host gave has no id');
+    }
     const headers = new Headers(asked.headers);
     let failed: Sealed[] | undefined;
     // Until the request's own signal is made, the caller's is all of it.
@@ -450,7 +455,9 @@ export function hosting(motty: Marked, options: HostOptions) {
       headers.delete(name);
       if (auth === undefined || caller !== undefined || !token) continue;
       try {
-        caller = await auth.verify(token);
+        const verified = await auth.verify(token);
+        // An empty id names nobody, as a token that states none.
+        caller = verified?.id === '' ? undefined : verified;
       } catch (thrown) {
         // No motty ran, so no record comes: the host is told here, and the
         // caller by whoever asked, of the thrown value as it is.
