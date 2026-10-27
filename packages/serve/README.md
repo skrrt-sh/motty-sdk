@@ -107,7 +107,7 @@ createServer(async (incoming, outgoing) => {
 A host that has already authenticated and numbered a request states both in the third argument,
 `fetch(request, undefined, { id, caller, waitUntil })`, and the auth adapter is not asked. The
 `namespace` option prefixes every stored key in place of the motty's name, so two motties of one
-name keep apart. `report` may return a promise, and the record is waited for until it settles.
+name sharing a storage keep apart when each is given its own namespace. `report` may return a promise, and the record is waited for until it settles.
 
 A caller of the Responses API through the AI SDK sets `providerOptions.openai.store` to `false`,
 since a motty holds no Responses state on the server and refuses an `item_reference`.
