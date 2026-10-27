@@ -1,7 +1,7 @@
 import type { Json, Message } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
-import { type Dict, dict, given } from '../wire/json.ts';
+import { type Dict, dict, given, without } from '../wire/json.ts';
 import { offered } from '../wire/offered.ts';
 import { unsupported } from '../wire/refusals.ts';
 import { unsampled } from '../wire/taken.ts';
@@ -170,6 +170,8 @@ export function encode(
     prompt.tools,
     prompt.options?.toolChoice,
   ).flatMap((tool) => toolTo(left, tool) ?? []);
+  // Every tool left out as only offered leaves nothing to choose among.
+  const choosing = tools.length > 0 || (prompt.tools?.length ?? 0) === 0;
   for (const { name } of prompt.messages) left.without('message.name', name);
   const system = systemTo(left, prompt.messages.slice(0, start));
   const turns = prompt.messages
@@ -183,7 +185,7 @@ export function encode(
         unsaid(prompt.options?.reasoning, defaults),
         prompt.options ?? {},
       ),
-      ...fields,
+      ...(choosing ? fields : without(fields, ['tool_choice'])),
       model,
       ...given({ system }),
       messages: placed(left, gathered(turns)),

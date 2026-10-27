@@ -40,6 +40,42 @@ test('a tool only another API runs is offered to a model of another family by le
   });
 });
 
+test('a tool choice is not sent when every tool it chose among was only offered and left out', () => {
+  const asked = responses.decode(
+    {
+      model: 'relay',
+      input: 'Look it up.',
+      tools: [{ type: 'web_search', external_web_access: false }],
+      tool_choice: 'auto',
+      parallel_tool_calls: true,
+    },
+    new Headers(),
+  ).request;
+  for (const codec of [messages, chatCompletions]) {
+    const { body } = codec.encode('model-x', asked);
+    expect(body).not.toHaveProperty('tools');
+    expect(body).not.toHaveProperty('tool_choice');
+    expect(body).not.toHaveProperty('parallel_tool_calls');
+  }
+
+  const { body } = responses.encode(
+    'gpt-x',
+    messages.decode(
+      {
+        model: 'relay',
+        max_tokens: 64,
+        messages: [{ role: 'user', content: 'Look it up.' }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        tool_choice: { type: 'auto', disable_parallel_tool_use: true },
+      },
+      new Headers({ 'anthropic-version': '2023-06-01' }),
+    ).request,
+  );
+  expect(body).not.toHaveProperty('tools');
+  expect(body).not.toHaveProperty('tool_choice');
+  expect(body).not.toHaveProperty('parallel_tool_calls');
+});
+
 const search = {
   type: 'tool_search',
   execution: 'client',

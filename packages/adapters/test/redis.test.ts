@@ -490,8 +490,9 @@ describe.skipIf(url === undefined)('against a server', () => {
     expect(held).toEqual(['first', 'second', undefined]);
   });
 
-  // The relay passes bytes as they are, so it cannot stand in front of TLS.
-  test.skipIf(url?.startsWith('rediss:') ?? false)(
+  // The relay passes plain TCP bytes, so it stands in front of neither TLS
+  // nor a Unix socket.
+  test.skipIf(!(url?.startsWith('redis:') ?? false))(
     'a connection the server dropped is made again by the next call',
     async () => {
       const target = new URL(url ?? '');

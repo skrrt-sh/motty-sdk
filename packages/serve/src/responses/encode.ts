@@ -100,6 +100,8 @@ export function encode(
     left,
     offered(left, family, prompt.tools, toolChoice),
   );
+  // Every tool left out as only offered leaves nothing to choose among.
+  const choosing = tools.length > 0 || (prompt.tools?.length ?? 0) === 0;
   const input = inputOf(left, prompt.messages, custom);
   const reasoning = reasoningOf(
     left,
@@ -137,8 +139,10 @@ export function encode(
     ...(tools.length === 0 ? {} : { tools }),
     ...given({
       tool_choice:
-        toolChoice === undefined ? undefined : choiceBody(toolChoice, custom),
-      parallel_tool_calls: options.parallelToolCalls,
+        toolChoice === undefined || !choosing
+          ? undefined
+          : choiceBody(toolChoice, custom),
+      parallel_tool_calls: choosing ? options.parallelToolCalls : undefined,
       max_output_tokens: options.maxTokens,
       user: options.user,
     }),

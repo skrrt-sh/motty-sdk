@@ -154,6 +154,8 @@ export function encode(
   const shown = offered(left, family, tools, toolChoice).map((each) =>
     tool(left, each),
   );
+  // Every tool left out as only offered leaves nothing to choose among.
+  const choosing = shown.length > 0 || tools.length === 0;
   const body = {
     ...preset,
     // A hint first and an option after, so neither outranks a typed field.
@@ -162,8 +164,10 @@ export function encode(
     ...given({
       tools: shown.length === 0 ? undefined : shown,
       tool_choice:
-        toolChoice === undefined ? undefined : choice(toolChoice, custom),
-      parallel_tool_calls: options.parallelToolCalls,
+        toolChoice === undefined || !choosing
+          ? undefined
+          : choice(toolChoice, custom),
+      parallel_tool_calls: choosing ? options.parallelToolCalls : undefined,
     }),
     ...reasoning,
     ...given({
