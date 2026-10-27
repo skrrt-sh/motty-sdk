@@ -75,11 +75,13 @@ export class MottyError extends Error {
     Object.defineProperty(MottyError.prototype, brand, { value: true });
   }
 
+  // Named, or a declaration file spells out the class it returns, and with
+  // it the statics the runtime's own types give Error, Node's among them.
   static define(
     code: string,
     status: number,
     { retryable = false }: { retryable?: boolean } = {},
-  ) {
+  ): typeof MottyError {
     return class extends MottyError {
       static override [Symbol.hasInstance](value: unknown): boolean {
         return raised(value, code);

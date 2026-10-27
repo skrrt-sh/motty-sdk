@@ -5,7 +5,7 @@
     "outDir": "dist",
     "noEmit": false,
     "declaration": true,
-    "emitDeclarationOnly": true
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["packages/*/src"]
 }

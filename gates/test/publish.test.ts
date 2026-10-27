@@ -1,18 +1,35 @@
-import { beforeAll, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { $, Glob } from 'bun';
 import { z } from 'zod';
+import { workerd } from '../hosts/workerd.ts';
 
-const packed: { name: string; files: string[]; manifest: string }[] = [];
+const packed: {
+  name: string;
+  files: string[];
+  contents: Map<string, File>;
+  manifest: string;
+}[] = [];
 
-// One at a time: every pack writes the declarations of all the packages
-// to one folder before it copies its own. A release names the folder of the
-// tarballs it is about to publish, so that those very files are the ones checked.
+const entries = z.object({
+  exports: z.record(
+    z.string(),
+    z.object({ types: z.string(), bun: z.string(), default: z.string() }),
+  ),
+});
+
+let folder = '';
+let project = '';
+
+// One at a time: every pack builds all the packages into one folder before
+// it copies its own. A release names the folder of the tarballs it is about
+// to publish, so that those very files are the ones checked.
 beforeAll(async () => {
   const { TARBALLS: given } = Bun.env;
-  const folder = given ?? (await mkdtemp(join(tmpdir(), 'motty-publish-')));
+  folder = await mkdtemp(join(tmpdir(), 'motty-publish-'));
+  const tarballs = given ?? folder;
   if (given === undefined) {
     for await (const manifest of new Glob('packages/*/package.json').scan()) {
       await $`bun pm pack --destination ${folder} --quiet`
@@ -20,20 +37,51 @@ beforeAll(async () => {
         .quiet();
     }
   }
-  const tarballs = await Array.fromAsync(new Glob('*.tgz').scan(folder));
-  for (const tarball of tarballs.sort()) {
-    const files = await new Bun.Archive(
-      await Bun.file(join(folder, tarball)).bytes(),
+  for (const tarball of (
+    await Array.fromAsync(new Glob('*.tgz').scan(tarballs))
+  ).sort()) {
+    const contents = await new Bun.Archive(
+      await Bun.file(join(tarballs, tarball)).bytes(),
     ).files();
-    const manifest = (await files.get('package/package.json')?.text()) ?? '{}';
     packed.push({
       name: tarball.replace(/-\d.*/, ''),
-      files: [...files.keys()].sort(),
-      manifest,
+      files: [...contents.keys()].sort(),
+      contents,
+      manifest: (await contents.get('package/package.json')?.text()) ?? '{}',
     });
   }
-  if (given === undefined) await rm(folder, { recursive: true });
+
+  // Installed as a registry would, with the one dependency from outside.
+  project = join(folder, 'project');
+  for (const { name, contents } of packed) {
+    const installed = join(
+      project,
+      'node_modules',
+      name.replace('mottyjs-', '@mottyjs/'),
+    );
+    for (const [path, file] of contents) {
+      await Bun.write(join(installed, path.replace('package/', '')), file);
+    }
+  }
+  await symlink(
+    Bun.resolveSync(
+      'jose',
+      `${import.meta.dir}/../../packages/adapters`,
+    ).replace(/\/dist\/.*/, ''),
+    join(project, 'node_modules', 'jose'),
+  );
+  await Bun.write(join(project, 'package.json'), '{ "type": "module" }');
+  for (const host of ['node.ts', 'worker.ts']) {
+    await Bun.write(
+      join(project, host),
+      Bun.file(`${import.meta.dir}/../hosts/packed/${host}`),
+    );
+  }
 }, 60_000);
+
+afterAll(async () => {
+  await rm(folder, { recursive: true, force: true });
+});
 
 test('all eight packages are packed', () => {
   expect(packed.map(({ name }) => name)).toEqual([
@@ -48,9 +96,9 @@ test('all eight packages are packed', () => {
   ]);
 });
 
-test('a tarball holds sources, their declarations, the manifest, the readme and the licence, and nothing else', () => {
+test('a tarball holds sources, their JavaScript and declarations, the manifest, the readme and the licence, and nothing else', () => {
   const allowed =
-    /^package\/(package\.json|README\.md|LICENSE|src\/.+\.ts|dist\/.+\.d\.ts)$/;
+    /^package\/(package\.json|README\.md|LICENSE|src\/.+\.ts|dist\/.+\.(js|d\.ts))$/;
 
   expect(
     packed.flatMap(({ name, files }) =>
@@ -61,22 +109,15 @@ test('a tarball holds sources, their declarations, the manifest, the readme and 
   ).toEqual([]);
 });
 
-test('a tarball holds the readme, the licence, and the source and the declaration of every entry its manifest exports', () => {
+test('a tarball holds the readme, the licence, and the source, the JavaScript and the declaration of every entry its manifest exports', () => {
   expect(
     packed.flatMap(({ name, files, manifest }) =>
       [
         './README.md',
         './LICENSE',
-        ...Object.values(
-          z
-            .object({
-              exports: z.record(
-                z.string(),
-                z.object({ types: z.string(), default: z.string() }),
-              ),
-            })
-            .parse(JSON.parse(manifest)).exports,
-        ).flatMap((entry) => [entry.default, entry.types]),
+        ...Object.values(entries.parse(JSON.parse(manifest)).exports).flatMap(
+          (entry) => [entry.bun, entry.default, entry.types],
+        ),
       ]
         .map((path) => path.replace('./', 'package/'))
         .filter((file) => !files.includes(file))
@@ -84,6 +125,140 @@ test('a tarball holds the readme, the licence, and the source and the declaratio
     ),
   ).toEqual([]);
 });
+
+test('the version a description carries is the one the core package is published at', async () => {
+  const core = packed.find(({ name }) => name === 'mottyjs-core');
+  const { version } = z
+    .object({ version: z.string() })
+    .parse(JSON.parse(core?.manifest ?? '{}'));
+
+  expect(await core?.contents.get('package/dist/version.js')?.text()).toContain(
+    `export const version = '${version}';`,
+  );
+});
+
+// Redis is Bun's own client, so that one entry needs Bun.
+test('on Node, every entry of the packed packages but the Redis adapter imports', async () => {
+  const specifiers = packed.flatMap(({ name, manifest }) =>
+    Object.keys(entries.parse(JSON.parse(manifest)).exports)
+      .map((path) => `${name.replace('mottyjs-', '@mottyjs/')}${path.slice(1)}`)
+      .filter((specifier) => specifier !== '@mottyjs/adapters/redis'),
+  );
+  const imported =
+    await $`node --input-type=module -e ${'for (const specifier of process.argv.slice(1)) await import(specifier); console.log(process.argv.length - 1);'} ${specifiers}`
+      .cwd(project)
+      .nothrow()
+      .quiet();
+
+  expect([
+    imported.stderr.toString(),
+    imported.stdout.toString().trim(),
+  ]).toEqual(['', String(specifiers.length)]);
+}, 30_000);
+
+// A consumer that checks every library it reads and holds neither Node's nor
+// Bun's types: a declaration naming one of their globals fails it.
+test('every entry of the packed packages type-checks with library checks on and only the web-standard libraries', async () => {
+  const specifiers = packed.flatMap(({ name, manifest }) =>
+    Object.keys(entries.parse(JSON.parse(manifest)).exports).map(
+      (path) => `${name.replace('mottyjs-', '@mottyjs/')}${path.slice(1)}`,
+    ),
+  );
+  await Bun.write(
+    join(project, 'consumer.ts'),
+    specifiers
+      .map((specifier, at) => `export * as entry${at} from '${specifier}';`)
+      .join('\n'),
+  );
+  await Bun.write(
+    join(project, 'tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: {
+        lib: ['ES2024', 'DOM', 'DOM.Iterable'],
+        target: 'ES2024',
+        module: 'NodeNext',
+        types: [],
+        strict: true,
+        skipLibCheck: false,
+        noEmit: true,
+      },
+      files: ['consumer.ts'],
+    }),
+  );
+  const checked = await $`bun tsc -p ${join(project, 'tsconfig.json')}`
+    .nothrow()
+    .quiet();
+
+  expect([checked.stdout.toString(), checked.exitCode]).toEqual(['', 0]);
+}, 30_000);
+
+test('on Node, the packed packages serve a motty over node:http, as JavaScript', async () => {
+  const served = await $`node node.ts`.cwd(project).nothrow().quiet();
+
+  expect([
+    served.stderr.toString(),
+    JSON.parse(served.stdout.toString()),
+  ]).toEqual([
+    '',
+    { resolved: 'dist/index.js', whole: '200 true', streamed: '200 true' },
+  ]);
+}, 30_000);
+
+test('on Bun, the same host serves from the packed packages, read as their sources', async () => {
+  const served = await $`${process.execPath} node.ts`
+    .cwd(project)
+    .nothrow()
+    .quiet();
+
+  expect([
+    served.stderr.toString(),
+    JSON.parse(served.stdout.toString()),
+  ]).toEqual([
+    '',
+    { resolved: 'src/index.ts', whole: '200 true', streamed: '200 true' },
+  ]);
+}, 30_000);
+
+// As a Workers bundler builds: the platform's conditions, and Node's modules
+// left to the runtime's compatibility layer.
+test('bundled for Workers, the packed packages answer in workerd', async () => {
+  const { outputs } = await Bun.build({
+    entrypoints: [join(project, 'worker.ts')],
+    target: 'browser',
+    conditions: ['workerd', 'worker'],
+    external: ['node:*'],
+  });
+  const bundle = (await outputs[0]?.text()) ?? '';
+  const { address, stop } = await workerd({
+    modules: { 'worker.js': bundle },
+    flags: ['nodejs_compat'],
+    bindings: {},
+  });
+  try {
+    const replies = await Promise.all(
+      [false, true].map(async (stream) => {
+        const reply = await fetch(`${address}/v1/chat/completions`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'echo',
+            stream,
+            messages: [{ role: 'user', content: 'Which lock?' }],
+          }),
+        });
+        return `${reply.status} ${(await reply.text()).includes('Use a mutex.')}`;
+      }),
+    );
+
+    expect([
+      bundle.includes('@mottyjs/core/dist/'),
+      bundle.includes('@mottyjs/core/src/'),
+      replies,
+    ]).toEqual([true, false, ['200 true', '200 true']]);
+  } finally {
+    await stop();
+  }
+}, 30_000);
 
 test('no packed manifest keeps a workspace or a catalog reference', () => {
   expect(

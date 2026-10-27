@@ -8,6 +8,7 @@ export async function build(entry: string) {
   const { outputs, metafile } = await Bun.build({
     entrypoints: [entry],
     target: 'node',
+    conditions: ['@mottyjs/source'],
     minify: true,
     metafile: true,
   });

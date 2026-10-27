@@ -8,7 +8,10 @@
     "gateway",
     "testing",
     "mock",
-    "bun"
+    "bun",
+    "node",
+    "deno",
+    "cloudflare-workers"
   ],
   "license": "Apache-2.0",
   "author": "Skrrt LLC",
@@ -22,7 +25,8 @@
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "bun": ">=1.4.2"
+    "bun": ">=1.4.2",
+    "node": ">=22"
   },
   "publishConfig": {
     "access": "public"
@@ -35,11 +39,12 @@
     ".": {
       "@mottyjs/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
-      "default": "./src/index.ts"
+      "bun": "./src/index.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/test/src dist"
+    "prepack": "bun run --cwd ../.. build && rm -rf dist && cp -R ../../dist/test/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*",

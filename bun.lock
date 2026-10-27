@@ -10,6 +10,8 @@
         "@langchain/core": "1.2.17",
         "@langchain/openai": "1.6.2",
         "@mastra/core": "1.75.0",
+        "@mottyjs/core": "workspace:*",
+        "@mottyjs/serve": "workspace:*",
         "@tanstack/ai": "0.68.0",
         "@tanstack/ai-openai": "0.29.1",
         "@types/bun": "catalog:",
@@ -121,12 +123,6 @@
         "@mottyjs/test": "workspace:*",
         "zod": "catalog:",
       },
-      "peerDependencies": {
-        "@types/bun": ">=1.4.2",
-      },
-      "optionalPeers": [
-        "@types/bun",
-      ],
     },
     "packages/settings": {
       "name": "@mottyjs/settings",

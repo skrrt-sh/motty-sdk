@@ -40,8 +40,14 @@ type Undeclared<Given, Declared> = (
       }
   : never;
 
+// The environment as the runtime's own types declare it, so that names a host
+// declares there stay known; a consumer with no such types gets plain strings.
+type Env = typeof globalThis extends { process: { env: infer Declared } }
+  ? Declared
+  : Record<string, string | undefined>;
+
 type Options<Served, Given> = (
-  env: typeof process.env,
+  env: Env,
 ) => HostOptions<Given & Undeclared<Given, Overrides<Served>>>;
 
 // Bun's server is the second argument only when Bun calls: on Workers it is
@@ -208,6 +214,10 @@ export function mount<
   return { fetch, close };
 }
 
+// Bun's server by the one method used, so that the declaration a consumer's
+// compiler reads names no type of Bun's.
+type Listening = { stop(closeActiveConnections?: boolean): Promise<void> };
+
 // For a serve file, whose default export Bun starts: the edge and the
 // process. Only a request shows the listener there is to stop.
 export function serve<
@@ -215,7 +225,7 @@ export function serve<
   const Given extends Overrides<Served>,
 >(motty: Served, options: Options<Served, Given>, edge: Edge = {}) {
   const mounted = mount<Served, Given>(motty, options, edge);
-  let listening: Bun.Server<undefined> | undefined;
+  let listening: Listening | undefined;
 
   async function close(): Promise<void> {
     process.off('SIGTERM', onSignal);
@@ -232,7 +242,7 @@ export function serve<
 
   function fetch(
     request: Request,
-    server?: Bun.Server<undefined>,
+    server?: Listening,
     from?: FromHost,
   ): Promise<Response> {
     if (server !== undefined && listening === undefined) {
