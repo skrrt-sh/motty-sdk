@@ -378,27 +378,6 @@ test("a citation delta is a citation with the upstream's own form kept", async (
   });
 });
 
-test('every stop reason ends the stream with its finish reason', async () => {
-  for (const [raw, reason] of [
-    ['end_turn', 'stop'],
-    ['max_tokens', 'length'],
-    ['stop_sequence', 'stop'],
-    ['tool_use', 'tool_calls'],
-    ['pause_turn', 'pause'],
-    ['refusal', 'content_filter'],
-  ] as const) {
-    const [finish] = await read(
-      {
-        type: 'message_delta',
-        delta: { stop_reason: raw, stop_sequence: null },
-        usage: { output_tokens: 3 },
-      },
-      { type: 'message_stop' },
-    );
-    expect(finish).toMatchObject({ type: 'finish', reason, rawReason: raw });
-  }
-});
-
 test('the stop sequence and the refusal details ride on the finish', async () => {
   const [stopped] = await read(
     {

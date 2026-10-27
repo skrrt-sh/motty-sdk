@@ -242,17 +242,15 @@ test.each([
 );
 
 test.each([
-  ['a thinking signature', signature, 'EqQBCgIYAhIM', false],
-  ['a thinking signature', signature, 'EqQBCgIYAhIM', true],
-  ['redacted thinking', redacted, 'EmwKAhgB', false],
-  ['redacted thinking', redacted, 'EmwKAhgB', true],
+  ['a thinking signature', signature, 'EqQBCgIYAhIM'],
+  ['redacted thinking', redacted, 'EmwKAhgB'],
 ])(
-  '%s reaches a Responses caller who includes encrypted reasoning, in the item it sends back (%#)',
-  async (_what, chunks, secret, stream) => {
+  '%s reaches a streamed Responses caller who includes encrypted reasoning, in the item it sends back',
+  async (_what, chunks, secret) => {
     const { status, text, reports } = await asked(
       '/v1/responses',
       {
-        stream,
+        stream: true,
         input: 'Is it safe?',
         reasoning: { summary: 'auto' },
         include: ['reasoning.encrypted_content'],

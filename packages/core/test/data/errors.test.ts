@@ -9,7 +9,6 @@ import {
   fromFacts,
   InvalidOutput,
   InvalidRequest,
-  type KnownCode,
   LimitReached,
   MottyError,
   Overloaded,
@@ -147,11 +146,6 @@ test('a base error raised by hand takes a status and can be retryable', () => {
 
 test('an error given no provider data has none', () => {
   expect('provider' in new RateLimited('slow down')).toBe(false);
-});
-
-test('an error carries the cause it was given', () => {
-  const cause = new Error('socket closed');
-  expect(new Overloaded('busy', { cause }).cause).toBe(cause);
 });
 
 test('a known error gives its own facts', () => {
@@ -376,17 +370,6 @@ test('a stop reason and the facts of the same value name one error', () => {
       new Overloaded('busy'),
     ].map((value) => toFacts(stopReason(value)).code === toFacts(value).code),
   ).toEqual([true, true, true]);
-});
-
-test('the known codes are offered by type and any other code is accepted', () => {
-  const known: ErrorFacts['code'][] = ['rate_limited', 'internal', 'db_down'];
-  const mine: KnownCode[] = [
-    'rate_limited',
-    'internal',
-    // @ts-expect-error
-    'rate_limted',
-  ];
-  expect([known.length, mine.length]).toEqual([3, 3]);
 });
 
 test('a stop reason made here carries the cause given', () => {

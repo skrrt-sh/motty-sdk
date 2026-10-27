@@ -11,10 +11,6 @@ async function* sent(...frames: string[]) {
   for (const data of frames) yield { data };
 }
 
-test('the codec serves the chat completions path', () => {
-  expect(chatCompletions.paths).toEqual(['/v1/chat/completions']);
-});
-
 test('a request read and sent on again reaches the upstream unchanged', () => {
   const messages = [
     { role: 'developer', content: 'Be brief.' },

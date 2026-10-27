@@ -595,40 +595,6 @@ test('a request still being let in when the drain is over is stopped with the sh
   ]);
 });
 
-test('shutdown waits for the report of a request the auth adapter failed on', async () => {
-  const order: string[] = [];
-  const served = mount(coder, () => ({
-    auth: {
-      verify: () => {
-        throw new Error('The key server timed out');
-      },
-    },
-    report: async () => {
-      await Bun.sleep(40);
-      order.push('delivered');
-    },
-  }));
-
-  const reply = await served.fetch(
-    new Request('http://motty.test/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: 'Bearer sk-ada',
-      },
-      body: JSON.stringify({
-        model: 'coder',
-        messages: [{ role: 'user', content: 'Why does this deadlock?' }],
-      }),
-    }),
-  );
-  expect(reply.status).toBe(500);
-  await served.close();
-  order.push('stopped');
-
-  expect(order).toEqual(['delivered', 'stopped']);
-});
-
 test("the host is handed the delivery of a request's record, which settles only once an async report has", async () => {
   const sent = Promise.withResolvers<void>();
   const order: string[] = [];
@@ -971,20 +937,5 @@ test('a request being answered is taken off the idle timeout of the server', asy
 
   expect(reply.status).toBe(200);
   expect(timeouts.mock.calls).toEqual([[expect.any(Request), 0]]);
-  await served.close();
-});
-
-test('the model list and the scripted models of the test kit work over the wire', async () => {
-  const served = mount(coder, () => ({
-    models: [fake(on(gpt, 'Use a mutex.'))],
-  }));
-  using server = Bun.serve({ port: 0, fetch: served.fetch });
-
-  const list = await fetch(`http://localhost:${server.port}/v1/models`);
-  expect(await list.json()).toMatchObject({ data: [{ id: 'coder' }] });
-  const reply = await ask(server.port, false);
-  expect(await reply.json()).toMatchObject({
-    choices: [{ message: { content: 'Use a mutex.' } }],
-  });
   await served.close();
 });

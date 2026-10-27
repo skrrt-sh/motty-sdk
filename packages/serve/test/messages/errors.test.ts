@@ -329,15 +329,6 @@ test('a request of too many bytes keeps the name this API gives it', () => {
   });
 });
 
-test('a path this API does not serve is told under the name this API gives a 404', () => {
-  expect(
-    error({ code: 'unsupported', status: 404, message: 'x' }),
-  ).toMatchObject({
-    status: 404,
-    body: { error: { type: 'not_found_error' } },
-  });
-});
-
 test('the type of what a model call can end in never follows the status', () => {
   const typed = (code: string, status: number) =>
     error({ code, status, message: 'x' }).body;

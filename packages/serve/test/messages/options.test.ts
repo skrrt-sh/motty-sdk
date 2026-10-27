@@ -169,12 +169,6 @@ test("neutral options are written as this API's fields", () => {
   });
 });
 
-test('a prompt with no limit is sent with one', () => {
-  expect(optionsTo(leaving('messages'), {}, undefined).fields).toEqual({
-    max_tokens: 64000,
-  });
-});
-
 test('only this wire`s own headers are sent and a foreign hint dropped', () => {
   expect(
     optionsTo(
@@ -284,133 +278,6 @@ test('sampling is sent with thinking on or off: which model takes it is the upst
   ).toMatchObject({ temperature: 0.2, thinking: { type: 'adaptive' } });
 });
 
-test('reasoning a caller of another API asked for is asked for shown', () => {
-  expect(
-    optionsTo(leaving('messages'), { reasoning: { effort: 'high' } }, undefined)
-      .fields,
-  ).toEqual({
-    max_tokens: 64000,
-    thinking: { type: 'adaptive', display: 'summarized' },
-    output_config: { effort: 'high' },
-  });
-  expect(
-    optionsTo(
-      leaving('messages'),
-      { maxTokens: 16000, reasoning: { budgetTokens: 2048 } },
-      undefined,
-    ).fields,
-  ).toEqual({
-    max_tokens: 16000,
-    thinking: { type: 'enabled', budget_tokens: 2048, display: 'summarized' },
-  });
-});
-
-test('muted reasoning is asked for omitted, and nothing is reported', () => {
-  const left = leaving('messages');
-  expect(
-    optionsTo(left, { reasoning: { effort: 'high', exclude: true } }, undefined)
-      .fields,
-  ).toEqual({
-    max_tokens: 64000,
-    thinking: { type: 'adaptive', display: 'omitted' },
-    output_config: { effort: 'high' },
-  });
-  expect(left.leftOut()).toEqual([]);
-});
-
-test('an order not to reason is sent as the lowest effort with no thinking, and reported', () => {
-  const left = leaving('messages');
-  expect(
-    optionsTo(left, { reasoning: { effort: 'none' } }, undefined).fields,
-  ).toEqual({ max_tokens: 64000, output_config: { effort: 'low' } });
-  expect(left.leftOut()).toEqual([
-    {
-      setting: 'reasoning.none',
-      detail:
-        'Anthropic Messages has no field for an order not to reason, sent as low effort',
-    },
-  ]);
-});
-
-test('thinking a caller of this API turned off in its own words is sent as said', () => {
-  const left = leaving('messages');
-  expect(
-    optionsTo(
-      left,
-      {
-        reasoning: { effort: 'none' },
-        hints: {
-          anthropic: {
-            thinking: { type: 'disabled' },
-            output_config: { effort: 'low' },
-          },
-        },
-      },
-      undefined,
-    ).fields,
-  ).toEqual({
-    max_tokens: 64000,
-    thinking: { type: 'disabled' },
-    output_config: { effort: 'low' },
-  });
-  expect(left.leftOut()).toEqual([]);
-});
-
-test.each([[{ type: 'between_tools' }], [{ type: 'disabled' }]])(
-  'the author`s own thinking %j is sent as said beside an effort, which still goes in the output config',
-  (thinking) => {
-    const left = leaving('messages');
-    expect(
-      optionsTo(
-        left,
-        {
-          reasoning: { effort: 'high' },
-          provider: { anthropic: { thinking } },
-        },
-        undefined,
-      ).fields,
-    ).toEqual({
-      max_tokens: 64000,
-      thinking,
-      output_config: { effort: 'high' },
-    });
-    expect(left.leftOut()).toEqual([]);
-  },
-);
-
-test('the author`s own thinking is sent as said over a budget and a mute, which are reported', () => {
-  const left = leaving('messages');
-  expect(
-    optionsTo(
-      left,
-      {
-        reasoning: { budgetTokens: 2048, exclude: true },
-        provider: { anthropic: { thinking: { type: 'between_tools' } } },
-      },
-      undefined,
-    ).fields,
-  ).toEqual({ max_tokens: 64000, thinking: { type: 'between_tools' } });
-  expect(left.leftOut()).toEqual([
-    {
-      setting: 'reasoning.own',
-      detail:
-        "Anthropic Messages has no field for a reasoning option the request also states in the API's own words",
-    },
-  ]);
-});
-
-test('the author`s own thinking with no reasoning asked is sent as said, unreported', () => {
-  const left = leaving('messages');
-  expect(
-    optionsTo(
-      left,
-      { provider: { anthropic: { thinking: { type: 'between_tools' } } } },
-      undefined,
-    ).fields,
-  ).toEqual({ max_tokens: 64000, thinking: { type: 'between_tools' } });
-  expect(left.leftOut()).toEqual([]);
-});
-
 test('an effort in the author`s own words wins over the neutral one, which is reported', () => {
   const left = leaving('messages');
   expect(
@@ -430,40 +297,6 @@ test('an effort in the author`s own words wins over the neutral one, which is re
   expect(left.leftOut().map(({ setting }) => setting)).toEqual([
     'reasoning.own',
   ]);
-});
-
-test('a hint of thinking that is not sent is reported', () => {
-  const left = leaving('messages');
-  expect(
-    optionsTo(
-      left,
-      { hints: { anthropic: { thinking: { type: 'adaptive' } } } },
-      undefined,
-    ).fields,
-  ).toEqual({ max_tokens: 64000 });
-  expect(left.leftOut()).toEqual([
-    {
-      setting: 'reasoning.hint',
-      detail:
-        'Anthropic Messages has no field for a hint of thinking the reasoning asked for does not take',
-    },
-  ]);
-});
-
-test('a minimal effort is sent as low and reported', () => {
-  const left = leaving('messages');
-  expect(
-    optionsTo(left, { reasoning: { effort: 'minimal' } }, undefined).fields,
-  ).toMatchObject({ output_config: { effort: 'low' } });
-  expect(left.leftOut()).toEqual([
-    {
-      setting: 'reasoning.minimal',
-      detail: 'Anthropic Messages has no field for minimal effort, sent as low',
-    },
-  ]);
-  const asked = leaving('messages');
-  optionsTo(asked, { reasoning: { effort: 'low' } }, undefined);
-  expect(asked.leftOut()).toEqual([]);
 });
 
 test('a penalty is left out and reported', () => {

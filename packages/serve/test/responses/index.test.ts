@@ -6,10 +6,6 @@ import { field } from '../../src/responses/fields.ts';
 import { responses, responsesIn } from '../../src/responses/index.ts';
 import { list, parsed } from '../../src/wire/json.ts';
 
-test('the codec answers on the path of the Responses API', () => {
-  expect(responses.paths).toEqual(['/v1/responses']);
-});
-
 test('a request decoded and encoded again reaches the upstream with the same meaning', () => {
   const { request } = responses.decode(
     {

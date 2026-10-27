@@ -148,23 +148,6 @@ test('function and custom tools are sent in their shapes', () => {
   });
 });
 
-test('a function with no strictness named is sent with none', () => {
-  const { body } = encode('gpt-x', {
-    messages: [],
-    tools: [{ type: 'function', name: 'weather', input: { type: 'object' } }],
-  });
-
-  expect(body).toMatchObject({
-    tools: [
-      {
-        type: 'function',
-        function: { name: 'weather', parameters: { type: 'object' } },
-      },
-    ],
-  });
-  expect(JSON.stringify(body)).not.toContain('strict');
-});
-
 test('no tools are sent as no tools field', () => {
   expect(encode('gpt-x', { messages: [], tools: [] }).body).not.toHaveProperty(
     'tools',

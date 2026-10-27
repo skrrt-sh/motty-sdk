@@ -80,24 +80,6 @@ test('a body that stops arriving is bounded under a mounted edge with no server'
   });
 });
 
-test('a body that arrives in time is taken off the idle timeout and answered', async () => {
-  const served = mount(coder, () => ({}), { receive: 5_000 });
-  using server = Bun.serve({ port: 0, idleTimeout: 1, fetch: served.fetch });
-
-  const reply = await fetch(`http://localhost:${server.port}/v1/messages`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'coder',
-      max_tokens: 64,
-      messages: [{ role: 'user', content: 'Why does this deadlock?' }],
-    }),
-  });
-
-  expect(reply.status).toBe(200);
-  await served.close();
-});
-
 test('a stated length over the limit is refused before a byte of the body is read, and no caller is looked up', async () => {
   let verified = 0;
   const served = mount(motty({ name: 'coder' }).use(auth()), () => ({

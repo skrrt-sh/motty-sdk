@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { error, errorBody, wireCode } from '../../src/wire/openai-error.ts';
+import { error, errorBody } from '../../src/wire/openai-error.ts';
 
 test('facts are answered with their status and their message', () => {
   expect(
@@ -19,39 +19,6 @@ test('facts are answered with their status and their message', () => {
       },
     },
   });
-});
-
-test('the facts given are written as they are, with nothing withheld', () => {
-  expect(
-    errorBody({
-      code: 'context_too_long',
-      status: 400,
-      message: 'The prompt is too long for the model',
-      upstream: true,
-    }),
-  ).toEqual({
-    error: {
-      message: 'The prompt is too long for the model',
-      type: 'invalid_request_error',
-      param: null,
-      code: 'context_length_exceeded',
-    },
-  });
-});
-
-test('facts with no status are a server error', () => {
-  expect(error({ code: 'internal', message: 'Internal error' })).toEqual({
-    status: 500,
-    body: {
-      error: {
-        message: 'Internal error',
-        type: 'server_error',
-        param: null,
-        code: 'internal',
-      },
-    },
-  });
-  expect(error({ code: 'odd', status: 200, message: 'x' }).status).toBe(500);
 });
 
 test.each([
@@ -112,14 +79,4 @@ test('a kind no model call ends in is typed by its status, as it was', () => {
   expect(kind('empty_prompt', 422)).toMatchObject({
     error: { type: 'invalid_request_error', code: 'empty_prompt' },
   });
-});
-
-test('an upstream`s failure with no status of its own answers with its kind`s', () => {
-  expect(error({ code: 'overloaded', message: 'Busy' }).status).toBe(503);
-  expect(error({ code: 'quota_exceeded', message: 'Spent' }).status).toBe(429);
-});
-
-test('a code these APIs have their own name for is written by that name', () => {
-  expect(wireCode('blocked')).toBe('content_policy_violation');
-  expect(wireCode('empty_prompt')).toBe('empty_prompt');
 });

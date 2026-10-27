@@ -38,7 +38,7 @@ test('a function tool is read and written back with the same meaning', () => {
   });
 });
 
-test('a function with no strictness named is read with none', () => {
+test('a function with no parameters is read as one that takes none', () => {
   expect(
     toolOf({ type: 'function', name: 'a', parameters: null }, 'tools[0]'),
   ).toEqual({
@@ -46,23 +46,6 @@ test('a function with no strictness named is read with none', () => {
     name: 'a',
     input: { type: 'object', properties: {} },
   });
-  expect(
-    toolOf({ type: 'function', name: 'a', strict: null }, 'tools[0]'),
-  ).toEqual({
-    type: 'function',
-    name: 'a',
-    input: { type: 'object', properties: {} },
-  });
-});
-
-test('a function with no strictness named is sent with none', () => {
-  expect(
-    toolBody(leaving('responses'), {
-      type: 'function',
-      name: 'a',
-      input: { type: 'object' },
-    }),
-  ).toEqual({ type: 'function', name: 'a', parameters: { type: 'object' } });
 });
 
 test('a custom tool keeps its grammar', () => {

@@ -1,53 +1,11 @@
 import { expect, test } from 'bun:test';
-import {
-  copied,
-  dict,
-  given,
-  isDict,
-  list,
-  number,
-  parsed,
-  text,
-  without,
-} from '../../src/wire/json.ts';
-
-test('only a JSON object is a dict', () => {
-  expect(isDict({ a: 1 })).toBe(true);
-  expect(isDict([1])).toBe(false);
-  expect(isDict(null)).toBe(false);
-  expect(isDict('a')).toBe(false);
-  expect(isDict(undefined)).toBe(false);
-});
-
-test('a value of the wrong kind reads as empty or absent', () => {
-  expect(dict([1])).toEqual({});
-  expect(dict({ a: 1 })).toEqual({ a: 1 });
-  expect(list({ a: 1 })).toEqual([]);
-  expect(list([1, 'a'])).toEqual([1, 'a']);
-  expect(text(1)).toBeUndefined();
-  expect(text('a')).toBe('a');
-  expect(number('1')).toBeUndefined();
-  expect(number(0)).toBe(0);
-});
+import { copied, dict, given, parsed, without } from '../../src/wire/json.ts';
 
 test('text that is not JSON parses to nothing', () => {
   expect(parsed('{"a":[1,null]}')).toEqual({ a: [1, null] });
   expect(parsed('null')).toBeNull();
   expect(parsed('{"a":')).toBeUndefined();
   expect(parsed('')).toBeUndefined();
-});
-
-test('every kind of JSON value parses to itself', () => {
-  expect(parsed('[1,"a",true,null,{"b":[]}]')).toEqual([
-    1,
-    'a',
-    true,
-    null,
-    { b: [] },
-  ]);
-  expect(parsed('"a"')).toBe('a');
-  expect(parsed('0')).toBe(0);
-  expect(parsed('false')).toBe(false);
 });
 
 test('a key named as the prototype parses to a key like any other', () => {

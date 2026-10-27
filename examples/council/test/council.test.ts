@@ -558,26 +558,24 @@ describe("spend", () => {
 });
 
 describe("gates", () => {
-  test("a greeting is answered by hand, with no council and no route", async () => {
-    const { route, answer, calls } = await run(council, { text: "Hello!" });
+  test.each([
+    ["as text", { text: "Hello!" }],
+    [
+      "as parts, as the Responses and Messages APIs send it",
+      { messages: [{ role: "user", parts: [{ type: "text", text: "Hello!" }] }] },
+    ],
+  ] satisfies [string, Parameters<typeof run>[1]][])(
+    "a greeting sent %s is answered by hand, with no council and no route",
+    async (_, request) => {
+      const { route, answer, calls } = await run(council, request);
 
-    expect(route).toBeUndefined();
-    expect(await answer.text()).toBe(
-      "Hello. Ask me something hard and I will put it to the council.",
-    );
-    expect(calls).toEqual([]);
-  });
-
-  test("a greeting sent as parts, as the Responses and Messages APIs send it, is answered by hand", async () => {
-    const { answer, calls } = await run(council, {
-      messages: [{ role: "user", parts: [{ type: "text", text: "Hello!" }] }],
-    });
-
-    expect(await answer.text()).toBe(
-      "Hello. Ask me something hard and I will put it to the council.",
-    );
-    expect(calls).toEqual([]);
-  });
+      expect(route).toBeUndefined();
+      expect(await answer.text()).toBe(
+        "Hello. Ask me something hard and I will put it to the council.",
+      );
+      expect(calls).toEqual([]);
+    },
+  );
 
   test("a request with tools is refused", async () => {
     const asked = run(council, {

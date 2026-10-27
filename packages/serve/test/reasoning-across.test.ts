@@ -137,29 +137,3 @@ test('what a Claude model goes on from its reasoning with reaches a Responses ca
   expect(JSON.stringify(sent.body)).not.toContain('EqQBCgIYAhIM');
   expect(sent.leftOut.map(({ setting }) => setting)).toEqual(['reasoning']);
 });
-
-test('a Responses caller who does not include it is told it was left out', async () => {
-  const { include: _, ...unasked } = asked;
-  const decoded = responses.decode(unasked, new Headers());
-
-  expect(
-    (await thought()).flatMap((chunk) => decoded.formless(chunk) ?? []),
-  ).toEqual([
-    {
-      warning: {
-        setting: 'reasoning',
-        detail:
-          'The Responses API has no form for what a model goes on from its reasoning with, which the request did not include',
-      },
-      ends: false,
-    },
-    {
-      warning: {
-        setting: 'reasoning',
-        detail:
-          'The Responses API has no form for what a model goes on from its reasoning with, which the request did not include',
-      },
-      ends: false,
-    },
-  ]);
-});

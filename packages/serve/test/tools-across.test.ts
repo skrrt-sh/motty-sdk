@@ -407,8 +407,8 @@ const spaced = {
   ],
 };
 
-test('the tools of a namespace go to a family with none under flat names, and to the Responses API in their namespace', () => {
-  const { request } = responses.decode(
+test('the tools of a namespace go to a family with none under flat names, and to the Responses API in their namespace, where a call under a flat name comes back', () => {
+  const decoded = responses.decode(
     {
       model: 'relay',
       input: 'Ping the server.',
@@ -419,6 +419,7 @@ test('the tools of a namespace go to a family with none under flat names, and to
     },
     new Headers(),
   );
+  const { request } = decoded;
 
   const { body, leftOut } = messages.encode('model-x', request);
   expect(body).toMatchObject({
@@ -442,20 +443,13 @@ test('the tools of a namespace go to a family with none under flat names, and to
       spaced,
     ],
   });
-});
-
-test('a call an upstream of another family makes under a flat name reaches a Responses caller in its namespace', () => {
-  const decoded = responses.decode(
-    { model: 'relay', input: 'Ping the server.', tools: [spaced] },
-    new Headers(),
-  );
-
   expect(
     decoded.collected(
       [
+        { type: 'tool_call', id: 'toolu_1', name: 'shell', arguments: '{}' },
         {
           type: 'tool_call',
-          id: 'toolu_1',
+          id: 'toolu_2',
           name: 'mcp__mini__ping',
           arguments: '{}',
         },
@@ -463,17 +457,20 @@ test('a call an upstream of another family makes under a flat name reaches a Res
       { type: 'finish', reason: 'tool_calls' },
       'r1',
     ),
-  ).toMatchObject({
-    output: [
-      {
-        type: 'function_call',
-        call_id: 'toolu_1',
-        namespace: 'mcp__mini',
-        name: 'ping',
-        arguments: '{}',
-      },
-    ],
-  });
+  ).toEqual(
+    expect.objectContaining({
+      output: [
+        expect.not.objectContaining({ namespace: expect.anything() }),
+        expect.objectContaining({
+          type: 'function_call',
+          call_id: 'toolu_2',
+          namespace: 'mcp__mini',
+          name: 'ping',
+          arguments: '{}',
+        }),
+      ],
+    }),
+  );
 });
 
 test('a flat name another tool already has, or one no family takes, is made apart, and still reaches the caller in its namespace', () => {

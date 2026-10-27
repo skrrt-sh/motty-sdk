@@ -18,7 +18,6 @@ test('a Responses caller that keys its cache asks for a marker on the last messa
     new Headers(),
   );
 
-  expect(request.messages.at(-1)?.cache).toEqual({});
   expect(messages.encode('model-x', request).body).toMatchObject({
     messages: [
       { role: 'user' },
@@ -64,8 +63,29 @@ test('a caller that marks its cache itself, or keys none, is given no marker', (
     new Headers(),
   );
 
-  expect(marked.request.messages.at(-1)?.cache).toBeUndefined();
-  expect(unkeyed.request.messages.at(-1)?.cache).toBeUndefined();
+  const { body } = messages.encode('model-x', marked.request);
+
+  expect(JSON.stringify(body).match(/cache_control/g)).toHaveLength(1);
+  expect(body).toMatchObject({
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Long rules.',
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+      },
+      { role: 'user' },
+      { role: 'assistant' },
+      { role: 'user' },
+    ],
+  });
+  expect(
+    JSON.stringify(messages.encode('model-x', unkeyed.request).body),
+  ).not.toContain('cache_control');
 });
 
 test('to a Responses upstream the key is sent and the marker it stands for is not reported left out', () => {

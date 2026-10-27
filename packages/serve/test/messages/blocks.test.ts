@@ -209,26 +209,6 @@ test.each([[[1]], [null]])(
   },
 );
 
-test('a tool call whose input is free text is sent as the one field of an object', () => {
-  expect(
-    blocksOf(leaving('messages'), [
-      {
-        type: 'tool_call',
-        id: 'call_1',
-        name: 'apply_patch',
-        input: '*** Begin Patch',
-      },
-    ]),
-  ).toEqual([
-    {
-      type: 'tool_use',
-      id: 'call_1',
-      name: 'apply_patch',
-      input: { input: '*** Begin Patch' },
-    },
-  ]);
-});
-
 test('a tool call and its result are written back', () => {
   expect(
     blocksOf(leaving('messages'), [

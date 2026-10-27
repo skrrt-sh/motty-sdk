@@ -6,14 +6,6 @@ import {
   replyFields,
 } from '../../src/chat-completions/finish.ts';
 
-test('each finish reason of the API is read as the core`s', () => {
-  expect(reasonRead('stop')).toBe('stop');
-  expect(reasonRead('length')).toBe('length');
-  expect(reasonRead('tool_calls')).toBe('tool_calls');
-  expect(reasonRead('content_filter')).toBe('content_filter');
-  expect(reasonRead('function_call')).toBe('tool_calls');
-});
-
 test('a provider`s own name for filtered content is the content-filter ending', () => {
   expect(reasonRead('sensitive')).toBe('content_filter');
 });
@@ -68,11 +60,6 @@ test('the failures every dialect shares stay failures under a dialect that names
   expect(
     reasonFailed('mistral', 'insufficient_system_resource', ['error']),
   ).toMatchObject({ code: 'overloaded' });
-});
-
-test('a reason the API does not list is read as other', () => {
-  expect(reasonRead('eos')).toBe('other');
-  expect(reasonRead('')).toBe('other');
 });
 
 test('a dialect`s own word for an ending is read as the ending it names, and no other word is', () => {

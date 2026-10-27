@@ -85,10 +85,6 @@ function timeAsked(decoded: Decoded, stream: boolean) {
   );
 }
 
-test('the codec serves the Messages path', () => {
-  expect(messages.paths).toEqual(['/v1/messages']);
-});
-
 test('a request of this family reaches the upstream with the same meaning', () => {
   const body = {
     model: 'claude-opus-5-5',

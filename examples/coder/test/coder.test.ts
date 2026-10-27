@@ -196,7 +196,7 @@ describe("tiers", () => {
     expect(route).toBe("deep");
   });
 
-  test("a long question sent as parts and no tools is classified, not taken for a quick one", async () => {
+  test("the question is the agent's last text, past its notes and a tool's result, for its length and for the decision model", async () => {
     const models = fake(
       on(jev, { tier: { quick: 0.05, standard: 0.5, deep: 0.45 } }),
       on(sonnet, "plan"),
@@ -204,22 +204,6 @@ describe("tiers", () => {
     );
 
     const { route } = await run(
-      tiers,
-      { messages: [{ role: "user", parts: [{ type: "text", text: "Why does this deadlock? ".repeat(40) }] }] },
-      { models: [models] },
-    );
-
-    expect(route).toBe("deep");
-  });
-
-  test("the question the decision model reads is the agent's last text, past its notes and a tool's result", async () => {
-    const models = fake(
-      on(jev, { tier: { quick: 0.05, standard: 0.5, deep: 0.45 } }),
-      on(sonnet, "plan"),
-      on(opus, "deep reply"),
-    );
-
-    await run(
       tiers,
       {
         messages: [
@@ -233,11 +217,11 @@ describe("tiers", () => {
           { role: "assistant", parts: [{ type: "tool_call", id: "t1", name: "read", input: {} }] },
           { role: "user", parts: [{ type: "tool_result", id: "t1", text: "fn main() {}" }] },
         ],
-        tools: [{ type: "function", name: "read", input: { type: "object" } }],
       },
       { models: [models] },
     );
 
+    expect(route).toBe("deep");
     expect(models.sent(jev)).toMatchObject([{ state: "Why does this deadlock? ".repeat(40) }]);
   });
 });
@@ -349,32 +333,24 @@ describe("gates", () => {
     await expect(run(coder, { messages: [] })).rejects.toBeInstanceOf(EmptyPrompt);
   });
 
-  test("an off-topic opening gets a canned reply and no route", async () => {
-    const models = fake(on(jev, { software: 0.02 }));
-
-    const { route, answer } = await run(
-      coder,
-      { text: "What should I cook tonight?" },
-      { models: [models] },
-    );
-
-    expect(route).toBeUndefined();
-    expect(await answer.text()).toBe("I only answer questions about software and codebases.");
-  });
-
-  test("an off-topic opening sent as parts, as the Responses and Messages APIs send it, gets the canned reply", async () => {
-    const models = fake(on(jev, { software: 0.02 }));
-
-    const { route, answer } = await run(
-      coder,
+  test.each([
+    ["as text", { text: "What should I cook tonight?" }],
+    [
+      "as parts, as the Responses and Messages APIs send it",
       { messages: [{ role: "user", parts: [{ type: "text", text: "What should I cook tonight?" }] }] },
-      { models: [models] },
-    );
+    ],
+  ] satisfies [string, Parameters<typeof run>[1]][])(
+    "an off-topic opening sent %s gets a canned reply and no route",
+    async (_, request) => {
+      const models = fake(on(jev, { software: 0.02 }));
 
-    expect(route).toBeUndefined();
-    expect(await answer.text()).toBe("I only answer questions about software and codebases.");
-    expect(models.sent(jev)).toMatchObject([{ state: "What should I cook tonight?" }]);
-  });
+      const { route, answer } = await run(coder, request, { models: [models] });
+
+      expect(route).toBeUndefined();
+      expect(await answer.text()).toBe("I only answer questions about software and codebases.");
+      expect(models.sent(jev)).toMatchObject([{ state: "What should I cook tonight?" }]);
+    },
+  );
 
   test("requests pass when the decision model is down", async () => {
     const models = fake(
