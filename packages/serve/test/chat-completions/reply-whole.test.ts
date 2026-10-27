@@ -672,3 +672,33 @@ test('a call of many fragments that each carry a field of their own is collected
     'x'.repeat(40_000),
   );
 });
+
+test('a function call with no arguments is collected as an empty object, and a custom call with no input as no text', () => {
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'call_a', name: 'now', arguments: '' },
+        {
+          type: 'tool_call',
+          id: 'call_b',
+          name: 'shell',
+          arguments: '',
+          provider: { 'openai.chat': { type: 'custom' } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            { function: { name: 'now', arguments: '{}' } },
+            { custom: { name: 'shell', input: '' } },
+          ],
+        },
+      },
+    ],
+  });
+});

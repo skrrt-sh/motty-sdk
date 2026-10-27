@@ -117,7 +117,10 @@ export function reply(asked: Asked, id: string) {
         // made together may come in turn and no other chunk says the last.
         calls.delete(event.id);
         over.add(event.id);
-        sent.push(given(call), done(call.index, callItem(call, 'completed')));
+        sent.push(
+          given(call, 'completed'),
+          done(call.index, callItem(call, 'completed')),
+        );
         return sent;
       }
       case 'provider':
@@ -141,7 +144,7 @@ export function reply(asked: Asked, id: string) {
     const sent = settled(open === undefined ? undefined : status(open.index));
     for (const call of calls.values()) {
       sent.push(
-        given(call),
+        given(call, status(call.index)),
         done(call.index, callItem(call, status(call.index))),
       );
     }

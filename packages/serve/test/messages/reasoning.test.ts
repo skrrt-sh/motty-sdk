@@ -69,6 +69,15 @@ test('effort alone is the reasoning effort, kept as sent alone', () => {
   });
 });
 
+test('a null effort, which the API allows, says no effort', () => {
+  expect(reasoningOf(undefined, null)).toEqual(
+    reasoningOf(undefined, undefined),
+  );
+  expect(reasoningOf({ type: 'adaptive' }, null)).toEqual(
+    reasoningOf({ type: 'adaptive' }, undefined),
+  );
+});
+
 test('a thinking mode not known here travels as it was sent', () => {
   expect(reasoningOf({ type: 'between_tools' }, undefined)).toEqual({
     kept: {},

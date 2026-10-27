@@ -2,7 +2,13 @@ import type { Chunk } from '@mottyjs/core/host';
 import { without } from '../wire/json.ts';
 import { held } from './family.ts';
 import { callUncarried, isCustom, put } from './fields.ts';
-import { type Call, callItem, type Sent, type Writing } from './output.ts';
+import {
+  type Call,
+  callItem,
+  type Ended,
+  type Sent,
+  type Writing,
+} from './output.ts';
 
 export function called(
   writing: Writing,
@@ -51,7 +57,13 @@ export function called(
   return sent;
 }
 
-export function given({ index, id, holds, given: whole }: Call): Sent {
+// Arguments are JSON, and no client parses none: a call that ended having
+// said nothing took an empty object. A custom tool's input is free text.
+export function given(call: Call, status: Ended): Sent {
+  if (status === 'completed' && call.holds === 'arguments') {
+    call.given ||= '{}';
+  }
+  const { index, id, holds, given: whole } = call;
   return {
     type:
       holds === 'input'

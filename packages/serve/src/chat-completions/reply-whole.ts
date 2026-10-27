@@ -103,8 +103,15 @@ export function collected(
     ...(calls.length === 0
       ? {}
       : {
+          // Arguments are JSON, and no client parses none: a call that said
+          // nothing took an empty object. A custom tool's input is free text.
           tool_calls: calls.map(({ id, name, type, input, carried }) =>
-            wireCall(type, input, mergedUnread(carried, type), { id, name }),
+            wireCall(
+              type,
+              type === 'function' && input === '' ? '{}' : input,
+              mergedUnread(carried, type),
+              { id, name },
+            ),
           ),
         }),
     ...(annotations.length === 0 ? {} : { annotations }),

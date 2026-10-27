@@ -1440,3 +1440,45 @@ test('what a later chunk of a call holds is added to the item where it is, howev
     ['__proto__', { a: 1 }],
   ]);
 });
+
+test('a function call that ended with no arguments is done with an empty object, and a custom call with no input', () => {
+  const { output, push, closed } = reply(
+    { body: {}, muted: true, custom: new Set(['patch']) },
+    'r1',
+  );
+  push({ type: 'tool_call', id: 'call_1', name: 'now', arguments: '' });
+  expect(
+    push({ type: 'tool_call', id: 'call_1', arguments: '', ended: true }),
+  ).toMatchObject([
+    { type: 'response.function_call_arguments.done', arguments: '{}' },
+    { type: 'response.output_item.done', item: { arguments: '{}' } },
+  ]);
+  push({ type: 'tool_call', id: 'call_2', name: 'today', arguments: '' });
+  push({ type: 'tool_call', id: 'call_3', name: 'patch', arguments: '' });
+  expect(closed('whole')).toMatchObject([
+    { type: 'response.function_call_arguments.done', arguments: '{}' },
+    { type: 'response.output_item.done', item: { arguments: '{}' } },
+    { type: 'response.custom_tool_call_input.done', input: '' },
+    { type: 'response.output_item.done', item: { input: '' } },
+  ]);
+  expect(output).toMatchObject([
+    { arguments: '{}' },
+    { arguments: '{}' },
+    { input: '' },
+  ]);
+});
+
+test('a function call a failure broke off before any arguments is left with none', () => {
+  const { push, closed } = reply(
+    { body: {}, muted: true, custom: new Set() },
+    'r1',
+  );
+  push({ type: 'tool_call', id: 'call_1', name: 'now', arguments: '' });
+  expect(closed('failed')).toMatchObject([
+    { type: 'response.function_call_arguments.done', arguments: '' },
+    {
+      type: 'response.output_item.done',
+      item: { status: 'incomplete', arguments: '' },
+    },
+  ]);
+});
