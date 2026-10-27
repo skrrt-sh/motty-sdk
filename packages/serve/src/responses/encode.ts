@@ -157,10 +157,10 @@ export function encode(
     }),
   });
   // A request with a cache key is cached by it, which is what a marker this
-  // API had no place for asked.
+  // API had no place for asked. A key holds no lifetime, so a ttl is still lost.
   const { prompt_cache_key: key } = body;
   const keyed = typeof key === 'string';
-  const marks = ['cache', 'cache.outside', 'cache.ttl'];
+  const marks = ['cache', 'cache.outside'];
   return {
     path: '/responses',
     leftOut: [

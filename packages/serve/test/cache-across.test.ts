@@ -99,3 +99,20 @@ test('to a Responses upstream the key is sent and the marker it stands for is no
   expect(body).toMatchObject({ prompt_cache_key: 'session-1' });
   expect(leftOut).toEqual([]);
 });
+
+test('to a Responses upstream a key does not stand for the lifetime a marker asked', () => {
+  const { request } = responses.decode(
+    { model: 'relay', input: turn, prompt_cache_key: 'session-1' },
+    new Headers(),
+  );
+
+  const { leftOut } = responses.encode('model-x', {
+    ...request,
+    messages: [
+      { role: 'user', text: 'Long rules.', cache: { ttl: '1h' } },
+      ...request.messages,
+    ],
+  });
+
+  expect(leftOut.map(({ setting }) => setting)).toEqual(['cache.ttl']);
+});
