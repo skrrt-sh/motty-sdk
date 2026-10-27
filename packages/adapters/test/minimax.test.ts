@@ -440,6 +440,63 @@ test.each([
     base: { status_code: '1008', status_msg: 'insufficient balance' },
     kind: 'quota_exceeded',
   },
+  {
+    base: { status_code: 1026, status_msg: 'input new_sensitive' },
+    kind: 'blocked',
+  },
+  {
+    base: { status_code: 1041, status_msg: 'conn limit' },
+    kind: 'rate_limited',
+  },
+  {
+    base: { status_code: 2045, status_msg: 'rate growth limit' },
+    kind: 'rate_limited',
+  },
+  {
+    base: { status_code: 2046, status_msg: 'token growth limit' },
+    kind: 'rate_limited',
+  },
+  {
+    base: { status_code: 2047, status_msg: 'conn growth limit' },
+    kind: 'rate_limited',
+  },
+  {
+    base: { status_code: 2053, status_msg: 'insufficient credit' },
+    kind: 'quota_exceeded',
+  },
+  {
+    base: { status_code: 2056, status_msg: 'usage limit exceeded' },
+    kind: 'quota_exceeded',
+  },
+  {
+    base: {
+      status_code: 2067,
+      status_msg: 'usage limit reached and credit auto consumption is off',
+    },
+    kind: 'quota_exceeded',
+  },
+  {
+    base: { status_code: 2022, status_msg: 'model is not exist' },
+    kind: 'unknown_model',
+  },
+  {
+    base: { status_code: 2069, status_msg: 'model is no longer available' },
+    kind: 'unknown_model',
+  },
+  {
+    base: {
+      status_code: 2064,
+      status_msg: 'The server cluster is currently under high load',
+    },
+    kind: 'overloaded',
+  },
+  {
+    base: {
+      status_code: 2066,
+      status_msg: 'The request timed out while processing',
+    },
+    kind: 'timed_out',
+  },
 ])(
   'status $base.status_code inside a reply that began well is $kind, in the upstream`s words, by its reference',
   async ({ base, kind }) => {
@@ -491,6 +548,10 @@ test.each([
     },
     kind: 'upstream_refused',
   },
+  {
+    base: { status_code: 2049, status_msg: 'invalid API Key' },
+    kind: 'upstream_refused',
+  },
 ])(
   'status $base.status_code inside a reply is the host`s to mend, and its words are kept for the host, by its reference',
   async ({ base, kind }) => {
@@ -526,7 +587,10 @@ data: ${JSON.stringify({ id: '0629', choices: [], base_resp: base })}
           code: kind,
           message: "The upstream refused the host's credentials or account",
           provider: {
-            minimax: { status_code: 1004, message: base.status_msg },
+            minimax: {
+              status_code: base.status_code,
+              message: base.status_msg,
+            },
           },
           upstream: true,
         },

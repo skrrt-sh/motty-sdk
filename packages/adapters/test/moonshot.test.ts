@@ -996,6 +996,16 @@ test.each([
     said: 'Limit of org-0123456789abcdef0123456789abcdef <cak-a1b2c3d4e5f6g7h8i9j0> reached, in words not seen before',
     told: 'Limit of reached, in words not seen before',
   },
+  {
+    status: 429,
+    said: 'Your account org-f3575b7f8db2491484802c82c85d1e60 / proj-3e64ded3bb8f4d2ca52cf30e20059f8b <ak-a1b2c3d4e5f6g7h8i9j0> request reached organization TPD rate limit, current: 1500246, limit: 1500000',
+    told: 'Your account request reached organization TPD rate limit, current: 1500246, limit: 1500000',
+  },
+  {
+    status: 429,
+    said: 'Limit of proj-3e64ded3bb8f4d2ca52cf30e20059f8b reached, in words not seen before',
+    told: 'Limit of reached, in words not seen before',
+  },
 ])(
   'what names the host`s account and its key is cut from what the caller is told, and kept for the host: $told',
   async ({ status, said, told }) => {

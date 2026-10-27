@@ -723,6 +723,57 @@ test.each([
   },
   {
     status: 403,
+    told: 'a guardrail budget that is spent',
+    from: 'by its reference',
+    error: {
+      message:
+        'Org member budget limit exceeded (weekly limit). Contact your org admin.',
+      code: 403,
+      metadata: {
+        limit_source: 'openrouter_guardrail_budget',
+        scope: 'member',
+        limit_usd: 50,
+        spend_usd: 52,
+      },
+    },
+    kind: 'quota_exceeded',
+  },
+  {
+    status: 403,
+    told: 'a workspace budget that is spent',
+    from: 'by its reference',
+    error: {
+      message: 'Workspace budget limit exceeded.',
+      code: 403,
+      metadata: { limit_source: 'openrouter_workspace_budget' },
+    },
+    kind: 'quota_exceeded',
+  },
+  {
+    status: 403,
+    told: 'a key at its own limit',
+    from: 'by its reference',
+    error: {
+      message: 'Key limit exceeded.',
+      code: 403,
+      metadata: { limit_source: 'openrouter_key_limit' },
+    },
+    kind: 'quota_exceeded',
+  },
+  {
+    status: 402,
+    told: 'an in-flight budget named by its source alone',
+    from: 'by its reference',
+    error: {
+      message:
+        'This request would exceed your available credits given your current in-flight requests.',
+      code: 402,
+      metadata: { limit_source: 'openrouter_in_flight_budget' },
+    },
+    kind: 'rate_limited',
+  },
+  {
+    status: 403,
     told: 'an input the moderation flagged',
     from: 'by its reference',
     error: {

@@ -489,6 +489,63 @@ describe.skipIf(url === undefined)('against a server', () => {
 
     expect(held).toEqual(['first', 'second', undefined]);
   });
+
+  test('a connection the server dropped is made again by the next call', async () => {
+    const target = new URL(url ?? '');
+    const open: { end: () => void }[] = [];
+    let made = 0;
+    // A relay in front of the server, so the test can drop the connection
+    // as a server's idle timeout or a restart does.
+    using relay = Bun.listen<{ ahead?: Bun.Socket; held: Uint8Array[] }>({
+      hostname: '127.0.0.1',
+      port: 0,
+      socket: {
+        open: async (caller) => {
+          caller.data = { held: [] };
+          made += 1;
+          open.push(caller);
+          const ahead = await Bun.connect({
+            hostname: target.hostname,
+            port: Number(target.port || 6379),
+            socket: {
+              data: (_, chunk) => {
+                caller.write(chunk);
+              },
+              close: () => {
+                caller.end();
+              },
+            },
+          });
+          open.push(ahead);
+          caller.data.ahead = ahead;
+          for (const chunk of caller.data.held) ahead.write(chunk);
+        },
+        data: (caller, chunk) => {
+          const { ahead } = caller.data;
+          if (ahead === undefined) caller.data.held.push(chunk);
+          else ahead.write(chunk);
+        },
+        close: (caller) => {
+          caller.data.ahead?.end();
+        },
+      },
+    });
+    const relayed = new URL(target);
+    relayed.hostname = '127.0.0.1';
+    relayed.port = `${relay.port}`;
+    const storage = redis({ url: relayed.href });
+
+    await storage.set(`${run}:dropped`, 'first');
+    for (const socket of open.splice(0)) socket.end();
+    await Bun.sleep(50);
+    const read = await storage
+      .get(`${run}:dropped`)
+      .catch((raised: unknown) => raised);
+    await storage.delete(`${run}:dropped`);
+
+    expect(read).toBe('first');
+    expect(made).toBe(2);
+  });
 });
 
 test('with no url it fails when made', () => {

@@ -1,7 +1,7 @@
 import { expect, jest, test } from 'bun:test';
 import { once } from 'node:events';
 import { createServer, type Server, type ServerResponse } from 'node:http';
-import { chatCompletions, responses } from '@mottyjs/serve';
+import { chatCompletions, messages, responses } from '@mottyjs/serve';
 import { chat } from '../src/chat.ts';
 
 // Bun's own server does not say how many connections it took.
@@ -48,6 +48,11 @@ test.each([
     'Responses',
     responses,
     'event: response.completed\ndata: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n',
+  ],
+  [
+    'Messages',
+    messages,
+    'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"small","content":[],"stop_reason":null,"usage":{"input_tokens":3,"output_tokens":0}}}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\nevent: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n',
   ],
 ])(
   'a %s body that ends in a later write than its last event keeps the connection for the next call',
@@ -234,4 +239,32 @@ test('a body held open past its last event is let go after a second', async () =
   } finally {
     jest.useRealTimers();
   }
+});
+
+test('a failure told in a body of its own keeps the connection for the next call', async () => {
+  let connections = 0;
+  const server = createServer((request, response) => {
+    request.resume().on('end', () => {
+      response.writeHead(429, { 'content-type': 'application/json' });
+      response.end('{"error":{"message":"Slow down","type":"rate_limit"}}');
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  await using upstream = server;
+  upstream.on('connection', () => {
+    connections += 1;
+  });
+
+  const codes: (string | undefined)[] = [];
+  for (let sent = 0; sent < 3; sent += 1) {
+    const events = await Array.fromAsync(
+      asked(addressOf(upstream), AbortSignal.timeout(5000)),
+    );
+    const last = events.at(-1);
+    codes.push(last?.type === 'error' ? last.error.code : undefined);
+  }
+
+  expect(codes).toEqual(['rate_limited', 'rate_limited', 'rate_limited']);
+  expect(connections).toBe(1);
 });

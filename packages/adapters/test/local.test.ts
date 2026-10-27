@@ -942,6 +942,41 @@ data: [DONE]
   expect(seen).toEqual(['core']);
 });
 
+test('a header a call states goes to the server where the host names it among those the connection forwards', async () => {
+  const seen: (string | null)[] = [];
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      seen.push(request.headers.get('x-session'));
+      return new Response(
+        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
+
+data: [DONE]
+
+`,
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
+    },
+  });
+  const { models } = adapted([
+    local({ address: upstream.url.origin, forwardHeaders: ['x-session'] }),
+  ]);
+
+  const events = await Array.fromAsync(
+    models(
+      'local/qwen3',
+      {
+        messages: [{ role: 'user', text: 'What is 17*23?' }],
+        options: { headers: { 'x-session': 's-1' } },
+      },
+      AbortSignal.timeout(5000),
+    ),
+  );
+
+  expect(seen).toEqual(['s-1']);
+  expect(events.at(-1)).not.toHaveProperty('warnings');
+});
+
 test('a server said to open the thinking in its template has a reply that only closes it read as reasoning and then text', async () => {
   using upstream = Bun.serve({
     port: 0,

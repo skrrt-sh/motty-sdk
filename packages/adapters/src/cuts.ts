@@ -36,16 +36,17 @@ export const groqCuts: readonly Cut[] = [
   },
 ];
 
-// A rate limit names the organisation and the key it is counted for. The
-// last two read each id alone, should the words around them change.
+// A rate limit names the organisation, the project and the key it is
+// counted for. The last two read each id alone, should the words around
+// them change.
 export const moonshotCuts: readonly Cut[] = [
   {
     pattern:
-      /Your account org-[0-9a-f]{16,4096} ?<c?ak-[a-z0-9]{8,4096}> request/gi,
+      /Your account org-[0-9a-f]{16,4096}(?: \/ proj-[0-9a-f]{16,4096})? ?<c?ak-[a-z0-9]{8,4096}> request/gi,
     replacement: 'Your account request',
   },
   {
-    pattern: /(?<![A-Za-z0-9_-])org-[0-9a-f]{16,4096}/g,
+    pattern: /(?<![A-Za-z0-9_-])(?:org|proj)-[0-9a-f]{16,4096}/g,
     replacement: '',
     bare: true,
   },
