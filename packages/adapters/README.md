@@ -3,9 +3,9 @@
 The adapters of the Motty SDK: plain objects a host passes in its host options, one import path
 each. Model providers: `openai`, `anthropic`, `openrouter`, `deepseek`, `moonshot`, `zai`,
 `dashscope`, `minimax`, `groq`, `mistral`, `together`, `fireworks`, `ollama`, `local` and
-`typesafe`. Storage: `redis`. Auth: `jwt` and `bearer`, or an object of the host's own. A
-credential stays inside the adapter the host made and never enters a motty's code. This package is
-never in a motty's bundle.
+`typesafe`. Storage: `redis`, which is Bun's own client and so runs on Bun alone. Auth: `jwt` and
+`bearer`, or an object of the host's own. A credential stays inside the adapter the host made and
+never enters a motty's code. This package is never in a motty's bundle.
 
 ```sh
 bun add @mottyjs/adapters

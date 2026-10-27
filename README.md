@@ -14,7 +14,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <a href="https://www.npmjs.com/package/@mottyjs/core"><img src="https://img.shields.io/npm/v/%40mottyjs%2Fcore?label=npm&color=cb3837" alt="@mottyjs/core on npm"></a>
-  <img src="https://img.shields.io/badge/runtime-Bun-f472b6" alt="Runtime: Bun">
+  <img src="https://img.shields.io/badge/runtime-Bun%20%7C%20Node%20%7C%20Deno%20%7C%20Workers-f472b6" alt="Runtime: Bun, Node, Deno, Workers">
   <img src="https://img.shields.io/badge/TypeScript-strict-3178c6" alt="TypeScript: strict">
 </p>
 
@@ -143,7 +143,8 @@ test("a short question without tools goes to the quick tier", async () => {
 ## What the code can do
 
 - **Read the whole request.** The messages, the tools, the options, the caller's headers and who
-  the caller is are all there.
+  the caller is are all there. `said(message)` is what the caller wrote, whether the message came
+  as `text` or as parts.
 - **Call any model, more than once and in any order.** `race`, `fallback`, `retry` and `timeout`
   compose, and a decision model such as Jev or Laya can pick.
 - **Answer without a model.** An answer can be written by hand.
@@ -185,7 +186,7 @@ and go as low as a provider's own options on one call, or your own adapter, auth
 
 | Package | Kind | Holds |
 | --- | --- | --- |
-| [`@mottyjs/core`](packages/core) | Core | The builder, model calls, `fallback`, `race`, `retry`, `timeout`, answers, error classes, types |
+| [`@mottyjs/core`](packages/core) | Core | The builder, model calls, `fallback`, `race`, `retry`, `timeout`, answers, `said`, error classes, types |
 | [`@mottyjs/store`](packages/store) | Plugin | Key-value storage that outlives a request |
 | [`@mottyjs/decision`](packages/decision) | Plugin | Decision models and their questions |
 | [`@mottyjs/auth`](packages/auth) | Plugin | A part that requires an identified caller |
@@ -241,8 +242,8 @@ yourself.
 ## Status
 
 The packages are on npm under the `@mottyjs` scope, all at one version. Until `1.0.0` a minor
-version may break an API. The SDK runs on Bun only, since `serve`, the adapters, the bundler and
-the test runner are Bun's.
+version may break an API. The SDK runs on Bun, Node 22 and later, Deno and Cloudflare Workers.
+`serve` and the Redis adapter are Bun's; on any other runtime a host serves a motty with `mount`.
 
 - Images, files and audio are carried inside a chat request where the upstream takes them. The
   embeddings, images, audio, files and batches endpoints are not served.

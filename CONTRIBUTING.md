@@ -20,7 +20,8 @@ bun test
 
 The storage adapter's tests need a server: `podman compose up -d --wait`, or the same with
 `docker`, and `REDIS_URL=redis://127.0.0.1:6379`. The gates under `gates/` run with `bun test` and
-hold the SDK's size, type-check cost and time per call within a recorded baseline. Live tests make
+hold the SDK's size, type-check cost and time per call within a recorded baseline. The gate on the
+packed packages runs them on Node too, so it needs Node 24, which CI sets up. Live tests make
 real calls, need provider keys in `.env`, and are not part of a pull request's checks.
 
 ## Code rules
@@ -52,8 +53,11 @@ core's own plan goes into [CORE.md](CORE.md) the same way.
 ## Releases
 
 - All packages carry one version. A release bumps it in every package in one pull request, with
-  `bun run bump X.Y.Z`, which also brings the lockfile along. A package is packed with the versions
-  the lockfile records, so a lockfile left behind fails the checks.
+  `bun run bump X.Y.Z`, which also writes the SDK's version constant and brings the lockfile
+  along. A package is packed with the versions the lockfile records, so a lockfile left behind
+  fails the checks.
+- Packing a package builds its JavaScript and declarations first, with `bun run build`. Neither
+  is committed.
 - A release is an annotated `vX.Y.Z` tag on `main`, or `vX.Y.Z-rc.N` for a pre-release. A tag is
   never moved. The release workflow refuses a tag that is lightweight or of neither form.
 - Pushing the tag runs the checks on it and packs the packages once. After a maintainer approves,
