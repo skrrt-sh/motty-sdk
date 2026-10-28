@@ -169,6 +169,28 @@ test('calls whose fragments take turns are one block each', () => {
   ]);
 });
 
+test('text between the fragments of parallel calls leaves each call whole', () => {
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'a', name: 'f', arguments: '{"city":' },
+        { type: 'tool_call', id: 'b', name: 'g', arguments: '{"tz":' },
+        { type: 'text', text: 'Checking both.' },
+        { type: 'tool_call', id: 'a', arguments: '"Paris"}' },
+        { type: 'tool_call', id: 'b', arguments: '"CET"}' },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      'req_5',
+      'coder',
+      false,
+    ),
+  ).toHaveProperty('content', [
+    { type: 'tool_use', id: 'a', name: 'f', input: { city: 'Paris' } },
+    { type: 'tool_use', id: 'b', name: 'g', input: { tz: 'CET' } },
+    { type: 'text', text: 'Checking both.' },
+  ]);
+});
+
 test('a collected message holds what the ending said of it, in the delta and beside it', () => {
   expect(
     collected(
