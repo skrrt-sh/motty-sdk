@@ -51,8 +51,9 @@ test('a tracing switch left on in a developer`s shell is off before any rival is
 });
 
 // A tie has to fail, so a rival must take a tenth more than motty: over
-// repeated runs, some with every core busy, a tie read 1.00 at the most
-// and the narrowest lead 1.43 at the least.
+// repeated runs, motty slowed to ai-sdk's time read 1.02 at the most, and
+// the narrowest lead, text against ai-sdk, 1.39 at the least on the Bun
+// CI runs.
 test.each(timed.filter(({ name }) => !behind.includes(name)))(
   'a call takes less time through motty, $name',
   async ({ scenario, rival }) => {
