@@ -56,7 +56,10 @@ describe.skipIf(url === undefined)('on Valkey', () => {
   ])(
     'a $call through the adapter takes about what the bare client takes',
     async ({ motty, bare }) => {
-      expect(await share(bare, motty, timed, 200)).toBeLessThan(1.5);
+      const taken = await share(bare, motty, timed, 200);
+      console.log('SHARE valkey', taken);
+      console.log('SHARE workers', call, taken);
+      expect(taken).toBeLessThan(1.5);
     },
     60_000,
   );
@@ -97,7 +100,7 @@ describe('on Workers', () => {
     };
   }
 
-  test.each(['get', 'set', 'increment'])(
+  test.each(['get', 'set', 'plain', 'increment'])(
     'a %s through the adapter takes about what a bare Durable Object takes',
     async (call) => {
       const taken = await share(
@@ -106,6 +109,7 @@ describe('on Workers', () => {
         (subject) => nanosecondsPerCall(subject, 1),
         200,
       );
+      console.log('SHARE workers', call, taken);
       expect(taken).toBeLessThan(1.5);
     },
     60_000,

@@ -40,6 +40,8 @@ export default {
     const made = {
       'motty get': () => storage.get('timed'),
       'motty set': () => storage.set('timed', value, { ttl: 60_000 }),
+      'motty plain': () => storage.set('timed', value),
+      'bare plain': () => bare.write('timed', JSON.stringify(value)),
       'motty increment': () =>
         storage.increment?.('counted', 1, { ttl: 60_000 }),
       'bare get': async () => {
