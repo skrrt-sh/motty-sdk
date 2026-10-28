@@ -125,6 +125,26 @@ test('a completed call resolves an answer with its text', async () => {
   expect(text).toBe('Hello');
 });
 
+test('the usage of an answer holds only the counts it names, not what else the upstream reported', async () => {
+  const host = {
+    ...stubHost(),
+    models: async function* () {
+      yield JSON.parse(
+        '{"type":"finish","reason":"stop","usage":{"input":3,"output":2,"secret":"sk-canary"}}',
+      );
+    },
+  };
+
+  const usage = await enter(host, async () => {
+    const reply = await model('acme/small').complete({
+      messages: [{ role: 'user', text: 'Hi' }],
+    });
+    return reply.usage();
+  });
+
+  expect(usage).toStrictEqual({ input: 3, output: 2 });
+});
+
 test('usage and time land in calls and are summed over two calls', async () => {
   const host = stubHost({
     'acme/small': [

@@ -21,7 +21,12 @@ import {
   toFacts,
   unexpected,
 } from './data/errors.ts';
-import { isTerminal, type StreamEvent, type Usage } from './data/event.ts';
+import {
+  isTerminal,
+  type StreamEvent,
+  type Usage,
+  usageOf,
+} from './data/event.ts';
 import type { ChatRequest, Json } from './data/message.ts';
 
 // A decision provider's adapter carries only the decision call.
@@ -184,7 +189,7 @@ function isAmount(cost: unknown): cost is number {
 
 function costed(event: StreamEvent, model: string, price: Price): StreamEvent {
   if (!isTerminal(event) || event.usage === undefined) return event;
-  const cost = price(model, event.usage);
+  const cost = price(model, usageOf(event.usage));
   return isAmount(cost) ? { ...event, usage: { ...event.usage, cost } } : event;
 }
 

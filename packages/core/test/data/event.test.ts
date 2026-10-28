@@ -86,7 +86,7 @@ test('a finish enters as the terminal event it is', () => {
     warnings: [{ setting: 'seed' }],
     provider: { anthropic: { stop_sequence: null } },
   };
-  expect(eventOf(event) === event).toBe(true);
+  expect<unknown>(eventOf(event)).toStrictEqual(event);
 });
 
 test('a failure that enters is marked as from outside and is otherwise as it was sent', () => {
@@ -179,12 +179,20 @@ test.each([
 
 test('a count of zero is a count', () => {
   const finish = { type: 'finish', reason: 'stop', usage: { cached: 0 } };
-  expect(eventOf(finish) === finish).toBe(true);
+  expect<unknown>(eventOf(finish)).toStrictEqual(finish);
 });
 
 test('a cost is an amount, whole or not, and is kept beside the counts', () => {
-  const usage = { input: 12, cost: 0.0000023 };
-  expect(usageOf(usage) === usage).toBe(true);
+  expect(usageOf({ input: 12, cost: 0.0000023 })).toStrictEqual({
+    input: 12,
+    cost: 0.0000023,
+  });
+});
+
+test('usage holds only the counts it names, whatever else an upstream reports', () => {
+  expect(
+    usageOf({ input: 12, secret: 'sk-canary', nested: { token: 'x' } }),
+  ).toStrictEqual({ input: 12 });
 });
 
 test('a cost that is not an amount is dropped and the counts kept', () => {
