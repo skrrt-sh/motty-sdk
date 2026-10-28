@@ -162,6 +162,43 @@ test("the model's turn is written as the items it was made of", () => {
   ]);
 });
 
+test('reasoning a reply marked cut short goes back without the mark, which OpenAI refuses on input', () => {
+  const sent = (status: string) =>
+    inputOf(
+      leaving('responses'),
+      [
+        {
+          role: 'assistant',
+          parts: [
+            {
+              type: 'reasoning',
+              text: '',
+              provider: {
+                'openai.responses': {
+                  type: 'reasoning',
+                  id: 'rs_1',
+                  status,
+                  summary: [],
+                  encrypted_content: 'gAAAAABo',
+                },
+              },
+            },
+          ],
+        },
+      ],
+      new Set(),
+    ).input;
+  expect(sent('incomplete')).toEqual([
+    {
+      type: 'reasoning',
+      id: 'rs_1',
+      summary: [],
+      encrypted_content: 'gAAAAABo',
+    },
+  ]);
+  expect(sent('completed')).toMatchObject([{ status: 'completed' }]);
+});
+
 test('reasoning this API did not sign is left out and reported', () => {
   const left = leaving('responses');
   expect(

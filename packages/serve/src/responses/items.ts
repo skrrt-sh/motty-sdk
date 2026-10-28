@@ -170,7 +170,13 @@ function items(
           break;
         }
         flushed();
-        out.push(item);
+        // A reply marks reasoning cut short, which OpenAI writes no status
+        // for and refuses one on input. Another router's own status stays.
+        out.push(
+          field(item, 'status') === 'incomplete'
+            ? without(item, ['status'])
+            : item,
+        );
         break;
       }
       case 'provider':

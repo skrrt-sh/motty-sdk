@@ -1648,6 +1648,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   of the reply, after items the upstream sent later. No chunk said a call was whole, since
   pieces of calls made together may interleave and a motty may reorder them. Rejected: ending
   a call when an item of another kind opened, which could write a cut free-text call as whole.
+- **A reasoning item a caller sends back loses only the `incomplete` status a reply gave it.**
+  The reply marks reasoning cut short so the caller can tell, but OpenAI writes no status on a
+  reasoning item and refuses any status on one it is given. A router's own `completed` stays.
+  Cause: live, a Codex-shaped turn after a reply cut by its output limit failed with a 400 on
+  `input[1].status`.
 - **What a Chat Completions tool definition holds beyond what is read is a hint of that API,**
   where the Responses and Messages codecs keep a definition's unread fields as provider data.
   Cause: provider data of one family is refused by an upstream of another, so a chat caller's
