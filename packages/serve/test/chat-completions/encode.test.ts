@@ -806,7 +806,7 @@ test('what a tool holds for this API is written back where it sat', () => {
         input: { type: 'object' },
         hints: {
           'openai.chat': {
-            cache_control: { type: 'ephemeral' },
+            defer: true,
             function: { vendor: 1, name: 'other' },
           },
         },
@@ -821,7 +821,7 @@ test('what a tool holds for this API is written back where it sat', () => {
 
   expect(body).toHaveProperty('tools', [
     {
-      cache_control: { type: 'ephemeral' },
+      defer: true,
       type: 'function',
       function: { vendor: 1, name: 'now', parameters: { type: 'object' } },
     },
@@ -862,4 +862,165 @@ test('a field a tool was not given is not written from what it holds', () => {
       function: { name: 'now', parameters: { type: 'object' } },
     },
   ]);
+});
+
+test('an upstream that keeps a marker five minutes alone is sent the marker with no lifetime, and an hour is reported', () => {
+  const { body, leftOut } = encode(
+    'qwen-x',
+    {
+      messages: [
+        { role: 'system', text: 'A long manual', cache: { ttl: '1h' } },
+        { role: 'user', text: 'Hi', cache: { ttl: '5m' } },
+      ],
+    },
+    { name: 'dashscope', breakpoints: 'cache_control', lifetime: '5m' },
+  );
+
+  expect(body).toHaveProperty('messages', [
+    {
+      role: 'system',
+      content: [
+        {
+          type: 'text',
+          text: 'A long manual',
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+    },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Hi', cache_control: { type: 'ephemeral' } },
+      ],
+    },
+  ]);
+  expect(leftOut.map(({ setting }) => setting)).toEqual(['cache.ttl']);
+});
+
+test('where the lifetime is the request`s, an hour asked by any marker is asked once and no marker is written', () => {
+  const { body, leftOut } = encode(
+    'kimi-k3',
+    {
+      messages: [
+        { role: 'system', text: 'A long manual', cache: { ttl: '1h' } },
+        {
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hi', cache: {} }],
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          name: 'now',
+          input: { type: 'object' },
+          cache: {},
+        },
+      ],
+    },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+
+  expect(body).toMatchObject({
+    prompt_cache_options: { mode: 'implicit', ttl: '1h' },
+    tools: [{ type: 'function', function: { name: 'now' } }],
+    messages: [
+      { role: 'system', content: 'A long manual' },
+      { role: 'user', content: [{ type: 'text', text: 'Hi' }] },
+    ],
+  });
+  expect(JSON.stringify(body)).not.toContain('cache_control');
+  expect(leftOut).toEqual([]);
+
+  const short = encode(
+    'kimi-k3',
+    { messages: [{ role: 'user', text: 'Hi', cache: { ttl: '5m' } }] },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+  expect(short.body).not.toHaveProperty('prompt_cache_options');
+  expect(short.leftOut).toEqual([]);
+
+  const own = encode(
+    'kimi-k3',
+    {
+      messages: [{ role: 'user', text: 'Hi', cache: { ttl: '1h' } }],
+      options: {
+        provider: {
+          'openai.chat': {
+            prompt_cache_options: { mode: 'implicit', ttl: '5m' },
+          },
+        },
+      },
+    },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+  expect(own.body).toHaveProperty('prompt_cache_options', {
+    mode: 'implicit',
+    ttl: '5m',
+  });
+});
+
+test('where the lifetime is the request`s, an hour asked on a tool result is asked of the request', () => {
+  const { body, leftOut } = encode(
+    'kimi-k3',
+    {
+      messages: [
+        {
+          role: 'assistant',
+          parts: [{ type: 'tool_call', id: 'c1', name: 'now', input: {} }],
+        },
+        {
+          role: 'tool',
+          parts: [
+            { type: 'tool_result', id: 'c1', text: '4C', cache: { ttl: '1h' } },
+          ],
+        },
+      ],
+    },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+
+  expect(body).toMatchObject({
+    prompt_cache_options: { mode: 'implicit', ttl: '1h' },
+    messages: [{}, { role: 'tool', tool_call_id: 'c1', content: '4C' }],
+  });
+  expect(leftOut).toEqual([]);
+});
+
+test('a tool`s marker goes on the tool to a router, with what it said beside it, and is reported to OpenAI', () => {
+  const sent = (dialect?: Parameters<typeof encode>[2]) =>
+    encode(
+      'claude-x',
+      {
+        messages: [],
+        tools: [
+          {
+            type: 'function',
+            name: 'now',
+            input: { type: 'object' },
+            cache: { ttl: '1h' },
+            hints: { 'openai.chat': { cache_control: { scope: 'org' } } },
+          },
+        ],
+      },
+      dialect,
+    );
+
+  const routed = sent({ name: 'openrouter', breakpoints: 'cache_control' });
+  expect(routed.body).toHaveProperty('tools', [
+    {
+      type: 'function',
+      cache_control: { scope: 'org', type: 'ephemeral', ttl: '1h' },
+      function: { name: 'now', parameters: { type: 'object' } },
+    },
+  ]);
+  expect(routed.leftOut).toEqual([]);
+
+  const plain = sent();
+  expect(plain.body).toHaveProperty('tools', [
+    {
+      type: 'function',
+      function: { name: 'now', parameters: { type: 'object' } },
+    },
+  ]);
+  expect(plain.leftOut.map(({ setting }) => setting)).toEqual(['tool.cache']);
 });

@@ -1567,6 +1567,12 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   breakpoint, gives it no lifetime and ignores a `cache_control` on a content part; its Chat
   Completions takes `cache_control` with one. Cause: measured there, a part's `cache_control`
   wrote and read 0 tokens and the breakpoint 9,129.
+- **A dialect also says where a marker's lifetime goes.** DashScope keeps a marker five minutes
+  and takes no lifetime, so it is sent `cache_control` alone and an hour is reported. Moonshot
+  takes no marker and caches by itself, and its Kimi K3 models take the lifetime for the whole
+  request in `prompt_cache_options`, so any marker asking an hour asks it there once. Cause:
+  DashScope was sent no marker, and reads it marks cost half of those it finds alone; Moonshot
+  refuses a breakpoint, and an hour asked by Claude Code was dropped.
 - **A JSON schema is held as strictly as its caller's API holds it.** Left unsaid, Chat
   Completions takes a schema loosely and Responses strictly, and Anthropic Messages always
   constrains: each decoder writes its API's default, and both OpenAI encoders always say `strict`.

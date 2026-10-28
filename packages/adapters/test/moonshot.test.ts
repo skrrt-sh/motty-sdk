@@ -495,3 +495,59 @@ test.each([
     ]);
   },
 );
+
+test('a marker kept an hour asks the newest model to keep the whole prefix an hour, and is no warning; K2 is told nothing', async () => {
+  const seen: unknown[] = [];
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      seen.push(await request.json());
+      return new Response(
+        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":1,"prompt_tokens_details":{"cached_tokens":300,"cache_write_tokens":600}}}
+
+data: [DONE]
+
+`,
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
+    },
+  });
+  const { models } = adapted([
+    moonshot({ key: 'sk-host', address: upstream.url.origin }),
+  ]);
+  const asked = (model: string) =>
+    Array.fromAsync(
+      models(
+        model,
+        {
+          messages: [
+            { role: 'system', text: 'A long manual', cache: { ttl: '1h' } },
+            { role: 'user', text: 'What is 17*23?' },
+          ],
+        },
+        AbortSignal.timeout(5000),
+      ),
+    );
+
+  const newest = await asked('moonshot/kimi-k3.1-pro');
+  await asked('moonshot/kimi-k2.6');
+
+  expect(seen).toMatchObject([
+    {
+      prompt_cache_options: { mode: 'implicit', ttl: '1h' },
+      messages: [
+        { role: 'system', content: 'A long manual' },
+        { role: 'user', content: 'What is 17*23?' },
+      ],
+    },
+    { model: 'kimi-k2.6' },
+  ]);
+  expect(seen[1]).not.toHaveProperty('prompt_cache_options');
+  expect(newest.at(-1)).toMatchObject({
+    type: 'finish',
+    usage: { input: 1000, output: 1, cached: 300, cacheWrite: 600 },
+  });
+  expect(newest.at(-1)).not.toHaveProperty('warnings');
+});

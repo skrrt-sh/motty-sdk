@@ -65,6 +65,10 @@ export type Dialect = {
   // of OpenAI's own models refuse, or a router's `cache_control`, which has
   // a lifetime.
   breakpoints?: true | 'cache_control';
+  // Where a marker's lifetime goes, if not on the marker: nowhere, as an
+  // upstream that keeps one five minutes alone, or in the request's
+  // `prompt_cache_options`, as one that caches every prefix by itself.
+  lifetime?: '5m' | 'prompt_cache_options';
   // Headers that say what the body may hold, by name in lower case: sent
   // from the hint or the option of that name, and never in the body.
   carried?: readonly string[];
@@ -74,7 +78,8 @@ export type Dialect = {
   endings?: { readonly [word: string]: FinishReason };
   // Its own words for a reply that did not end: the call failed.
   broken?: readonly string[];
-  // `cached_tokens` at the top of usage, where a model sends no details.
+  // `cached_tokens` at the top of usage, where a model sends no details:
+  // the details and DeepSeek's `prompt_cache_hit_tokens` outrank it.
   flat?: true;
 };
 

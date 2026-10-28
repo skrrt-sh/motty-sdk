@@ -104,6 +104,11 @@ function result(
   const wire = { role: 'tool', tool_call_id: part.id, content: said };
   const cache = part.cache ?? held;
   if (cache === undefined) return wire;
+  // Where the lifetime is the request's, the marker only asks for it.
+  if (left.lifetime === 'prompt_cache_options') {
+    breakpoint(left, cache);
+    return wire;
+  }
   const parts =
     typeof said !== 'string'
       ? said

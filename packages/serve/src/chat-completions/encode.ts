@@ -1,4 +1,5 @@
 import type {
+  Cache,
   Json,
   JsonOutput,
   Options,
@@ -11,6 +12,7 @@ import { carrying } from '../wire/carried.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, picked } from '../wire/json.ts';
 import { offered } from '../wire/offered.ts';
+import { breakpoint } from '../wire/openai-cache.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
 import {
   asked,
@@ -23,21 +25,28 @@ import { wireMessages } from './encode-messages.ts';
 import { addressed, family, hinted, own } from './family.ts';
 import { toolFields, withUnread } from './unread.ts';
 
+// A tool takes a marker only where the marker is a router's, as a client of
+// this family writes one: elsewhere none is written beside OpenAI's fields.
+function toolMarker(left: Leaving, cache: Cache | undefined, kept?: Json) {
+  const placed =
+    left.marks === 'cache_control' || left.lifetime === 'prompt_cache_options';
+  if (placed) return breakpoint(left, cache, kept);
+  left.without('tool.cache', cache);
+  return {};
+}
+
 function tool(left: Leaving, wanted: Tool): Dict {
-  if (wanted.type !== 'custom') left.without('tool.cache', wanted.cache);
   switch (wanted.type) {
     case 'function': {
       const { name, description, input, strict } = wanted;
-      const carried = {
-        ...hinted(wanted.hints),
-        ...own(wanted.provider, 'a tool option'),
-      };
+      const { cache_control: kept, ...hints } = hinted(wanted.hints);
+      const carried = { ...hints, ...own(wanted.provider, 'a tool option') };
       const inside = { name, description, parameters: copied(input), strict };
       return withUnread(
         carried,
         'function',
         toolFields,
-        { type: 'function' },
+        { type: 'function', ...toolMarker(left, wanted.cache, kept) },
         given(inside),
       );
     }
@@ -60,7 +69,10 @@ function tool(left: Leaving, wanted: Tool): Dict {
       );
     }
     case 'provider':
-      return own(wanted.provider, 'a provider tool');
+      return {
+        ...own(wanted.provider, 'a provider tool'),
+        ...toolMarker(left, wanted.cache),
+      };
     default:
       return wanted satisfies never;
   }
@@ -120,7 +132,7 @@ export function encode(
 ): ReturnType<Codec['encode']> {
   const { messages, tools = [], options = {}, output } = prompt;
   const { toolChoice } = options;
-  const left = leaving('chat', dialect.breakpoints);
+  const left = leaving('chat', dialect.breakpoints, dialect.lifetime);
   if (dialect.topK !== true) left.without('topK', options.topK);
   const said = addressed(options);
   const { parted } = carrying(
@@ -154,6 +166,14 @@ export function encode(
   );
   // Every tool left out as only offered leaves nothing to choose among.
   const choosing = shown.length > 0 || tools.length === 0;
+  // Read before the lifetime the markers asked for, which only an hour
+  // changes from the default; one the request names outranks it.
+  const wired = wireMessages(left, messages, dialect);
+  const { prompt_cache_options: named } = stated;
+  const lasting =
+    left.lasted() === '1h' && named === undefined
+      ? { prompt_cache_options: { mode: 'implicit', ttl: '1h' } }
+      : {};
   const body = {
     ...preset,
     // A hint first and an option after, so neither outranks a typed field.
@@ -189,8 +209,9 @@ export function encode(
       },
       provider,
     ),
+    ...lasting,
     model,
-    messages: wireMessages(left, messages, dialect),
+    messages: wired,
     // Always a stream, and usage in it: the core counts what each call used.
     stream: true,
     stream_options: { include_usage: true },

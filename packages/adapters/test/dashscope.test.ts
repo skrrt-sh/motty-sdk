@@ -388,3 +388,62 @@ test.each([
     ]);
   },
 );
+
+test('a marker is sent as a marker of five minutes, an hour is reported, and the cache written is read', async () => {
+  const seen: unknown[] = [];
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      seen.push(await request.json());
+      return new Response(
+        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":1,"prompt_tokens_details":{"cached_tokens":0,"cache_creation_input_tokens":990}}}
+
+data: [DONE]
+
+`,
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
+    },
+  });
+  const { models } = adapted([
+    dashscope({ key: 'sk-host', address: upstream.url.origin }),
+  ]);
+
+  const events = await Array.fromAsync(
+    models(
+      'dashscope/qwen3.7-plus',
+      {
+        messages: [
+          { role: 'system', text: 'A long manual', cache: { ttl: '1h' } },
+          { role: 'user', text: 'What is 17*23?' },
+        ],
+      },
+      AbortSignal.timeout(5000),
+    ),
+  );
+
+  expect(seen).toMatchObject([
+    {
+      messages: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'text',
+              text: 'A long manual',
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        },
+        { role: 'user', content: 'What is 17*23?' },
+      ],
+    },
+  ]);
+  expect(events.at(-1)).toMatchObject({
+    type: 'finish',
+    usage: { input: 1000, output: 1, cached: 0, cacheWrite: 990 },
+    warnings: [{ setting: 'cache.ttl' }],
+  });
+});

@@ -1,3 +1,4 @@
+import type { Cache } from '@mottyjs/core/host';
 import type { LeftOut } from '../codec.ts';
 import { unsupported } from './refusals.ts';
 
@@ -255,9 +256,16 @@ export type Fieldless = keyof typeof fieldless;
 
 // One per encoded prompt. Each option is reported once, however many
 // messages or parts carried it. Which cache marker the upstream takes, if
-// any, is the connection's to say, and is asked wherever one would be written.
-export function leaving(api: Api, marks?: true | 'cache_control') {
+// any, and where its lifetime goes, is the connection's to say, and is asked
+// wherever one would be written.
+export function leaving(
+  api: Api,
+  marks?: true | 'cache_control',
+  lifetime?: '5m' | 'prompt_cache_options',
+) {
   const left = new Map<Fieldless, LeftOut>();
+  // The longest lifetime asked of a marker, where it is the request's.
+  let longest: Cache['ttl'];
 
   // Asked wherever this API's encoder has nowhere to write the value. An
   // option not given, turned off or empty asks for nothing.
@@ -273,7 +281,18 @@ export function leaving(api: Api, marks?: true | 'cache_control') {
     }
   }
 
-  return { without, marks, leftOut: (): LeftOut[] => [...left.values()] };
+  function lasting(cache: Cache): void {
+    if (longest !== '1h' && cache.ttl !== undefined) longest = cache.ttl;
+  }
+
+  return {
+    without,
+    marks,
+    lifetime,
+    lasting,
+    lasted: () => longest,
+    leftOut: (): LeftOut[] => [...left.values()],
+  };
 }
 
 export type Leaving = ReturnType<typeof leaving>;
