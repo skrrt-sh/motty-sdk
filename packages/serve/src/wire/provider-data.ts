@@ -1,6 +1,6 @@
 import type { ProviderData, ReadonlyJson } from '@mottyjs/core/host';
 import type { LeftOut } from '../codec.ts';
-import { copied, type Dict, dict, without } from './json.ts';
+import { copied, type Dict, dict, picked, without } from './json.ts';
 import { unsupported } from './refusals.ts';
 
 // A null, an empty list and an empty object say what leaving the field out
@@ -12,9 +12,7 @@ function says(value: ReadonlyJson): boolean {
 }
 
 export function meant(fields: Dict): Dict {
-  return Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => says(value)),
-  );
+  return picked(fields, (_name, value) => says(value));
 }
 
 // One per wire API, not per provider: two APIs of one provider name the same
@@ -82,10 +80,9 @@ export function providerData(
     const shared = vendor === undefined ? undefined : data?.[vendor];
     if (shared === undefined || elsewhere === undefined) return {};
     const said = mine(data);
-    return Object.fromEntries(
-      Object.entries(dict(copied(shared))).filter(
-        ([name]) => elsewhere.has(name) && !Object.hasOwn(said, name),
-      ),
+    return picked(
+      dict(copied(shared)),
+      (name) => elsewhere.has(name) && !Object.hasOwn(said, name),
     );
   }
 

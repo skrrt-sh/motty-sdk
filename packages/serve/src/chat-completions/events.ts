@@ -28,10 +28,13 @@ import { untagged } from './think-tags.ts';
 import { callFields, unreadOf } from './unread.ts';
 import { usageRead } from './usage.ts';
 
-function probable(tokens: Json | undefined): { provider?: Dict } {
+function probable<Told extends StreamEvent>(
+  event: Told,
+  tokens: Json | undefined,
+): Told {
   return Array.isArray(tokens) && tokens.length > 0
-    ? { provider: { [family]: { logprobs: tokens } } }
-    : {};
+    ? { ...event, provider: { [family]: { logprobs: tokens } } }
+    : event;
 }
 
 // One per stream: after its first fragment a call is named by index alone.
@@ -83,19 +86,11 @@ function reader(dialect: Dialect) {
         : text;
     return read.map((piece, at) => {
       if (at !== first) return piece;
-      const likely = { ...piece, ...probable(owed) };
+      const likely = probable(piece, owed);
       owed = [];
       return likely;
     });
   }
-
-  const spoken =
-    tags === undefined
-      ? (content: string, tokens: Json | undefined): StreamEvent[] => [
-          { type: 'text', text: content, ...probable(tokens) },
-        ]
-      : (content: string, tokens: Json | undefined) =>
-          told(tags.read(content), tokens);
 
   // Text that might have opened a tag when the reply ended was text.
   // Likelihoods no text came for are still the reply's, told with none.
@@ -134,13 +129,15 @@ function reader(dialect: Dialect) {
       });
     }
     if (typeof content === 'string' && content !== '') {
-      out.push(...spoken(content, tokens));
+      if (tags === undefined) {
+        out.push(probable({ type: 'text', text: content }, tokens));
+      } else out.push(...told(tags.read(content), tokens));
     }
     if (typeof refusal === 'string' && refusal !== '') {
-      out.push({ type: 'refusal', text: refusal, ...probable(refused) });
+      out.push(probable({ type: 'refusal', text: refusal }, refused));
     }
     // A call follows the text before it, so what was held is said first.
-    const made = list(calls).filter(isDict);
+    const made = Array.isArray(calls) ? calls.filter(isDict) : [];
     if (made.length > 0) out.push(...ended());
     for (const call of made) out.push(called(call));
     for (const annotation of list(annotations)) {

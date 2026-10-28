@@ -102,6 +102,9 @@ const openaiOn =
   (tuned, reasons) => {
     // A fine-tuned model behaves as the one it was tuned from.
     const model = tuned.replace(/^ft:/, '');
+    // Read only of a model that may reason, the levels cost eight patterns.
+    const searches = searching.test(model);
+    const always = !searches && classic.test(model);
     const sampling: Taken = {
       temperature: [0, 2],
       topP: [0, 1],
@@ -109,7 +112,7 @@ const openaiOn =
       presencePenalty: true,
       frequencyPenalty: true,
       together: true,
-      effort: levels(model, chat),
+      effort: searches || always ? false : levels(model, chat),
     };
     const fixed: Taken = {
       ...sampling,
@@ -118,8 +121,8 @@ const openaiOn =
       presencePenalty: false,
       frequencyPenalty: false,
     };
-    if (searching.test(model)) return { ...fixed, effort: false };
-    if (classic.test(model)) return { ...sampling, effort: false };
+    if (searches) return fixed;
+    if (always) return sampling;
     const samples = lenient.test(model) ? reasons !== true : reasons === false;
     // Chat Completions refuses a top-p of zero from a model that can reason.
     return samples ? { ...sampling, topP: [0.01, 1] } : fixed;

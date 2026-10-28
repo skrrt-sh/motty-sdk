@@ -9,7 +9,7 @@ import type {
 import type { Codec } from '../codec.ts';
 import { carrying } from '../wire/carried.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
-import { copied, type Dict, dict, given } from '../wire/json.ts';
+import { copied, type Dict, dict, given, picked } from '../wire/json.ts';
 import { offered } from '../wire/offered.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
 import {
@@ -66,8 +66,11 @@ function tool(left: Leaving, wanted: Tool): Dict {
   }
 }
 
-function choice(wanted: ToolChoice, custom: ReadonlySet<string>): Json {
+function choice(wanted: ToolChoice, tools: readonly Tool[]): Json {
   if (typeof wanted === 'string') return wanted;
+  const custom = new Set(
+    tools.flatMap((each) => (each.type === 'custom' ? [each.name] : [])),
+  );
   const named = (name: string) =>
     custom.has(name)
       ? { type: 'custom', custom: { name } }
@@ -105,9 +108,7 @@ function unsaid(defaults: Dict, { reasoning, maxTokens }: Options): Dict {
       ? []
       : reasoningWords),
   ];
-  return Object.fromEntries(
-    Object.entries(defaults).filter(([name]) => !said.includes(name)),
-  );
+  return picked(defaults, (name) => !said.includes(name));
 }
 
 export function encode(
@@ -148,9 +149,6 @@ export function encode(
       sent === undefined ? undefined : hints[name],
     );
   }
-  const custom = new Set(
-    tools.flatMap((each) => (each.type === 'custom' ? [each.name] : [])),
-  );
   const shown = offered(left, family, tools, toolChoice).map((each) =>
     tool(left, each),
   );
@@ -166,7 +164,7 @@ export function encode(
       tool_choice:
         toolChoice === undefined || !choosing
           ? undefined
-          : choice(toolChoice, custom),
+          : choice(toolChoice, tools),
       parallel_tool_calls: choosing ? options.parallelToolCalls : undefined,
     }),
     ...reasoning,

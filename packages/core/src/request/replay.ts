@@ -1,4 +1,5 @@
-import { wait } from './wait.ts';
+import { stopReason } from '../data/errors.ts';
+import { onAbort } from './wait.ts';
 
 type BufferState =
   | { readonly at: 'arriving' | 'finished' }
@@ -15,8 +16,10 @@ export async function* replayed<Item>(
   signal: AbortSignal | undefined,
 ): AsyncGenerator<Item, undefined> {
   let read = 0;
+  let stopped = false;
   let wake: (() => void) | undefined;
   let unfollow: (() => void) | undefined;
+  let unwatch: (() => void) | undefined;
   try {
     while (true) {
       const item = buffer[read];
@@ -29,14 +32,27 @@ export async function* replayed<Item>(
       if (now.at === 'finished') return;
       if (now.at === 'failed') throw now.error();
       unfollow ??= onArrival(() => wake?.());
-      // Each wait follows the signal itself: a stop told while no read
-      // waited would be lost to the next one.
-      const arrived = new Promise<void>((resolve) => {
-        wake = resolve;
-      });
-      await (signal === undefined ? arrived : wait(arrived, signal));
+      // Followed once and the stop kept, so a stop told while no read waited
+      // still ends the next one.
+      unwatch ??=
+        signal &&
+        onAbort(
+          signal,
+          () => {
+            stopped = true;
+            wake?.();
+          },
+          'afterTurn',
+        );
+      if (!stopped) {
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+      }
+      if (stopped) throw stopReason(signal?.reason);
     }
   } finally {
     unfollow?.();
+    unwatch?.();
   }
 }

@@ -14,7 +14,7 @@ import {
   streamOf,
   type Upstream,
 } from './switching.ts';
-import { clock, close, ownSignal } from './wait.ts';
+import { clock, close, ownSignal, readOut } from './wait.ts';
 
 type Watch =
   | { at: 'streaming' }
@@ -68,9 +68,7 @@ function stallWatched(
 
   function giveUp(last?: StreamEvent): void {
     const owed: Read =
-      last === undefined
-        ? { done: true, value: undefined }
-        : { done: false, value: last };
+      last === undefined ? readOut : { done: false, value: last };
     switch (watch.at) {
       case 'streaming':
         abandon(run);
@@ -143,7 +141,7 @@ function stallWatched(
       case 'reading':
         return watch.read.promise.then<Read, Read>(next, next);
       case 'ended': {
-        const { owed = { done: true, value: undefined } } = watch;
+        const { owed = readOut } = watch;
         watch = { at: 'ended' };
         return Promise.resolve(owed);
       }
@@ -158,7 +156,7 @@ function stallWatched(
     return: async () => {
       giveUp();
       watch = { at: 'ended' };
-      return { done: true, value: undefined };
+      return readOut;
     },
   });
 }

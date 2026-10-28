@@ -498,7 +498,8 @@ export function hosting(motty: Marked, options: HostOptions) {
     if (duration !== undefined) {
       signals.push(AbortSignal.timeout(duration));
     }
-    signal = AbortSignal.any(signals);
+    // One signal is its own sum, and summing it costs more than admitting.
+    signal = signals.length === 1 ? stop.signal : AbortSignal.any(signals);
     // A price that throws leaves the call as the upstream told it: what was
     // spent is counted, and the host reads of its price on the report.
     const quote: Price | undefined =

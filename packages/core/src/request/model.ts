@@ -24,7 +24,7 @@ import {
 } from './answer.ts';
 import { current, mayGoUnawaited, openCall } from './context.ts';
 import { wired } from './output-schema.ts';
-import { close, onAbort, reader, reasonOf } from './wait.ts';
+import { close, onAbort, reader, readOut, reasonOf } from './wait.ts';
 
 export type Model = {
   complete: <Schema extends OutputSchema = OutputSchema>(
@@ -46,8 +46,6 @@ export type Call = (
 export type Read = IteratorResult<StreamEvent, undefined>;
 
 const calls = new WeakMap<Model, Call>();
-
-const readOut: Read = { done: true, value: undefined };
 
 // A call given up with no reason, as when its phase ends, is ended by these:
 // no error is made for an ending nobody may ever read.

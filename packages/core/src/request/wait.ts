@@ -25,6 +25,12 @@ const noReason = new DOMException(stopped, 'AbortError');
 // A timer given a longer delay than this fires after one millisecond.
 const timerMax = 2 ** 31 - 1;
 
+// Shared and frozen: an iterator read out says nothing of its own.
+export const readOut: IteratorReturnResult<undefined> = Object.freeze({
+  done: true,
+  value: undefined,
+});
+
 export function clock(ring: () => void, ms?: number): Timer | undefined {
   return ms === undefined
     ? undefined
