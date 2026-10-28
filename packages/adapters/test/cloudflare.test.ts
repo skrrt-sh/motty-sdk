@@ -384,3 +384,21 @@ test('keys grouped in one object keep their own times, and an expired or deleted
   expect(early).toEqual([undefined, 2, 3, undefined]);
   expect(late).toEqual([undefined, undefined, 3]);
 });
+
+// Reads check each key's expiry, so only the rows left show whether the
+// alarm came: here it is brought earlier, fires, and is set again.
+test('the alarm sweeps each expired key from its object, the soonest first', async () => {
+  const storage = cloudflare('swept');
+  const held = async () => Number(await sent('held', '', { group: 'swept' }));
+  await storage.set('later', 1, { ttl: 400 });
+  await storage.set('sooner', 2, { ttl: 50 });
+
+  await Bun.sleep(200);
+  const between = await held();
+  await Bun.sleep(400);
+  const emptied = await held();
+  await storage.set('again', 3, { ttl: 50 });
+  await Bun.sleep(200);
+
+  expect([between, emptied, await held()]).toEqual([1, 0, 0]);
+});

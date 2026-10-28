@@ -1,12 +1,17 @@
-import { cloudflare, MottyStorage } from '../src/cloudflare.ts';
+import { cloudflare, MottyStorage as Stored } from '../src/cloudflare.ts';
 import { parsed } from '../src/json.ts';
 
-export { MottyStorage };
+// The adapter's object, and the count of rows it holds, expired or not.
+export class MottyStorage extends Stored {
+  async held(): Promise<number> {
+    return [...this.ctx.storage.kv.list()].length;
+  }
+}
 
 // Each storage call over HTTP, so the tests run in Bun against the adapter in
 // workerd: the path names the call, the query its key and numbers, the body
 // the value. `group` keeps every key in one object; `raw` and `text` write
-// and read an object's text as another writer would.
+// and read an object's text as another writer would; `held` counts its rows.
 export default {
   fetch: async (
     request: Request,
@@ -35,6 +40,7 @@ export default {
         return new Response();
       }
       if (call === 'text') return new Response(await object.read(key));
+      if (call === 'held') return reply(await object.held());
       if (call === 'get') return reply(await storage.get(key));
       if (call === 'set') {
         await storage.set(key, parsed(await request.text()), options);
