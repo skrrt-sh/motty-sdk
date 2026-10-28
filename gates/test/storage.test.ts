@@ -55,10 +55,9 @@ describe.skipIf(url === undefined)('on Valkey', () => {
     },
   ])(
     'a $call through the adapter takes about what the bare client takes',
-    async ({ motty, bare }) => {
+    async ({ call, motty, bare }) => {
       const taken = await share(bare, motty, timed, 200);
-      console.log('SHARE valkey', taken);
-      console.log('SHARE workers', call, taken);
+      console.log('SHARE valkey', call, taken);
       expect(taken).toBeLessThan(1.5);
     },
     60_000,
