@@ -264,7 +264,8 @@ bun run typecheck
 bun test
 ```
 
-- The storage adapter is tested against a real server, or not at all. Start one with
+- The storage adapter is tested against a real server, or not at all. The server is Valkey 9,
+  and any that speaks the Redis protocol from Redis 6 on works too. Start one with
   `podman compose up -d --wait`, or the same with `docker`, and run the tests with
   `REDIS_URL=redis://127.0.0.1:6379`.
 - `bun run test:live` makes real calls that cost money. It needs provider keys in `.env`, and a
