@@ -69,9 +69,10 @@ export function zai(
   }
   return chat({
     // Thinking is a switch, with three efforts beside it and no budget, and
-    // JSON comes by no schema.
+    // JSON comes by no schema. A model may count its cache hits at the top.
     codec: chatCompletionsIn({
       name: 'zai',
+      flat: true,
       thought: 'reasoning_content',
       asks: 'thinking',
       efforts: ['low', 'high', 'max'],

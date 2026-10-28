@@ -59,6 +59,51 @@ test('cached tokens in the details outrank a count at the top of usage', () => {
   ).toEqual({ input: 3417, cached: 3327 });
 });
 
+test('DeepSeek`s count of hits is read where the details have none, and outranks one at the top', () => {
+  expect(
+    usageRead({
+      prompt_tokens: 1000,
+      prompt_cache_hit_tokens: 800,
+      prompt_cache_miss_tokens: 200,
+    }),
+  ).toEqual({ input: 1000, cached: 800 });
+  expect(
+    usageRead(
+      {
+        prompt_tokens: 1000,
+        cached_tokens: 9,
+        prompt_cache_hit_tokens: 800,
+        prompt_tokens_details: { cached_tokens: 700 },
+      },
+      true,
+    ),
+  ).toEqual({ input: 1000, cached: 700 });
+  expect(
+    usageRead(
+      { prompt_tokens: 1000, cached_tokens: 9, prompt_cache_hit_tokens: 800 },
+      true,
+    ),
+  ).toEqual({ input: 1000, cached: 800 });
+});
+
+test('a cache write is read under either name an upstream gives it', () => {
+  expect(
+    usageRead({
+      prompt_tokens: 1000,
+      prompt_tokens_details: {
+        cached_tokens: 0,
+        cache_creation_input_tokens: 900,
+      },
+    }),
+  ).toEqual({ input: 1000, cached: 0, cacheWrite: 900 });
+  expect(
+    usageRead({
+      prompt_tokens: 1000,
+      prompt_tokens_details: { cache_write_tokens: 256 },
+    }),
+  ).toEqual({ input: 1000, cacheWrite: 256 });
+});
+
 test('usage is written without a breakdown nobody reported', () => {
   expect(usageWritten({ output: 3 })).toEqual({
     prompt_tokens: 0,

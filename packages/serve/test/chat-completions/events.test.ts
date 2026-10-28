@@ -713,3 +713,19 @@ test.each([['"function":{"name":"weather","arguments":{"a":1}}']])(
     });
   },
 );
+
+test('usage sent inside the choice is read where the chunk has none of its own', async () => {
+  const read = await Array.fromAsync(
+    events(
+      sent(
+        '{"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}',
+        '{"choices":[{"index":0,"delta":{},"finish_reason":"stop","usage":{"prompt_tokens":1000,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":800}}}]}',
+        '[DONE]',
+      ),
+    ),
+  );
+  expect(read.at(-1)).toMatchObject({
+    type: 'finish',
+    usage: { input: 1000, output: 5, cached: 800 },
+  });
+});

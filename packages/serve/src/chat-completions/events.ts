@@ -259,8 +259,11 @@ export async function* events(
         system_fingerprint,
         service_tier ?? head.service_tier,
       );
-      if (isDict(reported)) usage = usageRead(reported, dialect.flat);
       const [first] = list(choices);
+      // Some upstreams send usage inside the choice instead.
+      const { usage: inside } = dict(first);
+      const counts = isDict(reported) ? reported : inside;
+      if (isDict(counts)) usage = usageRead(counts, dialect.flat);
       if (!isDict(first)) continue;
       for (const event of choice(first)) yield event;
       const { finish_reason: finished, native_finish_reason: own } = first;
