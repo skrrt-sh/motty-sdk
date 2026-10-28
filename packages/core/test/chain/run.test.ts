@@ -914,8 +914,9 @@ test('LimitReached nobody recovered goes out with the usage so far', async () =>
       type: 'error',
       error: {
         code: 'limit_reached',
-        status: 500,
-        message: 'The request reached its limit of 1 calls',
+        status: 400,
+        message:
+          'The request needs more model calls than the 1 this host allows',
         retryable: false,
       },
       usage: { input: 1, output: 1 },

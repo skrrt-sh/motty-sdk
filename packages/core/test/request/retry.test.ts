@@ -525,7 +525,7 @@ test('retry never repeats Aborted or LimitReached, whatever their facts say abou
         type: 'error',
         error: {
           code: 'limit_reached',
-          status: 500,
+          status: 400,
           message: 'Enough',
           retryable: true,
           retryAfter: 0,

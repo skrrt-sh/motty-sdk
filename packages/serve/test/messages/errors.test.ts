@@ -303,7 +303,7 @@ test('a kind no model call ends in is written as it was, by its code or its stat
   for (const [code, status, type] of [
     ['unauthenticated', 401, 'authentication_error'],
     ['aborted', 499, 'invalid_request_error'],
-    ['limit_reached', 500, 'api_error'],
+    ['limit_reached', 400, 'invalid_request_error'],
     ['empty_prompt', 413, 'request_too_large'],
   ] as const) {
     expect(error({ code, status, message: 'x' })).toMatchObject({

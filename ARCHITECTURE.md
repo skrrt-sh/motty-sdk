@@ -449,6 +449,10 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   type, and is not sent on, except that an invalid request keeps the 4xx it came with. Cause: with the upstream's status passed through, one kind reached callers under
   different statuses by provider, and a prompt too long that a provider told as 403 was written
   to the caller as a permission error.
+- **`LimitReached` is 400 on every API.** The request as sent cannot be served under this host's
+  cap on model calls, and a resend would pay for the same calls again before it failed the same
+  way. A 400 is the one status every client leaves alone. Rejected: 500 and 429, which Codex and
+  the AI SDK resend whatever `x-should-retry` says.
 - **Whether a failure may be retried is the upstream's to say, and the caller is told.** A retry
   flag and a retry-after an upstream sends replace the kind's defaults: a spent quota and a rate
   limit no wait can meet are not retried. The reply carries the flag in the header the official

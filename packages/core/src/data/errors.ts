@@ -132,7 +132,7 @@ export class Unauthenticated extends MottyError.define(
   401,
 ) {}
 export class InvalidOutput extends MottyError.define('invalid_output', 502) {}
-export class LimitReached extends MottyError.define('limit_reached', 500) {}
+export class LimitReached extends MottyError.define('limit_reached', 400) {}
 export class RouteLoop extends MottyError.define('route_loop', 500) {}
 export class UnknownRoute extends MottyError.define('unknown_route', 500) {}
 

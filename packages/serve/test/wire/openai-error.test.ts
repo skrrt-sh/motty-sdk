@@ -64,8 +64,8 @@ test('a kind no model call ends in is typed by its status, as it was', () => {
   expect(kind('aborted', 499)).toMatchObject({
     error: { type: 'invalid_request_error', code: 'aborted' },
   });
-  expect(kind('limit_reached', 500)).toMatchObject({
-    error: { type: 'server_error', code: 'limit_reached' },
+  expect(kind('limit_reached', 400)).toMatchObject({
+    error: { type: 'invalid_request_error', code: 'limit_reached' },
   });
   expect(kind('empty_prompt', 422)).toMatchObject({
     error: { type: 'invalid_request_error', code: 'empty_prompt' },
