@@ -2,7 +2,7 @@ import { fallback, model, retry, timeout, type Model, type NamedModel } from "@m
 import { decision } from "@mottyjs/decision";
 import type { Tuning } from "./settings";
 
-export const nano = model("openai/gpt-4.1-nano");
+export const nano = model("openai/gpt-5-nano");
 export const haiku = model("anthropic/claude-haiku-5-5");
 export const sonnet = model("anthropic/claude-sonnet-5-5");
 export const oss = model("openrouter/openai/gpt-oss-20b");

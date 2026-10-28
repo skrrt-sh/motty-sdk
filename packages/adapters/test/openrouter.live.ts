@@ -1076,7 +1076,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/openai/gpt-4.1-nano').complete(prompt),
+        model('openrouter/mistralai/mistral-nemo').complete(prompt),
       ),
       () => ({
         models: [openrouter({ key })],
@@ -1143,11 +1143,11 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'twice' }).handle(async ({ prompt }) => {
-        const first = await model('openrouter/openai/gpt-4.1-nano').complete(
+        const first = await model('openrouter/mistralai/mistral-nemo').complete(
           prompt,
         );
         await first.text();
-        return model('openrouter/openai/gpt-4.1-nano').complete(prompt);
+        return model('openrouter/mistralai/mistral-nemo').complete(prompt);
       }),
       () => ({
         models: [openrouter({ key })],
@@ -1216,7 +1216,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/openai/gpt-5-mini').complete(prompt),
+        model('openrouter/openai/gpt-5-nano').complete(prompt),
       ),
       () => ({
         models: [openrouter({ key })],
@@ -1249,7 +1249,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/google/gemini-3.1-flash-lite').complete({
+        model('openrouter/google/gemini-2.5-flash-lite').complete({
           ...prompt,
           options: { ...prompt.options, topK: 40 },
         }),
@@ -1285,7 +1285,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/meta-llama/llama-3.3-70b-instruct').complete(prompt),
+        model('openrouter/mistralai/mistral-nemo').complete(prompt),
       ),
       () => ({
         models: [openrouter({ key })],
@@ -1299,8 +1299,8 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'relay',
-          max_completion_tokens: 100_000_000,
-          messages: [{ role: 'user', content: 'Say ok.' }],
+          max_completion_tokens: 16,
+          messages: [{ role: 'user', content: 'hello '.repeat(200_000) }],
         }),
       }),
     );
@@ -1386,7 +1386,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/anthropic/claude-haiku-4.5').complete(prompt),
+        model('openrouter/anthropic/claude-haiku-5.5').complete(prompt),
       ),
       () => ({
         models: [openrouter({ key })],
@@ -1430,7 +1430,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       motty({ name: 'relay' }).handle(async ({ prompt }) => {
         const reply = await fallback(
           model('openrouter/nobody/no-such-model'),
-          model('openrouter/openai/gpt-4.1-nano'),
+          model('openrouter/mistralai/mistral-nemo'),
         ).complete(prompt);
         named.push(await reply.model());
         return reply;
@@ -1444,10 +1444,10 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
 
     const [, answered] = calls;
     expect(await answer.finish()).toBe('stop');
-    expect(named).toEqual(['openrouter/openai/gpt-4.1-nano']);
+    expect(named).toEqual(['openrouter/mistralai/mistral-nemo']);
     expect(calls.map(({ model: called, code }) => [called, code])).toEqual([
       ['openrouter/nobody/no-such-model', 'unknown_model'],
-      ['openrouter/openai/gpt-4.1-nano', undefined],
+      ['openrouter/mistralai/mistral-nemo', undefined],
     ]);
     expect(answered?.input).toBeGreaterThan(0);
     expect(answered?.cost).toBe(1000 + (answered?.input ?? 0));
