@@ -4,6 +4,9 @@
 for (const name of Object.keys(process.env)) {
   if (/^LANG(?:SMITH|CHAIN)_/.test(name)) delete process.env[name];
 }
+// Mastra sends its own telemetry from every process unless told not to; a
+// bench sends nothing anywhere.
+Object.assign(process.env, { MASTRA_TELEMETRY_DISABLED: '1' });
 
 // Loaded one at a time: a cold start is timed with no other SDK in memory.
 export const programs = {

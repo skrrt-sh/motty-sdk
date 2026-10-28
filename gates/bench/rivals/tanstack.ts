@@ -16,8 +16,8 @@ const adapter = openaiCompatibleText('gpt-4o-mini', {
 const City = z.object({ city: z.string(), words: z.array(z.string()) });
 
 async function served(request: Request) {
-  const { messages } = await chatParamsFromRequest(request);
-  return toServerSentEventsResponse(chat({ adapter, messages }));
+  const { messages, threadId } = await chatParamsFromRequest(request);
+  return toServerSentEventsResponse(chat({ adapter, messages, threadId }));
 }
 
 export const subjects = {
@@ -25,6 +25,7 @@ export const subjects = {
     const { text } = await chat({
       adapter,
       messages: [{ role: 'user', content: question }],
+      threadId: 'thread-1',
       stream: false,
     });
     return text;
@@ -34,6 +35,7 @@ export const subjects = {
     for await (const chunk of chat({
       adapter,
       messages: [{ role: 'user', content: question }],
+      threadId: 'thread-1',
     })) {
       if (chunk.type === 'TEXT_MESSAGE_CONTENT') text += chunk.delta;
     }
@@ -45,6 +47,7 @@ export const subjects = {
     for await (const chunk of chat({
       adapter,
       messages: [{ role: 'user', content: question }],
+      threadId: 'thread-1',
       tools: [
         toolDefinition({
           name: 'weather',

@@ -136,10 +136,16 @@ export function coldStart(rounds: number) {
   return { taken, ahead: shares(taken) };
 }
 
+// Mastra's telemetry client imports this optional peer when it is there;
+// left out, it is no part of what Mastra ships.
+const unshipped = ['@opentelemetry/api'];
+
 export async function bundleSize() {
   const bytes: Record<string, number[]> = {};
   for (const name of Object.keys(programs)) {
-    bytes[name] = [(await build(`gates/bench/rivals/${name}.ts`)).bytes];
+    bytes[name] = [
+      (await build(`gates/bench/rivals/${name}.ts`, unshipped)).bytes,
+    ];
   }
   return { bytes, ahead: shares(bytes) };
 }
