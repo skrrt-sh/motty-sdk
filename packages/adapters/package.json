@@ -138,8 +138,7 @@
     "./redis": {
       "@mottyjs/source": "./src/redis.ts",
       "types": "./dist/redis.d.ts",
-      "bun": "./src/redis.ts",
-      "default": "./dist/redis.js"
+      "bun": "./src/redis.ts"
     },
     "./jwt": {
       "@mottyjs/source": "./src/jwt.ts",

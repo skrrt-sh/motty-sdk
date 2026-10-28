@@ -16,7 +16,11 @@ const packed: {
 const entries = z.object({
   exports: z.record(
     z.string(),
-    z.object({ types: z.string(), bun: z.string(), default: z.string() }),
+    z.object({
+      types: z.string(),
+      bun: z.string(),
+      default: z.string().optional(),
+    }),
   ),
 });
 
@@ -116,7 +120,7 @@ test('a tarball holds the readme, the licence, and the source, the JavaScript an
         './README.md',
         './LICENSE',
         ...Object.values(entries.parse(JSON.parse(manifest)).exports).flatMap(
-          (entry) => [entry.bun, entry.default, entry.types],
+          (entry) => [entry.bun, entry.default ?? entry.bun, entry.types],
         ),
       ]
         .map((path) => path.replace('./', 'package/'))
@@ -137,7 +141,7 @@ test('the version a description carries is the one the core package is published
   );
 });
 
-// Redis is Bun's own client, so that one entry needs Bun.
+// Redis is Bun's own client, so that one entry is exported to Bun alone.
 test('on Node, every entry of the packed packages but the Redis adapter imports', async () => {
   const specifiers = packed.flatMap(({ name, manifest }) =>
     Object.keys(entries.parse(JSON.parse(manifest)).exports)
