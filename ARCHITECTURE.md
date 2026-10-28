@@ -1824,36 +1824,35 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   time. Rejected: removing whitespace only, which keeps names and loses lines; a source map,
   five times the bundle and holding the author's sources.
   Also rejected: a build file in every package, a second place for what the CLI will own.
-- **The SDK runs on Bun, Node 22 and later, Deno, and Workers or any bundler; `serve` and the
-  Redis adapter stay Bun's.** `mount` is web-standard; `serve` starts Bun's server, and the
-  Redis adapter is Bun's own client. A motty's own code uses web-standard APIs and the async
-  context, so it runs on the Hub too. Cause: hosts run everywhere. The packed packages were
-  measured serving whole and streamed replies on Node 24, Deno 2.9 and workerd. Rejected: a
-  Node adapter package, since a host on `node:http` needs about 25 lines and a host that passes
-  a web `Request` needs none.
+- **The SDK runs on Bun and Cloudflare Workers, and nowhere else; `serve` and the Redis adapter
+  stay Bun's.** `mount` is web-standard and is a Worker's default export; `serve` starts Bun's
+  server, and the Redis adapter is Bun's own client. A motty's own code uses web-standard APIs and
+  the async context, so it runs on the Hub too. The packed packages are checked serving whole and
+  streamed replies on Bun and in workerd. Cause: Deno is sunsetting, and no host needs a motty on
+  Node, while every claim of a runtime costs a gate, a CI step and code kept for it alone.
+  Rejected: Node 22 and later, and Deno, which the SDK ran on until this decision; a Node adapter
+  package.
 - **A published package holds its sources, compiled JavaScript, and declaration files.** Bun runs
-  the sources through the `bun` condition; every other runtime and bundler runs the JavaScript;
-  a consumer's compiler reads only the declarations. Cause: a compiler checks every
-  source it is led to under the consumer's own flags, and skipping library checks skips
-  declaration files only. Measured on a project installed from the packed packages, with sources
-  alone: under Bun's recommended config, which leaves exact optional properties off, 7 errors,
-  all in the host side; under a config that also does not allow an import path ending in `.ts`,
-  358 more, one for every such import. With declarations the same project gave none under either
-  config, with library checks on and off, on TypeScript 5.9 and 7.0. And Node 24 and Deno refuse
-  to strip types under `node_modules`, and a bundler that compiles no TypeScript in its
+  the sources through the `bun` condition; a Workers bundler runs the JavaScript; a consumer's
+  compiler reads only the declarations. Cause: a compiler checks every source it is led to under
+  the consumer's own flags, and skipping library checks skips declaration files only. Measured on
+  a project installed from the packed packages, with sources alone: under Bun's recommended
+  config, which leaves exact optional properties off, 7 errors, all in the host side; under a
+  config that also does not allow an import path ending in `.ts`, 358 more, one for every such
+  import. With declarations the same project gave none under either config, with library checks on
+  and off, on TypeScript 5.9 and 7.0. And a bundler that compiles no TypeScript in its
   dependencies fails on the sources. Rejected: making the sources pass under looser flags, which
   is every import rewritten, still one consumer flag from the next error, and every consumer
   paying to check the SDK's sources. Rejected: shipping the JavaScript alone, since a bare
-  `bun test` in the workspace would then read it, as Bun's config cannot name a condition and
-  its packer ignores `publishConfig.exports`. Rejected: reading the SDK's version from a JSON
-  import of the manifest, since Node and Deno give a JSON module no named exports, and the whole
-  file imported grew the core's bundle by 939 bytes.
+  `bun test` in the workspace would then read it, as Bun's config cannot name a condition and its
+  packer ignores `publishConfig.exports`. Rejected: reading the SDK's version from a JSON import
+  of the manifest, since the whole file imported grew the core's bundle by 939 bytes.
 - **A published declaration names only web-standard types and the SDK's own.** A runtime's own
   type is reached through a structural type or a conditional on the global object. Cause: a
-  consumer that checks its libraries and holds neither Node's nor Bun's types failed on Node's
-  `CallSite`, brought in by the statics of an anonymous error class, and on Bun's server type and
-  `process`. Rejected: asking consumers to turn library checks off or to install both runtimes'
-  types; casting.
+  consumer that checks its libraries and holds only the web-standard ones, as a Worker's project
+  may, failed on Node's `CallSite`, which Bun's types bring, through the statics of an anonymous
+  error class, and on Bun's server type and `process`. Rejected: asking consumers to turn library
+  checks off or to install Bun's types; casting.
 - **The JavaScript and the declarations are built when a package is packed, by one `tsc` run from
   the one shared compiler config.** They are never committed. Rejected: a build config in every
   package, as the layout rules reject a compiler config in every package.

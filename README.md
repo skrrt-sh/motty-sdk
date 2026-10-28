@@ -14,7 +14,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <a href="https://www.npmjs.com/package/@mottyjs/core"><img src="https://img.shields.io/npm/v/%40mottyjs%2Fcore?label=npm&color=cb3837" alt="@mottyjs/core on npm"></a>
-  <img src="https://img.shields.io/badge/runtime-Bun%20%7C%20Node%20%7C%20Deno%20%7C%20Workers-f472b6" alt="Runtime: Bun, Node, Deno, Workers">
+  <img src="https://img.shields.io/badge/runtime-Bun%20%7C%20Workers-f472b6" alt="Runtime: Bun, Workers">
   <img src="https://img.shields.io/badge/TypeScript-strict-3178c6" alt="TypeScript: strict">
 </p>
 
@@ -242,8 +242,8 @@ yourself.
 ## Status
 
 The packages are on npm under the `@mottyjs` scope, all at one version. Until `1.0.0` a minor
-version may break an API. The SDK runs on Bun, Node 22 and later, Deno and Cloudflare Workers.
-`serve` and the Redis adapter are Bun's; on any other runtime a host serves a motty with `mount`.
+version may break an API. The SDK runs on Bun and Cloudflare Workers. `serve` and the Redis
+adapter are Bun's; on Workers a host serves a motty with `mount`.
 
 - Images, files and audio are carried inside a chat request where the upstream takes them. The
   embeddings, images, audio, files and batches endpoints are not served.

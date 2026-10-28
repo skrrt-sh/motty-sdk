@@ -12,8 +12,6 @@
     "redis",
     "jwt",
     "bun",
-    "node",
-    "deno",
     "cloudflare-workers"
   ],
   "license": "Apache-2.0",
@@ -28,8 +26,7 @@
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "bun": ">=1.4.2",
-    "node": ">=22"
+    "bun": ">=1.4.2"
   },
   "publishConfig": {
     "access": "public"

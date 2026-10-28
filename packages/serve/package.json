@@ -1,7 +1,7 @@
 {
   "name": "@mottyjs/serve",
   "version": "0.1.1",
-  "description": "The host side of a motty: serves it as a model over the Chat Completions, Responses and Messages APIs, on Bun, Node, Deno or Cloudflare Workers.",
+  "description": "The host side of a motty: serves it as a model over the Chat Completions, Responses and Messages APIs, on Bun or Cloudflare Workers.",
   "keywords": [
     "motty",
     "llm",
@@ -11,8 +11,6 @@
     "responses-api",
     "messages-api",
     "bun",
-    "node",
-    "deno",
     "cloudflare-workers"
   ],
   "license": "Apache-2.0",
@@ -27,8 +25,7 @@
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "bun": ">=1.4.2",
-    "node": ">=22"
+    "bun": ">=1.4.2"
   },
   "publishConfig": {
     "access": "public"

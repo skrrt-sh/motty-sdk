@@ -75,7 +75,7 @@ beforeAll(async () => {
     join(project, 'node_modules', 'jose'),
   );
   await Bun.write(join(project, 'package.json'), '{ "type": "module" }');
-  for (const host of ['node.ts', 'worker.ts']) {
+  for (const host of ['bun.ts', 'worker.ts']) {
     await Bun.write(
       join(project, host),
       Bun.file(`${import.meta.dir}/../hosts/packed/${host}`),
@@ -141,27 +141,8 @@ test('the version a description carries is the one the core package is published
   );
 });
 
-// Redis is Bun's own client, so that one entry is exported to Bun alone.
-test('on Node, every entry of the packed packages but the Redis adapter imports', async () => {
-  const specifiers = packed.flatMap(({ name, manifest }) =>
-    Object.keys(entries.parse(JSON.parse(manifest)).exports)
-      .map((path) => `${name.replace('mottyjs-', '@mottyjs/')}${path.slice(1)}`)
-      .filter((specifier) => specifier !== '@mottyjs/adapters/redis'),
-  );
-  const imported =
-    await $`node --input-type=module -e ${'for (const specifier of process.argv.slice(1)) await import(specifier); console.log(process.argv.length - 1);'} ${specifiers}`
-      .cwd(project)
-      .nothrow()
-      .quiet();
-
-  expect([
-    imported.stderr.toString(),
-    imported.stdout.toString().trim(),
-  ]).toEqual(['', String(specifiers.length)]);
-}, 30_000);
-
-// A consumer that checks every library it reads and holds neither Node's nor
-// Bun's types: a declaration naming one of their globals fails it.
+// A Workers consumer that checks every library it reads and holds no
+// runtime's types: a declaration naming Bun's or Node's globals fails it.
 test('every entry of the packed packages type-checks with library checks on and only the web-standard libraries', async () => {
   const specifiers = packed.flatMap(({ name, manifest }) =>
     Object.keys(entries.parse(JSON.parse(manifest)).exports).map(
@@ -180,7 +161,8 @@ test('every entry of the packed packages type-checks with library checks on and 
       compilerOptions: {
         lib: ['ES2024', 'DOM', 'DOM.Iterable'],
         target: 'ES2024',
-        module: 'NodeNext',
+        module: 'ES2022',
+        moduleResolution: 'Bundler',
         types: [],
         strict: true,
         skipLibCheck: false,
@@ -196,20 +178,8 @@ test('every entry of the packed packages type-checks with library checks on and 
   expect([checked.stdout.toString(), checked.exitCode]).toEqual(['', 0]);
 }, 30_000);
 
-test('on Node, the packed packages serve a motty over node:http, as JavaScript', async () => {
-  const served = await $`node node.ts`.cwd(project).nothrow().quiet();
-
-  expect([
-    served.stderr.toString(),
-    JSON.parse(served.stdout.toString()),
-  ]).toEqual([
-    '',
-    { resolved: 'dist/index.js', whole: '200 true', streamed: '200 true' },
-  ]);
-}, 30_000);
-
-test('on Bun, the same host serves from the packed packages, read as their sources', async () => {
-  const served = await $`${process.execPath} node.ts`
+test('on Bun, the packed packages serve a motty, read as their sources', async () => {
+  const served = await $`${process.execPath} bun.ts`
     .cwd(project)
     .nothrow()
     .quiet();
@@ -259,6 +229,41 @@ test('bundled for Workers, the packed packages answer in workerd', async () => {
       bundle.includes('@mottyjs/core/src/'),
       replies,
     ]).toEqual([true, false, ['200 true', '200 true']]);
+  } finally {
+    await stop();
+  }
+}, 30_000);
+
+// Redis is Bun's own client, so that one entry is exported to Bun alone.
+test('bundled for Workers, every entry of the packed packages but the Redis adapter loads in workerd', async () => {
+  const specifiers = packed.flatMap(({ name, manifest }) =>
+    Object.keys(entries.parse(JSON.parse(manifest)).exports)
+      .map((path) => `${name.replace('mottyjs-', '@mottyjs/')}${path.slice(1)}`)
+      .filter((specifier) => specifier !== '@mottyjs/adapters/redis'),
+  );
+  await Bun.write(
+    join(project, 'entries.ts'),
+    [
+      ...specifiers.map(
+        (specifier, at) => `import * as entry${at} from '${specifier}';`,
+      ),
+      `const loaded = [${specifiers.map((_, at) => `entry${at}`).join(', ')}];`,
+      'export default { fetch: () => new Response(String(loaded.length)) };',
+    ].join('\n'),
+  );
+  const { outputs } = await Bun.build({
+    entrypoints: [join(project, 'entries.ts')],
+    target: 'browser',
+    conditions: ['workerd', 'worker'],
+    external: ['node:*'],
+  });
+  const { address, stop } = await workerd({
+    modules: { 'worker.js': (await outputs[0]?.text()) ?? '' },
+    flags: ['nodejs_compat'],
+    bindings: {},
+  });
+  try {
+    expect(await (await fetch(address)).text()).toBe(String(specifiers.length));
   } finally {
     await stop();
   }

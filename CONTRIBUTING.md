@@ -20,8 +20,7 @@ bun test
 
 The storage adapter's tests need a server: `podman compose up -d --wait`, or the same with
 `docker`, and `REDIS_URL=redis://127.0.0.1:6379`. The gates under `gates/` run with `bun test` and
-hold the SDK's size, type-check cost and time per call within a recorded baseline. The gate on the
-packed packages runs them on Node too, so it needs Node 24, which CI sets up. Live tests make
+hold the SDK's size, type-check cost and time per call within a recorded baseline. Live tests make
 real calls, need provider keys in `.env`, and are not part of a pull request's checks.
 
 ## Code rules

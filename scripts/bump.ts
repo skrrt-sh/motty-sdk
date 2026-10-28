@@ -18,8 +18,8 @@ for await (const manifest of new Glob('packages/*/package.json').scan()) {
   await Bun.write(manifest, text.replace(field, `"version": "${version}"`));
 }
 
-// Node and Deno give a JSON module no named exports, and the whole manifest
-// imported would grow every bundle, so the SDK's version is a constant.
+// The whole manifest imported would grow every bundle, so the SDK's version
+// is a constant.
 const constant = 'packages/core/src/version.ts';
 const declared = /export const version = '[^']*';/;
 const text = await Bun.file(constant).text();

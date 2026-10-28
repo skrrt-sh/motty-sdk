@@ -78,7 +78,7 @@ export function mount<
   const { name } = description;
   const started = new Date();
   const { begin, landed, stopAll } = flights();
-  // A runtime with Node's globals off has no environment to read.
+  // A Worker without `nodejs_compat` has no environment to read.
   const given = options(typeof process === 'undefined' ? {} : process.env);
   // Made first: it refuses a limit that is no number, the body's among them.
   const admit = hosting(motty, given);
