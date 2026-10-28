@@ -124,7 +124,8 @@ test('a caller the adapter does not know is refused by the motty that asks for o
   expect(reply.status).toBe(401);
   expect(await reply.json()).toMatchObject({
     error: {
-      message: 'This motty needs a caller, and the host knows none',
+      message:
+        'The request has no key or token this host accepts, and this motty answers only callers it can identify',
       type: 'authentication_error',
     },
   });
@@ -469,7 +470,8 @@ test.each([
     if (status === 401) {
       expect(await reply.json()).toEqual({
         error: {
-          message: 'This motty needs a caller, and the host knows none',
+          message:
+            'The request has no key or token this host accepts, and this motty answers only callers it can identify',
           type: 'authentication_error',
           param: null,
           code: 'invalid_api_key',
