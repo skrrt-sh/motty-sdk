@@ -37,6 +37,7 @@
   // Read with the Workers types alone, by tsconfig.workers.json.
   "exclude": [
     "packages/adapters/src/cloudflare.ts",
-    "packages/adapters/test/cloudflare.worker.ts"
+    "packages/adapters/test/cloudflare.worker.ts",
+    "packages/adapters/test/speed.worker.ts"
   ]
 }
