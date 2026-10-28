@@ -21,8 +21,8 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
-    "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.workers.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.workers.json",
     "test": "bun test",
     "test:browser": "bun test --timeout 20000 ./examples/coder/browser/chat.browser.ts",
     "test:live": "bun test --timeout 60000 ./packages/adapters/test/openrouter.live.ts ./packages/adapters/test/openrouter-media.live.ts ./packages/adapters/test/openrouter-output.live.ts ./packages/adapters/test/openai.live.ts ./packages/adapters/test/anthropic.live.ts ./packages/adapters/test/claude-code.live.ts ./packages/adapters/test/codex.live.ts ./packages/adapters/test/responses-reasoning.live.ts ./packages/adapters/test/openrouter-open-weight.live.ts ./packages/adapters/test/across-families.live.ts ./packages/adapters/test/responses-gaps.live.ts ./packages/adapters/test/mistral.live.ts ./packages/adapters/test/together.live.ts ./packages/adapters/test/fireworks.live.ts ./packages/adapters/test/typesafe.live.ts ./packages/adapters/test/takes.live.ts",
@@ -32,6 +32,7 @@
   "devDependencies": {
     "@ai-sdk/openai": "4.0.99",
     "@biomejs/biome": "catalog:",
+    "@cloudflare/workers-types": "5.20261025.1",
     "@langchain/core": "1.3.0",
     "@langchain/openai": "1.7.0",
     "@mastra/core": "1.79.0",
@@ -40,6 +41,7 @@
     "@tanstack/ai": "1.0.0",
     "@tanstack/ai-openai": "1.0.0",
     "@types/bun": "catalog:",
+    "@types/node": "26.6.5",
     "ai": "7.0.153",
     "playwright": "catalog:",
     "typescript": "catalog:",

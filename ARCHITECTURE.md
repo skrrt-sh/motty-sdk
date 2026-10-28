@@ -1134,9 +1134,22 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   a motty a caller whose id was empty, and `auth()` let it through. Rejected: reading the host's
   empty caller as no caller, which tells the caller to sign in for the host's mistake; a check
   in `auth()` alone, which leaves every other reader of the caller open.
-- **One storage adapter, not a driver collection.** `redis` speaks the Redis protocol, tested on
-  Valkey, and is Bun's built-in client. Its server must keep a key's expiry on a plain write:
-  Redis 6 or any Valkey. Rejected: an adapter per provider, redoing its client.
+- **One storage adapter per runtime, not a driver collection.** `redis` speaks the Redis
+  protocol, tested on Valkey, and is Bun's built-in client. Its server must keep a key's expiry
+  on a plain write: Redis 6 or any Valkey. Rejected: an adapter per provider, redoing its client.
+- **On Workers the store is a Durable Object, `durable`, one object per key.** Workers has no
+  Bun client and keeps no socket from one request to the next, and a Durable Object is the only
+  Workers database that adds in one step. The object keeps its values in its SQLite store through
+  the key-value calls, which need no table to make again once the object is deleted. Each value
+  keeps its expiry and is checked on every read, so a time to live is exact to the millisecond.
+  One alarm, at the earliest expiry, deletes what has expired and then the object once it is
+  empty. One object per key is Cloudflare's advice for a unit that is coordinated alone, and a
+  host may group keys with `name`. Rejected: Workers KV, whose shortest time to live is a minute,
+  which has no atomic step, takes one write a second per key and may read a value a minute
+  stale; Redis over TCP, which opens a connection on every call since no socket outlives its
+  request; D1, one database that runs one query at a time and has no unit per key; Upstash's
+  Redis over HTTP, a provider of its own whose every call leaves Cloudflare, and the adapter
+  per provider rejected above.
 - **The server behind it is Valkey 9, hosted with its I/O threads on.** It is the one the adapter
   is tested on, and the fastest maintained one on a motty's mix of reads, writes and increments.
   The threads change its speed and not its answers, so a test run may leave them off.
@@ -1147,7 +1160,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   connections.
 - **`increment` is the same IEEE double addition in every store.** `redis` adds in its own
   script and writes the total in seventeen digits, in place of the server's float increment,
-  and a total that is not finite is refused by both stores with the same message. Cause: the
+  and a total that is not finite is refused by every store with the same message. `durable`
+  adds in plain JavaScript, as the test store does. Cause: the
   server adds in a wider float and prints a rounded decimal, so 0.1 + 0.2 read 0.3 on a real
   store and 0.30000000000000004 on the test store.
 - **`limits` caps a request's duration, its model calls, its after-response work and its body.**

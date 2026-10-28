@@ -18,7 +18,8 @@ const entries = z.object({
     z.string(),
     z.object({
       types: z.string(),
-      bun: z.string(),
+      bun: z.string().optional(),
+      workerd: z.string().optional(),
       default: z.string().optional(),
     }),
   ),
@@ -74,6 +75,10 @@ beforeAll(async () => {
     ).replace(/\/dist\/.*/, ''),
     join(project, 'node_modules', 'jose'),
   );
+  await symlink(
+    `${import.meta.dir}/../../node_modules/@cloudflare`,
+    join(project, 'node_modules', '@cloudflare'),
+  );
   await Bun.write(join(project, 'package.json'), '{ "type": "module" }');
   for (const host of ['bun.ts', 'worker.ts']) {
     await Bun.write(
@@ -120,7 +125,10 @@ test('a tarball holds the readme, the licence, and the source, the JavaScript an
         './README.md',
         './LICENSE',
         ...Object.values(entries.parse(JSON.parse(manifest)).exports).flatMap(
-          (entry) => [entry.bun, entry.default ?? entry.bun, entry.types],
+          ({ types, ...code }) => [
+            types,
+            ...Object.values(code).filter((path) => path !== undefined),
+          ],
         ),
       ]
         .map((path) => path.replace('./', 'package/'))
@@ -143,40 +151,64 @@ test('the version a description carries is the one the core package is published
 
 // A Workers consumer that checks every library it reads and holds no
 // runtime's types: a declaration naming Bun's or Node's globals fails it.
-test('every entry of the packed packages type-checks with library checks on and only the web-standard libraries', async () => {
-  const specifiers = packed.flatMap(({ name, manifest }) =>
-    Object.keys(entries.parse(JSON.parse(manifest)).exports).map(
-      (path) => `${name.replace('mottyjs-', '@mottyjs/')}${path.slice(1)}`,
-    ),
-  );
-  await Bun.write(
-    join(project, 'consumer.ts'),
-    specifiers
-      .map((specifier, at) => `export * as entry${at} from '${specifier}';`)
-      .join('\n'),
-  );
-  await Bun.write(
-    join(project, 'tsconfig.json'),
-    JSON.stringify({
-      compilerOptions: {
-        lib: ['ES2024', 'DOM', 'DOM.Iterable'],
-        target: 'ES2024',
-        module: 'ES2022',
-        moduleResolution: 'Bundler',
-        types: [],
-        strict: true,
-        skipLibCheck: false,
-        noEmit: true,
-      },
-      files: ['consumer.ts'],
-    }),
-  );
-  const checked = await $`bun tsc -p ${join(project, 'tsconfig.json')}`
-    .nothrow()
-    .quiet();
+// The Durable Object entry names the Workers types, as its host holds them.
+test.each([
+  [
+    'every entry of the packed packages but the Durable Object adapter',
+    'web-standard libraries',
+    ['DOM', 'DOM.Iterable'],
+    [],
+  ],
+  [
+    'the Durable Object adapter',
+    'Workers types',
+    [],
+    ['@cloudflare/workers-types'],
+  ],
+])(
+  '%s type-checks with library checks on and only the %s',
+  async (_entries, _libraries, lib, types) => {
+    const durable = types.length > 0;
+    const specifiers = packed
+      .flatMap(({ name, manifest }) =>
+        Object.keys(entries.parse(JSON.parse(manifest)).exports).map(
+          (path) => `${name.replace('mottyjs-', '@mottyjs/')}${path.slice(1)}`,
+        ),
+      )
+      .filter(
+        (specifier) => (specifier === '@mottyjs/adapters/durable') === durable,
+      );
+    const consumer = durable ? 'workers' : 'consumer';
+    await Bun.write(
+      join(project, `${consumer}.ts`),
+      specifiers
+        .map((specifier, at) => `export * as entry${at} from '${specifier}';`)
+        .join('\n'),
+    );
+    await Bun.write(
+      join(project, `${consumer}.json`),
+      JSON.stringify({
+        compilerOptions: {
+          lib: ['ES2024', ...lib],
+          target: 'ES2024',
+          module: 'ES2022',
+          moduleResolution: 'Bundler',
+          types,
+          strict: true,
+          skipLibCheck: false,
+          noEmit: true,
+        },
+        files: [`${consumer}.ts`],
+      }),
+    );
+    const checked = await $`bun tsc -p ${join(project, `${consumer}.json`)}`
+      .nothrow()
+      .quiet();
 
-  expect([checked.stdout.toString(), checked.exitCode]).toEqual(['', 0]);
-}, 30_000);
+    expect([checked.stdout.toString(), checked.exitCode]).toEqual(['', 0]);
+  },
+  30_000,
+);
 
 test('on Bun, the packed packages serve a motty, read as their sources', async () => {
   const served = await $`${process.execPath} bun.ts`
@@ -234,7 +266,8 @@ test('bundled for Workers, the packed packages answer in workerd', async () => {
   }
 }, 30_000);
 
-// Redis is Bun's own client, so that one entry is exported to Bun alone.
+// Redis is Bun's own client, so that one entry is exported to Bun alone. The
+// Durable Object adapter imports the runtime's own module, left to workerd.
 test('bundled for Workers, every entry of the packed packages but the Redis adapter loads in workerd', async () => {
   const specifiers = packed.flatMap(({ name, manifest }) =>
     Object.keys(entries.parse(JSON.parse(manifest)).exports)
@@ -255,7 +288,7 @@ test('bundled for Workers, every entry of the packed packages but the Redis adap
     entrypoints: [join(project, 'entries.ts')],
     target: 'browser',
     conditions: ['workerd', 'worker'],
-    external: ['node:*'],
+    external: ['node:*', 'cloudflare:*'],
   });
   const { address, stop } = await workerd({
     modules: { 'worker.js': (await outputs[0]?.text()) ?? '' },

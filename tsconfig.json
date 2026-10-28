@@ -33,5 +33,10 @@
     "examples/*/evals",
     "examples/*/demo",
     "examples/*/browser"
+  ],
+  // Read with the Workers types alone, by tsconfig.workers.json.
+  "exclude": [
+    "packages/adapters/src/durable.ts",
+    "packages/adapters/test/durable.worker.ts"
   ]
 }

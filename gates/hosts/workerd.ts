@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,8 +33,13 @@ export async function workerd(worker: {
   modules: { readonly [name: string]: string };
   flags: readonly string[];
   bindings: { readonly [name: string]: string };
+  // A binding to the Durable Object class of that name, kept in SQLite on
+  // disk, since workerd keeps no SQLite in memory.
+  objects?: { readonly [name: string]: string };
 }): Promise<{ address: string; stop: () => Promise<void> }> {
   const folder = await mkdtemp(join(tmpdir(), 'workerd-'));
+  const { objects = {} } = worker;
+  await mkdir(join(folder, 'objects'));
   await Promise.all(
     Object.entries(worker.modules).map(([name, source]) =>
       Bun.write(join(folder, 'modules', name), source),
@@ -48,6 +53,7 @@ const config :Workerd.Config = (
   services = [
     (name = "main", worker = .worker),
     (name = "network", network = (allow = ["local", "private"])),
+    (name = "disk", disk = (path = ${JSON.stringify(join(folder, 'objects'))}, writable = true)),
   ],
   sockets = [(name = "http", address = "127.0.0.1:0", http = (), service = "main")],
 );
@@ -61,12 +67,23 @@ const worker :Workerd.Worker = (
     .join(', ')}],
   compatibilityDate = "2026-01-01",
   compatibilityFlags = ${JSON.stringify(worker.flags)},
-  bindings = [${Object.entries(worker.bindings)
-    .map(
+  bindings = [${[
+    ...Object.entries(worker.bindings).map(
       ([name, text]) =>
         `(name = ${JSON.stringify(name)}, text = ${JSON.stringify(text)})`,
+    ),
+    ...Object.entries(objects).map(
+      ([name, kind]) =>
+        `(name = ${JSON.stringify(name)}, durableObjectNamespace = ${JSON.stringify(kind)})`,
+    ),
+  ].join(', ')}],
+  durableObjectNamespaces = [${Object.values(objects)
+    .map(
+      (kind) =>
+        `(className = ${JSON.stringify(kind)}, uniqueKey = ${JSON.stringify(kind)}, enableSql = true)`,
     )
     .join(', ')}],
+  durableObjectStorage = (localDisk = "disk"),
   globalOutbound = "network",
 );
 `,

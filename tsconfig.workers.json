@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": [
+    "packages/adapters/src/durable.ts",
+    "packages/adapters/test/durable.worker.ts"
+  ],
+  "exclude": []
+}

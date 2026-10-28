@@ -1,7 +1,7 @@
 {
   "name": "@mottyjs/adapters",
   "version": "0.1.1",
-  "description": "Host-side adapters for a motty: model providers, Redis storage, and jwt and bearer auth.",
+  "description": "Host-side adapters for a motty: model providers, Redis and Durable Object storage, and jwt and bearer auth.",
   "keywords": [
     "motty",
     "llm",
@@ -10,6 +10,7 @@
     "anthropic",
     "openrouter",
     "redis",
+    "durable-objects",
     "jwt",
     "bun",
     "cloudflare-workers"
@@ -136,6 +137,11 @@
       "@mottyjs/source": "./src/redis.ts",
       "types": "./dist/redis.d.ts",
       "bun": "./src/redis.ts"
+    },
+    "./durable": {
+      "@mottyjs/source": "./src/durable.ts",
+      "types": "./dist/durable.d.ts",
+      "workerd": "./dist/durable.js"
     },
     "./jwt": {
       "@mottyjs/source": "./src/jwt.ts",
