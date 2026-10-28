@@ -14,6 +14,10 @@ export class BareStorage extends DurableObject {
     this.ctx.storage.kv.put(key, text);
   }
 
+  async row(key: string, text: string, until: number): Promise<void> {
+    this.ctx.storage.kv.put(key, { text, until });
+  }
+
   async add(key: string, by: number): Promise<number> {
     const total = Number(this.ctx.storage.kv.get(key) ?? 0) + by;
     this.ctx.storage.kv.put(key, total);
@@ -42,6 +46,18 @@ export default {
       'motty set': () => storage.set('timed', value, { ttl: 60_000 }),
       'motty plain': () => storage.set('timed', value),
       'bare plain': () => bare.write('timed', JSON.stringify(value)),
+      'motty rpc': () =>
+        env.STORAGE.getByName('timed').write(
+          'timed',
+          JSON.stringify(value),
+          60_000,
+        ),
+      'bare rpc': () =>
+        env.STORAGE.getByName('timed').write('timed', JSON.stringify(value)),
+      'motty row': () =>
+        bare.row('timed', JSON.stringify(value), Date.now() + 60_000),
+      'bare row': () =>
+        bare.row('timed', JSON.stringify(value), Number.POSITIVE_INFINITY),
       'motty increment': () =>
         storage.increment?.('counted', 1, { ttl: 60_000 }),
       'bare get': async () => {
