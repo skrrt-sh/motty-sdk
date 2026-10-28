@@ -179,6 +179,51 @@ test('tool call fragments are sent by index, id and name on the first', async ()
   ]);
 });
 
+test('a function call with no input is sent an empty object before the reason', async () => {
+  expect(
+    await frames(
+      run(
+        { type: 'tool_call', id: 'call_a', name: 'now', arguments: '' },
+        {
+          type: 'tool_call',
+          id: 'call_b',
+          name: 'shell',
+          arguments: '',
+          provider: { 'openai.chat': { type: 'custom' } },
+        },
+        { type: 'finish', reason: 'tool_calls' },
+      ),
+    ),
+  ).toMatchObject([
+    {
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              { index: 0, function: { name: 'now', arguments: '' } },
+            ],
+          },
+        },
+      ],
+    },
+    {
+      choices: [
+        { delta: { tool_calls: [{ index: 1, custom: { name: 'shell' } }] } },
+      ],
+    },
+    {
+      choices: [
+        {
+          delta: { tool_calls: [{ index: 0, function: { arguments: '{}' } }] },
+          finish_reason: null,
+        },
+      ],
+    },
+    { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+    '[DONE]',
+  ]);
+});
+
 test('a refusal, logprobs, a citation and sound each have their field', async () => {
   const token = {
     token: 'No',
