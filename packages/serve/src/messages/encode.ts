@@ -1,4 +1,4 @@
-import type { Json, Message } from '@mottyjs/core/host';
+import type { Json, Message, Options } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { type Dict, dict, given, without } from '../wire/json.ts';
@@ -151,11 +151,27 @@ function placed(left: Leaving, turns: readonly Dict[]): Dict[] {
   return [...sent, ...settled(sent, waiting)];
 }
 
+// While the request asks for automatic caching, the last message's own
+// marker is that ask, which this API is sent as the field it came in.
+function unmoved(
+  messages: readonly Message[],
+  options: Options,
+): readonly Message[] {
+  const last = messages.at(-1);
+  const { cache_control: automatic } = hinted(options.hints);
+  if (automatic === undefined || last?.cache === undefined) {
+    return messages;
+  }
+  const { cache: _, ...rest } = last;
+  return [...messages.slice(0, -1), rest];
+}
+
 export function encode(
   ...[model, prompt, defaults = {}, takes]: Parameters<Codec['encode']>
 ): ReturnType<Codec['encode']> {
-  const turn = prompt.messages.findIndex((message) => !leads(message));
-  const start = turn === -1 ? prompt.messages.length : turn;
+  const said = unmoved(prompt.messages, prompt.options ?? {});
+  const turn = said.findIndex((message) => !leads(message));
+  const start = turn === -1 ? said.length : turn;
   const left = leaving('messages');
   const { headers, fields } = optionsTo(
     left,
@@ -172,9 +188,9 @@ export function encode(
   ).flatMap((tool) => toolTo(left, tool) ?? []);
   // Every tool left out as only offered leaves nothing to choose among.
   const choosing = tools.length > 0 || (prompt.tools?.length ?? 0) === 0;
-  for (const { name } of prompt.messages) left.without('message.name', name);
-  const system = systemTo(left, prompt.messages.slice(0, start));
-  const turns = prompt.messages
+  for (const { name } of said) left.without('message.name', name);
+  const system = systemTo(left, said.slice(0, start));
+  const turns = said
     .slice(start)
     .flatMap((message) => messageTo(left, message));
   return {

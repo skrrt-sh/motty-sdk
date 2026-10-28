@@ -1,9 +1,12 @@
 import { expect, test } from 'bun:test';
 import type { Json, Progress, StreamEvent } from '@mottyjs/core/host';
-import { chatCompletions } from '../../src/chat-completions/index.ts';
+import {
+  chatCompletions,
+  chatCompletionsIn,
+} from '../../src/chat-completions/index.ts';
 import type { Decoded } from '../../src/codec.ts';
 import { messages } from '../../src/messages/index.ts';
-import { responses } from '../../src/responses/index.ts';
+import { responses, responsesIn } from '../../src/responses/index.ts';
 import { dict, list, parsed, text } from '../../src/wire/json.ts';
 
 async function answered(decoded: Decoded, wire: Json[], stream: boolean) {
@@ -949,4 +952,118 @@ test("an author's own cache marker with no neutral one is sent as given", () => 
     tools: [{ name: 'get_weather', cache_control: marker }],
   });
   expect(leftOut).toEqual([]);
+});
+
+test('a top-level cache marker reaches every upstream as a marker on the last message', () => {
+  const body = {
+    model: 'claude-opus-5-5',
+    max_tokens: 1024,
+    system: 'You are Claude Code.',
+    messages: [
+      { role: 'user', content: 'List the files.' },
+      { role: 'assistant', content: 'a.txt' },
+      { role: 'user', content: 'Go on.' },
+    ],
+    cache_control: { type: 'ephemeral', ttl: '1h', evict_on_complete: true },
+    stream: true,
+  };
+  const { request } = messages.decode(body, new Headers());
+
+  const anthropic = messages.encode('claude-opus-5-5', request);
+  expect(anthropic.body).toEqual(body);
+  expect(anthropic.leftOut).toEqual([]);
+  const router = chatCompletionsIn({
+    name: 'openrouter',
+    breakpoints: 'cache_control',
+  }).encode('anthropic/claude-opus-5-5', request);
+  expect(router.body).toMatchObject({
+    messages: [
+      { role: 'system', content: 'You are Claude Code.' },
+      { role: 'user', content: 'List the files.' },
+      { role: 'assistant', content: 'a.txt' },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Go on.',
+            cache_control: { type: 'ephemeral', ttl: '1h' },
+          },
+        ],
+      },
+    ],
+  });
+  expect(router.body).not.toHaveProperty('cache_control');
+  const breakpoint = {
+    type: 'text',
+    text: 'Go on.',
+    prompt_cache_breakpoint: { mode: 'explicit' },
+  };
+  const chat = chatCompletionsIn({ name: 'openai', breakpoints: true }).encode(
+    'gpt-5.5',
+    request,
+  );
+  expect(chat.body).toMatchObject({
+    messages: [{}, {}, {}, { role: 'user', content: [breakpoint] }],
+  });
+  expect(chat.leftOut.map(({ setting }) => setting)).toEqual(['cache.ttl']);
+  const answers = responsesIn({ breakpoints: true }).encode('gpt-5.5', request);
+  expect(answers.body).toMatchObject({
+    input: [
+      {},
+      {},
+      {},
+      { role: 'user', content: [{ ...breakpoint, type: 'input_text' }] },
+    ],
+  });
+  expect(answers.leftOut.map(({ setting }) => setting)).toEqual(['cache.ttl']);
+  expect(
+    chatCompletions
+      .encode('gpt-5.5', request)
+      .leftOut.map(({ setting }) => setting),
+  ).toEqual(['cache.ttl', 'cache']);
+});
+
+test('a top-level cache marker and one on the last block make one marker', () => {
+  const body = {
+    model: 'claude-opus-5-5',
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Rules.',
+            cache_control: { type: 'ephemeral' },
+          },
+          {
+            type: 'text',
+            text: 'Go on.',
+            cache_control: { type: 'ephemeral', ttl: '1h' },
+          },
+        ],
+      },
+    ],
+    cache_control: { type: 'ephemeral', ttl: '1h' },
+    stream: true,
+  };
+  const { request } = messages.decode(body, new Headers());
+
+  expect(messages.encode('claude-opus-5-5', request).body).toEqual(body);
+  const { body: sent } = chatCompletionsIn({
+    name: 'openrouter',
+    breakpoints: 'cache_control',
+  }).encode('anthropic/claude-opus-5-5', request);
+  expect(JSON.stringify(sent).match(/cache_control/g)).toHaveLength(2);
+  expect(sent).toMatchObject({
+    messages: [
+      {
+        content: [
+          { text: 'Rules.', cache_control: { type: 'ephemeral' } },
+          { text: 'Go on.', cache_control: { type: 'ephemeral', ttl: '1h' } },
+        ],
+      },
+    ],
+  });
 });
