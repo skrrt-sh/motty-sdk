@@ -520,6 +520,68 @@ test('a cache marker with no input content to sit on is left out and reported', 
   });
 });
 
+test('a cache marker on a tool result, or on a message of results, is a breakpoint on its output', () => {
+  const marker = { prompt_cache_breakpoint: { mode: 'explicit' } };
+  const left = leaving('responses', true);
+  expect(
+    inputOf(
+      left,
+      [
+        {
+          role: 'tool',
+          parts: [{ type: 'tool_result', id: 'call_1', text: '4C', cache: {} }],
+        },
+        {
+          role: 'tool',
+          cache: {},
+          parts: [
+            { type: 'tool_result', id: 'call_2', text: '7C' },
+            { type: 'tool_result', id: 'call_3', text: 'Rain' },
+          ],
+        },
+      ],
+      new Set(),
+    ).input,
+  ).toEqual([
+    {
+      type: 'function_call_output',
+      call_id: 'call_1',
+      output: [{ type: 'input_text', text: '4C', ...marker }],
+    },
+    { type: 'function_call_output', call_id: 'call_2', output: '7C' },
+    {
+      type: 'function_call_output',
+      call_id: 'call_3',
+      output: [{ type: 'input_text', text: 'Rain', ...marker }],
+    },
+  ]);
+  expect(left.leftOut()).toEqual([]);
+});
+
+test('a marker on an empty tool result is reported, unless a key implied it', () => {
+  const sent = (cache: { implied?: true }) => {
+    const left = leaving('responses', true);
+    const { input } = inputOf(
+      left,
+      [
+        {
+          role: 'tool',
+          cache,
+          parts: [{ type: 'tool_result', id: 'call_1', text: '' }],
+        },
+      ],
+      new Set(),
+    );
+    return { input, leftOut: left.leftOut().map(({ setting }) => setting) };
+  };
+  const input = [
+    { type: 'function_call_output', call_id: 'call_1', output: '' },
+  ];
+
+  expect(sent({})).toEqual({ input, leftOut: ['tool.cache'] });
+  expect(sent({ implied: true })).toEqual({ input, leftOut: [] });
+});
+
 test('the hints of a message wait for its first message item', () => {
   const left = leaving('responses');
   expect(

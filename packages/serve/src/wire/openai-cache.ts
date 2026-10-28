@@ -20,3 +20,9 @@ export function breakpoint(left: Leaving, cache: Cache | undefined): Dict {
 export function cacheFor(left: Leaving, cache: Cache | undefined) {
   return cache?.implied === true && !left.marks ? undefined : cache;
 }
+
+// A marker a key implied is no ask of the caller, so with no place it is
+// not reported either.
+export function asked(cache: Cache | undefined): Cache | undefined {
+  return cache?.implied === true ? undefined : cache;
+}

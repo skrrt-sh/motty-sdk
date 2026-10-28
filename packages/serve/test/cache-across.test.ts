@@ -1,5 +1,11 @@
 import { expect, test } from 'bun:test';
-import { chatCompletions, messages, responses } from '../src/index.ts';
+import {
+  chatCompletions,
+  chatCompletionsIn,
+  messages,
+  responses,
+  responsesIn,
+} from '../src/index.ts';
 
 const turn = [
   { type: 'message', role: 'user', content: 'List the files.' },
@@ -132,4 +138,65 @@ test('to an upstream that takes no marker the key changes nothing', () => {
     );
     expect(leftOut).toEqual([]);
   }
+});
+
+test.each([
+  ['cache_control', { cache_control: { type: 'ephemeral' } }],
+  [true, { prompt_cache_breakpoint: { mode: 'explicit' } }],
+] as const)(
+  'to a chat upstream that takes %p markers, the key`s marker sits on the closing tool message',
+  (breakpoints, marker) => {
+    const { request } = responses.decode(
+      { model: 'relay', input: turn, prompt_cache_key: 'session-1' },
+      new Headers(),
+    );
+
+    const { body, leftOut } = chatCompletionsIn({
+      name: 'router',
+      breakpoints,
+    }).encode('model-x', request);
+
+    expect(body).toMatchObject({
+      messages: [
+        { role: 'user' },
+        { role: 'assistant' },
+        {
+          role: 'tool',
+          tool_call_id: 'call_1',
+          content: [{ type: 'text', text: 'a.txt', ...marker }],
+        },
+      ],
+    });
+    expect(leftOut).toEqual([]);
+  },
+);
+
+test('to a Responses upstream that takes markers, the key`s marker sits on the closing tool output', () => {
+  const { request } = responses.decode(
+    { model: 'relay', input: turn, prompt_cache_key: 'session-1' },
+    new Headers(),
+  );
+
+  const { body, leftOut } = responsesIn({ breakpoints: true }).encode(
+    'model-x',
+    request,
+  );
+
+  expect(body).toMatchObject({
+    input: [
+      { type: 'message' },
+      { type: 'function_call' },
+      {
+        type: 'function_call_output',
+        output: [
+          {
+            type: 'input_text',
+            text: 'a.txt',
+            prompt_cache_breakpoint: { mode: 'explicit' },
+          },
+        ],
+      },
+    ],
+  });
+  expect(leftOut).toEqual([]);
 });

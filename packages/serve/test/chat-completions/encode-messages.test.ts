@@ -410,6 +410,117 @@ test('a router`s cache marker is written with its lifetime, on a part or a messa
   expect(left.leftOut()).toEqual([]);
 });
 
+test('a cache marker on a tool result, or on a message of results, is written on the last text of the result', () => {
+  const left = leaving('chat', 'cache_control');
+
+  expect(
+    wireMessages(left, [
+      {
+        role: 'tool',
+        parts: [{ type: 'tool_result', id: 'call_a', text: '4°C', cache: {} }],
+      },
+      {
+        role: 'tool',
+        cache: { ttl: '1h' },
+        parts: [
+          { type: 'tool_result', id: 'call_b', text: '7°C' },
+          {
+            type: 'tool_result',
+            id: 'call_c',
+            parts: [
+              { type: 'text', text: 'Rain' },
+              { type: 'text', text: 'at noon' },
+            ],
+          },
+        ],
+      },
+    ]),
+  ).toEqual([
+    {
+      role: 'tool',
+      tool_call_id: 'call_a',
+      content: [
+        { type: 'text', text: '4°C', cache_control: { type: 'ephemeral' } },
+      ],
+    },
+    { role: 'tool', tool_call_id: 'call_b', content: '7°C' },
+    {
+      role: 'tool',
+      tool_call_id: 'call_c',
+      content: [
+        { type: 'text', text: 'Rain' },
+        {
+          type: 'text',
+          text: 'at noon',
+          cache_control: { type: 'ephemeral', ttl: '1h' },
+        },
+      ],
+    },
+  ]);
+  expect(left.leftOut()).toEqual([]);
+});
+
+test('OpenAI`s own takes a marker on a tool result as a breakpoint', () => {
+  const left = leaving('chat', true);
+
+  expect(
+    wireMessages(left, [
+      {
+        role: 'tool',
+        cache: {},
+        parts: [{ type: 'tool_result', id: 'call_a', text: '4°C' }],
+      },
+    ]),
+  ).toEqual([
+    {
+      role: 'tool',
+      tool_call_id: 'call_a',
+      content: [
+        {
+          type: 'text',
+          text: '4°C',
+          prompt_cache_breakpoint: { mode: 'explicit' },
+        },
+      ],
+    },
+  ]);
+  expect(left.leftOut()).toEqual([]);
+});
+
+test('a marker on a tool result with no place is reported, unless a key implied it', () => {
+  const sent = (
+    marks: true | undefined,
+    cache: { implied?: true },
+    text: string,
+  ) => {
+    const left = leaving('chat', marks);
+    const wire = wireMessages(left, [
+      {
+        role: 'tool',
+        cache,
+        parts: [{ type: 'tool_result', id: 'call_a', text }],
+      },
+    ]);
+    return { wire, leftOut: left.leftOut().map(({ setting }) => setting) };
+  };
+  const plain = (text: string) => [
+    { role: 'tool', tool_call_id: 'call_a', content: text },
+  ];
+
+  expect(sent(undefined, {}, '4°C')).toEqual({
+    wire: plain('4°C'),
+    leftOut: ['tool.cache'],
+  });
+  expect(sent(true, {}, '')).toEqual({
+    wire: plain(''),
+    leftOut: ['tool.cache'],
+  });
+  expect(sent(true, { implied: true }, '')).toEqual({
+    wire: plain(''),
+    leftOut: [],
+  });
+});
+
 test('a message, a part and a provider part with an entry for each family are sent this one`s own', () => {
   const left = leaving('chat');
 
