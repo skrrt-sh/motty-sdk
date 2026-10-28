@@ -1412,9 +1412,13 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   unknown fields are still decoded under the key of the API it spoke. Cause: every comparable
   SDK that shares one key drops such a field silently.
 - **What a Responses caller sends only to observe its request is a hint:** `metadata`,
-  `client_metadata`, the cache key and the safety identifier among others, left out by another
-  family. Cause: Codex sends `client_metadata` on every request, and as provider data it made an
-  Anthropic upstream refuse the first one.
+  `client_metadata` and the safety identifier among others, left out by another family. Cause:
+  Codex sends `client_metadata` on every request, and as provider data it made an Anthropic
+  upstream refuse the first one.
+- **The cache key is held under the shared `openai` key, whichever OpenAI API sent it.** An
+  upstream of either API is sent it, and another family leaves it out. Cause: a key held as a
+  hint of the API that sent it was lost between the two, so a caller of one API routed to the
+  other paid its prompt again.
 - **Across families the common set is translated:** messages, tools and tool choice, structured
   output, reasoning effort, stop, max tokens, sampling, finish reason, usage.
 - **Nothing that changes the meaning is dropped.** It fails that call with `Unsupported`, so
@@ -1532,17 +1536,20 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   400 to `prompt_cache_breakpoint`, so a hint failed the call, and they cache by themselves.
   Rejected: writing it always, which is that; never, which lost explicit caching through a router
   that honours it.
-- **A Responses caller that keys its cache and marks none asks for a marker on the last
-  message.** The decoder puts the neutral marker there, so an upstream that caches only where it
-  is told, as Anthropic does, is told, and the author sees the marker and may move or remove it.
-  One marker is within Anthropic's limit of four. A request that sends the Responses API's own
-  key is cached by it, so a marker left out of it is not reported. The marker says it was
+- **A caller of either OpenAI API that keys its cache and marks none asks for a marker on the
+  last message.** The decoder puts the neutral marker there, so an upstream that caches only
+  where it is told, as Anthropic does, is told, and the author sees the marker and may move or
+  remove it. One marker is within Anthropic's limit of four. A request that sends an OpenAI API
+  the key is cached by it, so a marker left out of it is not reported. The marker says it was
   implied by a key, so an upstream that takes no marker, caching by itself, is sent the request
   as if there were none, with nothing reported. Cause: Codex sends
   `prompt_cache_key` on every turn and no marker, so every turn to Claude paid its 13,000 tokens
   of prompt again, and with one marker live, 98 of each 100 were read from the cache. Rejected:
   the Anthropic encoder reading the key, a hint of another family, which the author could not see
   or change; a marker on the system prompt alone, which leaves the conversation uncached.
+  A Chat Completions caller's key implies the marker the same way. Cause: opencode sends only the
+  key to an OpenAI-family upstream, and routed to Claude, directly or through OpenRouter, it was
+  sent no marker and cached nothing.
 - **What a `cache_control` says beside its kind and lifetime is a hint of the Messages
   family.** A `scope` or a field named later reaches an Anthropic upstream under the marker it
   came with, and another family leaves it out. A marker taken away takes it along, while an

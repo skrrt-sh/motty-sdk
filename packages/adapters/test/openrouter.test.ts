@@ -923,3 +923,67 @@ data: [DONE]
     },
   ]);
 });
+
+test('a Codex turn keyed for its cache reaches the router with the key, which pins its provider, and a marker on the last message', async () => {
+  const seen: unknown[] = [];
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      seen.push(await request.json());
+      return new Response(
+        `data: {"id":"gen-1","model":"anthropic/claude-haiku-5-5","choices":[{"index":0,"delta":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}
+
+data: [DONE]
+
+`,
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
+    },
+  });
+  const reports: Report[] = [];
+  const served = mount(
+    motty({ name: 'relay' }).handle(({ prompt }) =>
+      model('openrouter/anthropic/claude-haiku-5-5').complete(prompt),
+    ),
+    () => ({
+      models: [
+        openrouter({ key: 'sk-or-host', address: `${upstream.url}api/v1` }),
+      ],
+      report: (report) => reports.push(report),
+    }),
+  );
+
+  const reply = await served.fetch(
+    new Request('http://localhost/v1/responses', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'relay',
+        input: 'ping',
+        prompt_cache_key: 'session-1',
+      }),
+    }),
+  );
+  await reply.json();
+  await served.close();
+
+  expect(reply.status).toBe(200);
+  expect(seen).toMatchObject([
+    {
+      prompt_cache_key: 'session-1',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'ping',
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+  expect(reports[0]?.calls[0]).not.toHaveProperty('warnings');
+});

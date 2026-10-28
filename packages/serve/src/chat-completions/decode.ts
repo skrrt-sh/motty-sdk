@@ -1,5 +1,6 @@
 import type { Json, JsonOutput, Options } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
+import { keyed, shared } from '../wire/cache-key.ts';
 import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
@@ -113,7 +114,6 @@ function optionsOf(body: Dict): Options {
     store,
     service_tier,
     safety_identifier,
-    prompt_cache_key,
     prompt_cache_options,
     prompt_cache_retention,
     prediction,
@@ -142,7 +142,7 @@ function optionsOf(body: Dict): Options {
     ...(frequencyPenalty === undefined ? {} : { frequencyPenalty }),
     ...(typeof user === 'string' ? { user } : {}),
     ...marked(others),
-    ...noted(hints),
+    ...shared(noted(hints), prompt_cache_key),
   };
 }
 
@@ -160,6 +160,7 @@ export function decode(body: Json): Decoded {
     function_call: legacy,
     ...rest
   } = body;
+  const { prompt_cache_key: key } = rest;
   if (typeof model !== 'string') {
     invalid('The body needs a model');
   }
@@ -181,7 +182,7 @@ export function decode(body: Json): Decoded {
   return {
     request: {
       model,
-      messages: messages.map(messageOf),
+      messages: keyed(messages.map(messageOf), key),
       tools: listed,
       options,
       ...(output === undefined ? {} : { output }),

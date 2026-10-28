@@ -181,7 +181,7 @@ test('what changes the answer and only this wire reads is kept as its option', (
   });
 });
 
-test('bookkeeping and tuning only this wire reads are kept as hints', () => {
+test('bookkeeping and tuning only this wire reads are kept as hints, and the cache key both OpenAI APIs read', () => {
   const { request } = decode({
     model: 'coder',
     messages: [],
@@ -203,12 +203,12 @@ test('bookkeeping and tuning only this wire reads are kept as hints', () => {
         store: true,
         service_tier: 'flex',
         safety_identifier: 'u_9f2',
-        prompt_cache_key: 'manual-v3',
         prompt_cache_options: { mode: 'explicit', ttl: '30m' },
         prompt_cache_retention: '24h',
         prediction: { type: 'content', content: 'const a = 1;' },
         verbosity: 'low',
       },
+      openai: { prompt_cache_key: 'manual-v3' },
     },
   });
 });

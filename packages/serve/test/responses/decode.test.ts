@@ -122,10 +122,10 @@ test('what another family may leave out is a hint and the rest must arrive', () 
         include: ['reasoning.encrypted_content'],
         metadata: { ticket: 'T-1' },
         client_metadata: { 'x-codex-installation-id': 'i-1' },
-        prompt_cache_key: 'k1',
         service_tier: 'flex',
         safety_identifier: 's1',
       },
+      openai: { prompt_cache_key: 'k1' },
     },
     provider: { 'openai.responses': { truncation: 'auto', top_logprobs: 3 } },
   });

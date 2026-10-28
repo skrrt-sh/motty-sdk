@@ -6,6 +6,7 @@ import type {
   Options,
 } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
+import { keyed, shared } from '../wire/cache-key.ts';
 import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import {
@@ -123,7 +124,6 @@ function optionsOf(body: Dict): Options {
     'client_metadata',
     'include',
     'metadata',
-    'prompt_cache_key',
     'prompt_cache_retention',
     'prompt_cache_options',
     'safety_identifier',
@@ -137,6 +137,7 @@ function optionsOf(body: Dict): Options {
   const provider = {
     ...without(body, [
       ...dropped,
+      'prompt_cache_key',
       'model',
       'input',
       'instructions',
@@ -162,7 +163,11 @@ function optionsOf(body: Dict): Options {
     reasoning: meant(thinking),
     text: meant(writing),
   };
-  return { ...options, ...noted(meant(hints)), ...marked(provider) };
+  return {
+    ...options,
+    ...shared(noted(meant(hints)), given(body, 'prompt_cache_key')),
+    ...marked(provider),
+  };
 }
 
 // Instructions lead the conversation; the mark puts them back in their own
@@ -179,24 +184,6 @@ function led(instructions: Json | undefined): Message[] {
       hints: { [family]: { instructions: true } },
     },
   ];
-}
-
-function cached(message: Message): boolean {
-  if (message.cache !== undefined) return true;
-  return (message.parts ?? []).some(
-    (part) => part.type !== 'provider' && part.cache !== undefined,
-  );
-}
-
-// A caller who keys its cache asks for one, and an upstream that caches only
-// where it is told is told so at the end of the conversation, as a marker
-// the author sees and may move. One the caller placed itself says where.
-function keyed(messages: Message[], key: Json | undefined): Message[] {
-  const last = messages.at(-1);
-  if (key === undefined || last === undefined || messages.some(cached)) {
-    return messages;
-  }
-  return [...messages.slice(0, -1), { ...last, cache: { implied: true } }];
 }
 
 export function decode(body: Json): Decoded {
