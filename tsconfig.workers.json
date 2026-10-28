@@ -4,8 +4,8 @@
     "types": ["@cloudflare/workers-types", "node"]
   },
   "include": [
-    "packages/adapters/src/durable.ts",
-    "packages/adapters/test/durable.worker.ts"
+    "packages/adapters/src/cloudflare.ts",
+    "packages/adapters/test/cloudflare.worker.ts"
   ],
   "exclude": []
 }

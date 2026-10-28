@@ -3,7 +3,7 @@
 The adapters of the Motty SDK: plain objects a host passes in its host options, one import path
 each. Model providers: `openai`, `anthropic`, `openrouter`, `deepseek`, `moonshot`, `zai`,
 `dashscope`, `minimax`, `groq`, `mistral`, `together`, `fireworks`, `ollama`, `local` and
-`typesafe`. Storage: `redis`, which is Bun's own client and so runs on Bun alone, and `durable`,
+`typesafe`. Storage: `redis`, which is Bun's own client and so runs on Bun alone, and `cloudflare`,
 a Durable Object, which runs on Cloudflare Workers alone. Auth: `jwt` and
 `bearer`, or an object of the host's own. A credential stays inside the adapter the host made and
 never enters a motty's code. This package is never in a motty's bundle.
@@ -38,21 +38,21 @@ export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL })
 ```
 
 On Workers, storage is a Durable Object class of the host's own Worker. The worker entry exports
-`MottyStorage`, and `durable` is given its binding, read from the `env` that `cloudflare:workers`
+`MottyStorage`, and `cloudflare` is given its binding, read from the `env` that `cloudflare:workers`
 exports, since a binding is not a string and so is not in the environment `mount` reads:
 
 ```ts
 import { env } from "cloudflare:workers";
 import { mount } from "@mottyjs/serve";
-import { durable } from "@mottyjs/adapters/durable";
+import { cloudflare } from "@mottyjs/adapters/cloudflare";
 import { openai } from "@mottyjs/adapters/openai";
 import desk from "./motty";
 
-export { MottyStorage } from "@mottyjs/adapters/durable";
+export { MottyStorage } from "@mottyjs/adapters/cloudflare";
 
 export default mount(desk, ({ OPENAI_KEY }) => ({
   models: [openai({ key: OPENAI_KEY })],
-  storage: durable({ binding: env.STORAGE }),
+  storage: cloudflare({ binding: env.STORAGE }),
 }));
 ```
 

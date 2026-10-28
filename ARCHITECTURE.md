@@ -1137,7 +1137,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **One storage adapter per runtime, not a driver collection.** `redis` speaks the Redis
   protocol, tested on Valkey, and is Bun's built-in client. Its server must keep a key's expiry
   on a plain write: Redis 6 or any Valkey. Rejected: an adapter per provider, redoing its client.
-- **On Workers the store is a Durable Object, `durable`, one object per key.** Workers has no
+- **On Workers the store is a Durable Object, `cloudflare`, one object per key.** Workers has no
   Bun client and keeps no socket from one request to the next, and a Durable Object is the only
   Workers database that adds in one step. The object keeps its values in its SQLite store through
   the key-value calls, which need no table to make again once the object is deleted. Each value
@@ -1160,7 +1160,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   connections.
 - **`increment` is the same IEEE double addition in every store.** `redis` adds in its own
   script and writes the total in seventeen digits, in place of the server's float increment,
-  and a total that is not finite is refused by every store with the same message. `durable`
+  and a total that is not finite is refused by every store with the same message. `cloudflare`
   adds in plain JavaScript, as the test store does. Cause: the
   server adds in a wider float and prints a rounded decimal, so 0.1 + 0.2 read 0.3 on a real
   store and 0.30000000000000004 on the test store.

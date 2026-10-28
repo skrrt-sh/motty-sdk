@@ -276,8 +276,8 @@ test('every adapter the package exports is under this guard', () => {
     [
       ...Object.keys(adapters).map((name) => `./${name}`),
       // These reach no model: one signs a caller in, two store, one is rules.
-      // A Durable Object binding is no secret, so durable holds none.
-      './durable',
+      // A Durable Object binding is no secret, so cloudflare holds none.
+      './cloudflare',
       './jwt',
       './redis',
       './takes',

@@ -1,4 +1,4 @@
-import { durable, MottyStorage } from '../src/durable.ts';
+import { cloudflare, MottyStorage } from '../src/cloudflare.ts';
 import { parsed } from '../src/json.ts';
 
 export { MottyStorage };
@@ -21,7 +21,7 @@ export default {
     };
     const ttl = number('ttl');
     const group = query.get('group');
-    const storage = durable({
+    const storage = cloudflare({
       binding: env.STORAGE,
       ...(group === null ? {} : { name: () => group }),
     });

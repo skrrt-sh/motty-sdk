@@ -36,7 +36,7 @@
   ],
   // Read with the Workers types alone, by tsconfig.workers.json.
   "exclude": [
-    "packages/adapters/src/durable.ts",
-    "packages/adapters/test/durable.worker.ts"
+    "packages/adapters/src/cloudflare.ts",
+    "packages/adapters/test/cloudflare.worker.ts"
   ]
 }

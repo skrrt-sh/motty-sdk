@@ -110,7 +110,7 @@ export class MottyStorage extends DurableObject {
 
 // One object per key unless the host groups keys under a name of its own.
 // A binding restricted to a jurisdiction is passed as the binding.
-export function durable(options: {
+export function cloudflare(options: {
   binding: DurableObjectNamespace<MottyStorage>;
   name?: (key: string) => string;
 }): Storage {

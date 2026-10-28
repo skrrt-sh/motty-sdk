@@ -243,7 +243,7 @@ yourself.
 
 The packages are on npm under the `@mottyjs` scope, all at one version. Until `1.0.0` a minor
 version may break an API. The SDK runs on Bun and Cloudflare Workers. `serve` and the Redis
-adapter are Bun's. On Workers a host serves a motty with `mount` and stores with the `durable`
+adapter are Bun's. On Workers a host serves a motty with `mount` and stores with the `cloudflare`
 adapter, a Durable Object of the host's own Worker.
 
 - Images, files and audio are carried inside a chat request where the upstream takes them. The

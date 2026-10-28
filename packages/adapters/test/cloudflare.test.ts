@@ -11,7 +11,7 @@ let stop = async () => {};
 
 beforeAll(async () => {
   const { outputs } = await Bun.build({
-    entrypoints: [`${import.meta.dir}/durable.worker.ts`],
+    entrypoints: [`${import.meta.dir}/cloudflare.worker.ts`],
     target: 'browser',
     external: ['cloudflare:workers'],
   });
@@ -46,7 +46,7 @@ async function sent(
   return text;
 }
 
-function durable(group?: string): Storage {
+function cloudflare(group?: string): Storage {
   const at = group === undefined ? {} : { group };
   return {
     get: async (key) => {
@@ -76,7 +76,7 @@ const other = {
 };
 
 test('every kind of JSON value is read back as it was set', async () => {
-  const storage = durable();
+  const storage = cloudflare();
   const kinds = {
     text: 'deep',
     empty: '',
@@ -105,11 +105,11 @@ test('every kind of JSON value is read back as it was set', async () => {
 });
 
 test('a key never set reads as nothing', async () => {
-  expect(await durable().get('never')).toBeUndefined();
+  expect(await cloudflare().get('never')).toBeUndefined();
 });
 
 test('a value set again replaces the first and drops its time to live', async () => {
-  const storage = durable();
+  const storage = cloudflare();
 
   await storage.set('again', 'fast', { ttl: 1_000 });
   await storage.set('again', 'deep');
@@ -119,7 +119,7 @@ test('a value set again replaces the first and drops its time to live', async ()
 });
 
 test('a time to live may be shorter than a second', async () => {
-  const storage = durable();
+  const storage = cloudflare();
 
   await storage.set('part', 'deep', { ttl: 200 });
   const before = await storage.get('part');
@@ -131,7 +131,7 @@ test('a time to live may be shorter than a second', async () => {
 });
 
 test('an increment of a key never set starts from zero, and the total is read back as a number', async () => {
-  const storage = durable();
+  const storage = cloudflare();
 
   const total = await storage.increment?.('fresh', 2.5);
 
@@ -140,7 +140,7 @@ test('an increment of a key never set starts from zero, and the total is read ba
 });
 
 test('an increment adds to the number held, and takes away with an amount below zero', async () => {
-  const storage = durable();
+  const storage = cloudflare();
   await storage.set('spent', 4);
 
   const totals = [
@@ -163,7 +163,7 @@ test.each([
     const key = `sum:${crypto.randomUUID()}`;
 
     const totals = [];
-    for (const storage of [durable(), memory()]) {
+    for (const storage of [cloudflare(), memory()]) {
       for (const by of amounts) await storage.increment?.(key, by);
       totals.push(await storage.increment?.(key, 0), await storage.get(key));
     }
@@ -182,7 +182,7 @@ test.each([
     const key = `held:${crypto.randomUUID()}`;
 
     const totals = [];
-    for (const storage of [durable(), memory()]) {
+    for (const storage of [cloudflare(), memory()]) {
       await storage.set(key, held);
       totals.push(await storage.increment?.(key, by), await storage.get(key));
     }
@@ -195,7 +195,7 @@ test('a total past the largest number is refused as the test store refuses it, a
   const key = `past:${crypto.randomUUID()}`;
 
   const seen = [];
-  for (const storage of [durable(), memory()]) {
+  for (const storage of [cloudflare(), memory()]) {
     await storage.set(key, 1.7976931348623157e308);
     seen.push(
       await storage
@@ -216,7 +216,7 @@ test('a total past the largest number is refused as the test store refuses it, a
 test.each([' 5', '5.0', '500E-2', '-0'])(
   'an increment adds to a number another writer stored as %p, as a read gives it',
   async (text) => {
-    const storage = durable();
+    const storage = cloudflare();
     const key = `written:${crypto.randomUUID()}`;
     await other.set(key, text);
 
@@ -233,7 +233,7 @@ test.each(['0x10', '+5', '05', '5.', '5e', '\v5'])(
     const key = `foreign:${crypto.randomUUID()}`;
     await other.set(key, text);
 
-    const thrown = await durable()
+    const thrown = await cloudflare()
       .increment?.(key, 1)
       .catch((raised: unknown) => raised);
 
@@ -247,7 +247,7 @@ test.each(['0x10', '+5', '05', '5.', '5e', '\v5'])(
 test('a JSON number too large to hold is refused, and the text stays', async () => {
   await other.set('vast', '1e999');
 
-  const thrown = await durable()
+  const thrown = await cloudflare()
     .increment?.('vast', 1)
     .catch((raised: unknown) => raised);
 
@@ -258,7 +258,7 @@ test('a JSON number too large to hold is refused, and the text stays', async () 
 });
 
 test('increments made at once from two adapters are all kept', async () => {
-  const adapters = [durable(), durable()];
+  const adapters = [cloudflare(), cloudflare()];
 
   const totals = await Promise.all(
     Array.from({ length: 40 }, (_, at) =>
@@ -273,7 +273,7 @@ test('increments made at once from two adapters are all kept', async () => {
 });
 
 test('the time to live is set by the increment that made the key and left alone by the ones after', async () => {
-  const storage = durable();
+  const storage = cloudflare();
 
   await storage.increment?.('window', 1, { ttl: 1_000 });
   await Bun.sleep(600);
@@ -287,7 +287,7 @@ test('the time to live is set by the increment that made the key and left alone 
 });
 
 test('an increment with a time to live gives none to a key that was set without one', async () => {
-  const storage = durable();
+  const storage = cloudflare();
   await storage.set('kept', 4);
 
   await storage.increment?.('kept', 1, { ttl: 200 });
@@ -297,7 +297,7 @@ test('an increment with a time to live gives none to a key that was set without 
 });
 
 test('an increment keeps the time to live the key was set with', async () => {
-  const storage = durable();
+  const storage = cloudflare();
   await storage.set('brief', 4, { ttl: 200 });
 
   const total = await storage.increment?.('brief', 1);
@@ -308,7 +308,7 @@ test('an increment keeps the time to live the key was set with', async () => {
 });
 
 test('an increment of a key whose time ran out starts from zero, with a time to live of its own', async () => {
-  const storage = durable();
+  const storage = cloudflare();
   await storage.set('lapsed', 4, { ttl: 200 });
   await Bun.sleep(400);
 
@@ -325,7 +325,7 @@ test('an increment of a key whose time ran out starts from zero, with a time to 
 test.each(['5'])(
   'an increment of a held %p is refused, and the value stays',
   async (value) => {
-    const storage = durable();
+    const storage = cloudflare();
     const key = `refused:${crypto.randomUUID()}`;
     await storage.set(key, value);
 
@@ -341,8 +341,8 @@ test.each(['5'])(
 );
 
 test('two adapters on one namespace see each other’s keys', async () => {
-  const first = durable();
-  const second = durable();
+  const first = cloudflare();
+  const second = cloudflare();
 
   await first.set('shared', { tier: 'deep' });
   const seen = await second.get('shared');
@@ -355,7 +355,7 @@ test('two adapters on one namespace see each other’s keys', async () => {
 // The alarm deletes the object whole once its keys expired, and a deleted
 // object takes a key again.
 test('a key whose object its alarm deleted is set again', async () => {
-  const storage = durable();
+  const storage = cloudflare();
   await storage.set('gone', 1, { ttl: 20 });
   await Bun.sleep(200);
 
@@ -365,7 +365,7 @@ test('a key whose object its alarm deleted is set again', async () => {
 });
 
 test('keys grouped in one object keep their own times, and an expired or deleted one leaves the others', async () => {
-  const storage = durable('ledger');
+  const storage = cloudflare('ledger');
   await storage.set('brief', 1, { ttl: 50 });
   await storage.set('longer', 2, { ttl: 400 });
   await storage.set('lasting', 3);

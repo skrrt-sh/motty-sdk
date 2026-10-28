@@ -168,7 +168,7 @@ test.each([
 ])(
   '%s type-checks with library checks on and only the %s',
   async (_entries, _libraries, lib, types) => {
-    const durable = types.length > 0;
+    const cloudflare = types.length > 0;
     const specifiers = packed
       .flatMap(({ name, manifest }) =>
         Object.keys(entries.parse(JSON.parse(manifest)).exports).map(
@@ -176,9 +176,10 @@ test.each([
         ),
       )
       .filter(
-        (specifier) => (specifier === '@mottyjs/adapters/durable') === durable,
+        (specifier) =>
+          (specifier === '@mottyjs/adapters/cloudflare') === cloudflare,
       );
-    const consumer = durable ? 'workers' : 'consumer';
+    const consumer = cloudflare ? 'workers' : 'consumer';
     await Bun.write(
       join(project, `${consumer}.ts`),
       specifiers

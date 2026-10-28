@@ -10,7 +10,7 @@
     "anthropic",
     "openrouter",
     "redis",
-    "durable-objects",
+    "cloudflare-objects",
     "jwt",
     "bun",
     "cloudflare-workers"
@@ -138,10 +138,10 @@
       "types": "./dist/redis.d.ts",
       "bun": "./src/redis.ts"
     },
-    "./durable": {
-      "@mottyjs/source": "./src/durable.ts",
-      "types": "./dist/durable.d.ts",
-      "workerd": "./dist/durable.js"
+    "./cloudflare": {
+      "@mottyjs/source": "./src/cloudflare.ts",
+      "types": "./dist/cloudflare.d.ts",
+      "workerd": "./dist/cloudflare.js"
     },
     "./jwt": {
       "@mottyjs/source": "./src/jwt.ts",
