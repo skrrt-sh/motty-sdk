@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Chunk } from '@mottyjs/core/host';
-import { messages, responses } from '../src/index.ts';
+import { chatCompletionsIn, messages, responses } from '../src/index.ts';
 import { events } from '../src/messages/events.ts';
 import { dict, list } from '../src/wire/json.ts';
 
@@ -136,4 +136,109 @@ test('what a Claude model goes on from its reasoning with reaches a Responses ca
   const sent = responses.encode('gpt-x', request);
   expect(JSON.stringify(sent.body)).not.toContain('EqQBCgIYAhIM');
   expect(sent.leftOut.map(({ setting }) => setting)).toEqual(['reasoning']);
+
+  // Muted, the caller is shown no text, and the signature still goes back
+  // with the text it signs, which Anthropic checks.
+  const { reasoning: _, ...muted } = asked;
+  const { output: hidden } = dict(
+    responses
+      .decode(muted, new Headers())
+      .collected(chunks, { type: 'finish', reason: 'stop' }, 'r1'),
+  );
+  expect(list(hidden)).toMatchObject([
+    { type: 'reasoning', summary: [] },
+    { type: 'reasoning', summary: [] },
+    { type: 'message' },
+  ]);
+  const echoed = responses.decode(
+    {
+      ...muted,
+      input: [
+        { type: 'message', role: 'user', content: 'List the files.' },
+        ...list(hidden),
+      ],
+    },
+    new Headers(),
+  );
+  expect(messages.encode('claude-x', echoed.request).body).toMatchObject({
+    messages: [
+      { role: 'user' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'thinking',
+            thinking: 'The user wants a listing.',
+            signature: 'EqQBCgIYAhIM',
+          },
+          { type: 'redacted_thinking' },
+          { type: 'text' },
+        ],
+      },
+    ],
+  });
+});
+
+test('details a router streamed in pieces go back from a Responses caller joined, the text with what signs it', () => {
+  const decoded = responses.decode(asked, new Headers());
+  const detail = (fields: { text?: string; signature?: string }) => ({
+    provider: {
+      'openai.chat': {
+        reasoning_details: [
+          { type: 'reasoning.text', index: 0, format: 'claude', ...fields },
+        ],
+      },
+    },
+  });
+  const { output } = dict(
+    decoded.collected(
+      [
+        { type: 'reasoning', text: 'Let ', ...detail({ text: 'Let ' }) },
+        {
+          type: 'reasoning',
+          text: 'me think.',
+          ...detail({ text: 'me think.' }),
+        },
+        { type: 'reasoning', text: '', ...detail({ signature: 'SIG' }) },
+        { type: 'text', text: 'Done.' },
+      ],
+      { type: 'finish', reason: 'stop' },
+      'r1',
+    ),
+  );
+  const { request } = responses.decode(
+    {
+      ...asked,
+      input: [
+        { type: 'message', role: 'user', content: 'List the files.' },
+        ...list(output),
+        { type: 'message', role: 'user', content: 'Go on.' },
+      ],
+    },
+    new Headers(),
+  );
+  const router = chatCompletionsIn({
+    name: 'openrouter',
+    thought: 'reasoning',
+    details: true,
+  });
+
+  expect(router.encode('claude-x', request).body).toMatchObject({
+    messages: [
+      { role: 'user' },
+      {
+        role: 'assistant',
+        reasoning_details: [
+          {
+            type: 'reasoning.text',
+            index: 0,
+            format: 'claude',
+            text: 'Let me think.',
+            signature: 'SIG',
+          },
+        ],
+      },
+      { role: 'user' },
+    ],
+  });
 });

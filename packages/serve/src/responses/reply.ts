@@ -33,6 +33,10 @@ export function reply(asked: Asked, id: string) {
   const output: Dict[] = [];
   const calls = new Map<string, Call>();
   const over = new Set<string>();
+  let unshown: { block: number | undefined; text: string } = {
+    block: undefined,
+    text: '',
+  };
   const writing: Writing = { id, output, open: undefined, added, settled };
 
   function added(item: Dict): Sent {
@@ -95,15 +99,23 @@ export function reply(asked: Asked, id: string) {
         // Muted, the model's reasoning is still handed back when it is this
         // API's own item: the caller returns it for the model to go on from.
         // The content that item holds is streamed, so the two agree.
-        if (asked.muted && own === undefined && carried === undefined) {
-          return [];
+        let hidden = '';
+        if (asked.muted && own === undefined) {
+          if (!asked.encrypted) return [];
+          // What signs the text is refused without it, so the text no one is
+          // shown is kept until that comes, and sealed with it.
+          const before = unshown.block === event.block ? unshown.text : '';
+          hidden = before + event.text;
+          const text = carried === undefined ? hidden : '';
+          unshown = { block: event.block, text };
+          if (carried === undefined) return [];
         }
         const shown = !asked.muted || kind === 'reasoning_text';
         return thought(writing, shown ? event.text : '', {
           part: kind === 'reasoning_text' ? 'content' : 'summary',
           ...(event.block === undefined ? {} : { block: event.block }),
           ...(item === undefined ? {} : { item }),
-          ...(carried === undefined ? {} : { carried }),
+          ...(carried === undefined ? {} : { carried, hidden }),
         });
       }
       case 'text':

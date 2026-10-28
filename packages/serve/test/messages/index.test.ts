@@ -910,3 +910,43 @@ test('what a cache marker says beside its kind and lifetime reaches an upstream 
     messages: [{ role: 'user', content: [{ type: 'text', text: 'Weather?' }] }],
   });
 });
+
+test("an author's own cache marker with no neutral one is sent as given", () => {
+  const marker = { type: 'ephemeral', ttl: '1h' };
+  const { body, leftOut } = messages.encode('claude-opus-5-5', {
+    messages: [
+      {
+        role: 'user',
+        parts: [
+          {
+            type: 'text',
+            text: 'Long rules.',
+            provider: { anthropic: { cache_control: marker } },
+          },
+          { type: 'text', text: 'Weather?' },
+        ],
+      },
+    ],
+    tools: [
+      {
+        type: 'function',
+        name: 'get_weather',
+        input: { type: 'object' },
+        hints: { anthropic: { cache_control: marker } },
+      },
+    ],
+  });
+
+  expect(body).toMatchObject({
+    messages: [
+      {
+        content: [
+          { text: 'Long rules.', cache_control: marker },
+          { text: 'Weather?' },
+        ],
+      },
+    ],
+    tools: [{ name: 'get_weather', cache_control: marker }],
+  });
+  expect(leftOut).toEqual([]);
+});

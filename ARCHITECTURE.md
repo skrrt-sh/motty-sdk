@@ -1532,14 +1532,17 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   message.** The decoder puts the neutral marker there, so an upstream that caches only where it
   is told, as Anthropic does, is told, and the author sees the marker and may move or remove it.
   One marker is within Anthropic's limit of four. A request that sends the Responses API's own
-  key is cached by it, so a marker left out of it is not reported. Cause: Codex sends
+  key is cached by it, so a marker left out of it is not reported. The marker says it was
+  implied by a key, so an upstream that takes no marker, caching by itself, is sent the request
+  as if there were none, with nothing reported. Cause: Codex sends
   `prompt_cache_key` on every turn and no marker, so every turn to Claude paid its 13,000 tokens
   of prompt again, and with one marker live, 98 of each 100 were read from the cache. Rejected:
   the Anthropic encoder reading the key, a hint of another family, which the author could not see
   or change; a marker on the system prompt alone, which leaves the conversation uncached.
 - **What a `cache_control` says beside its kind and lifetime is a hint of the Messages
   family.** A `scope` or a field named later reaches an Anthropic upstream under the marker it
-  came with, and another family leaves it out. A marker taken away takes it along. Cause: it was
+  came with, and another family leaves it out. A marker taken away takes it along, while an
+  author's own whole `cache_control`, with its kind, is sent as given where no neutral marker is. Cause: it was
   dropped as it was read, so an Anthropic caller relayed to an Anthropic upstream lost it.
   Rejected: provider data, which would make a request with such a marker fail on every other
   family.
@@ -1721,7 +1724,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **A Responses caller that includes encrypted reasoning is given another family's in it.** What
   the model goes on from is written in the item's `encrypted_content` as that family's own data,
   keyed by the family, and read back from the item the caller echoes, so a Claude model's thinking
-  goes back to it signed. Such an item is never sent to a Responses upstream. Which chunks a reply
+  goes back to it signed. A caller who muted reasoning is shown none of its text, so the text a
+  signature binds is sealed beside it, since Anthropic refuses a signature without its text.
+  Such an item is never sent to a Responses upstream. Which chunks a reply
   has no form for depends on what the caller asked, so it is said by the decoded request. Cause:
   Codex asks for the content and echoes the item, and every turn of it to Claude dropped the
   model's thinking. Rejected: an opaque encoding of our own, which a reader could not tell from

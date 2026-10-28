@@ -99,8 +99,9 @@ export function messageItem(message: Message, status: string): Dict {
 
 // A custom tool call has no status on this API.
 export function callItem({ item, holds, given }: Call, status: string): Dict {
+  // Before any of them came they are an empty object, never another type.
   if (holds === 'object') {
-    return { ...item, status, arguments: parsed(given) ?? given };
+    return { ...item, status, arguments: parsed(given || '{}') ?? given };
   }
   return {
     ...item,

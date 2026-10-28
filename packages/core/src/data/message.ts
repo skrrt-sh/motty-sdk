@@ -16,7 +16,9 @@ export type JsonSchema = { [keyword: string]: ReadonlyJson };
 // dropped when it sits in `hints`.
 export type ProviderData = { [key: string]: ReadonlyJson };
 
-export type Cache = { ttl?: '5m' | '1h' };
+// `implied` is a marker a cache key asked for, not one the caller placed:
+// an upstream that takes none caches by itself and misses nothing.
+export type Cache = { ttl?: '5m' | '1h'; implied?: true };
 
 // `data` is base64.
 export type Media =

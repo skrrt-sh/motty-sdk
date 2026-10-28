@@ -1,7 +1,7 @@
 import type { Json, Message, Part, Role } from '@mottyjs/core/host';
 import type { Leaving } from '../wire/fieldless.ts';
 import { type Dict, given } from '../wire/json.ts';
-import { breakpoint } from '../wire/openai-cache.ts';
+import { breakpoint, cacheFor } from '../wire/openai-cache.ts';
 import { a, unsupported } from '../wire/refusals.ts';
 import { thinking } from './content-chunks.ts';
 import { type Dialect, inlined, plain, returned } from './dialect.ts';
@@ -103,7 +103,8 @@ function result(
 }
 
 function encoded(left: Leaving, message: Message, dialect: Dialect): Dict[] {
-  const { role, name, cache } = message;
+  const { role, name } = message;
+  const cache = cacheFor(left, message.cache);
   const extra = {
     ...hinted(message.hints),
     ...own(message.provider, 'a message option'),

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { joined, plain } from '../../src/chat-completions/dialect.ts';
+import { plain } from '../../src/chat-completions/dialect.ts';
 import { encode } from '../../src/chat-completions/encode.ts';
 import { events } from '../../src/chat-completions/events.ts';
 import {
@@ -7,6 +7,7 @@ import {
   reasonWritten,
 } from '../../src/chat-completions/finish.ts';
 import { stopOf } from '../../src/messages/finish.ts';
+import { joined } from '../../src/wire/details.ts';
 
 async function* sent(...frames: string[]) {
   for (const data of frames) yield { data };

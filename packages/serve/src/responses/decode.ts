@@ -196,7 +196,7 @@ function keyed(messages: Message[], key: Json | undefined): Message[] {
   if (key === undefined || last === undefined || messages.some(cached)) {
     return messages;
   }
-  return [...messages.slice(0, -1), { ...last, cache: {} }];
+  return [...messages.slice(0, -1), { ...last, cache: { implied: true } }];
 }
 
 export function decode(body: Json): Decoded {

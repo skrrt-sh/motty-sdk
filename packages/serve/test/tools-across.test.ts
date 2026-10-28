@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test';
-import type { Chunk } from '@mottyjs/core/host';
+import type { Chunk, StreamEvent } from '@mottyjs/core/host';
 import { chatCompletions, messages, responses } from '../src/index.ts';
 import { events } from '../src/messages/events.ts';
+import { field } from '../src/responses/fields.ts';
+import { parsed } from '../src/wire/json.ts';
 
 async function* sse(...sent: { type: string; [field: string]: unknown }[]) {
   for (const event of sent) {
@@ -122,7 +124,7 @@ const found = [
   },
 ];
 
-test('a tool of its own type that the caller runs goes to another family as a function, and its call comes back as that type', () => {
+test('a tool of its own type that the caller runs goes to another family as a function, and its call comes back as that type', async () => {
   const decoded = responses.decode(
     { model: 'relay', input: 'Echo ping.', tools: [search] },
     new Headers(),
@@ -165,6 +167,22 @@ test('a tool of its own type that the caller runs goes to another family as a fu
       },
     ],
   });
+  const chunks: StreamEvent[] = [
+    { type: 'tool_call', id: 'toolu_1', name: 'tool_search', arguments: '' },
+    { type: 'tool_call', id: 'toolu_1', arguments: '{"query":"mini echo"}' },
+    { type: 'finish', reason: 'tool_calls' },
+  ];
+  async function* run() {
+    yield* chunks;
+  }
+  const sent = await Array.fromAsync(decoded.streamed(run(), 'r1'));
+  const items = sent
+    .map(({ data }) => field(parsed(data), 'item'))
+    .filter((item) => field(item, 'type') === 'tool_search_call');
+  expect(items.map((item) => field(item, 'arguments'))).toEqual([
+    {},
+    { query: 'mini echo' },
+  ]);
 });
 
 test('the tools a search the caller ran has found are declared to another family from then on, and called in their namespace', () => {

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { messages, responses } from '../src/index.ts';
+import { chatCompletions, messages, responses } from '../src/index.ts';
 
 const turn = [
   { type: 'message', role: 'user', content: 'List the files.' },
@@ -115,4 +115,21 @@ test('to a Responses upstream a key does not stand for the lifetime a marker ask
   });
 
   expect(leftOut.map(({ setting }) => setting)).toEqual(['cache.ttl']);
+});
+
+test('to an upstream that takes no marker the key changes nothing', () => {
+  for (const input of ['Fix it.', turn]) {
+    const keyed = responses.decode(
+      { model: 'relay', input, prompt_cache_key: 'session-1' },
+      new Headers(),
+    );
+    const unkeyed = responses.decode({ model: 'relay', input }, new Headers());
+
+    const { body, leftOut } = chatCompletions.encode('model-x', keyed.request);
+
+    expect(body).toEqual(
+      chatCompletions.encode('model-x', unkeyed.request).body,
+    );
+    expect(leftOut).toEqual([]);
+  }
 });

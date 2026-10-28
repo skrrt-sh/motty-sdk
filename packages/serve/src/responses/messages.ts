@@ -124,12 +124,13 @@ function resultOf(item: Dict, at: string): Part {
 // search found more, what came before is its text alone.
 function reasoningOf(item: Dict, stale: boolean): Part {
   const { summary, content, encrypted_content: sealed } = item;
-  const other = unsealed(sealed);
+  const { data: other, said: hidden = '' } = unsealed(sealed) ?? {};
   const said = [...list(summary), ...list(content)].flatMap((part) =>
     isDict(part) && typeof field(part, 'text') === 'string'
       ? [field(part, 'text')]
       : [],
   );
+  if (hidden !== '') said.push(hidden);
   return {
     type: 'reasoning',
     text: said.join('\n\n'),

@@ -14,3 +14,9 @@ export function breakpoint(left: Leaving, cache: Cache | undefined): Dict {
   left.without('cache', cache);
   return {};
 }
+
+// A marker a key implied is no ask of an upstream that takes none: there
+// it is not written, does not turn text into parts, and is not reported.
+export function cacheFor(left: Leaving, cache: Cache | undefined) {
+  return cache?.implied === true && !left.marks ? undefined : cache;
+}

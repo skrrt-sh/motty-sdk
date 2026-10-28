@@ -1,6 +1,6 @@
 import type { Chunk, Finish, Json, Progress } from '@mottyjs/core/host';
+import { joined } from '../wire/details.ts';
 import type { Dict } from '../wire/json.ts';
-import { joined } from './dialect.ts';
 import { reasonWritten, replyFields } from './finish.ts';
 import { pieces } from './reply-pieces.ts';
 import { type Kind, mergedUnread, wireCall } from './unread.ts';

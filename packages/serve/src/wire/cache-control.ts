@@ -19,8 +19,14 @@ export function cacheExtra(control: Json | undefined): Dict | undefined {
   return Object.keys(extra).length === 0 ? undefined : extra;
 }
 
+// With no neutral marker, an author's own whole one, which says its kind, is
+// sent as given; what was kept beside a marker taken away goes with it.
 export function cacheTo(cache: Cache | undefined, extra?: Json): Dict {
-  if (cache === undefined) return {};
+  if (cache === undefined) {
+    const own = dict(extra);
+    const { type } = own;
+    return type === undefined ? {} : { cache_control: own };
+  }
   return {
     cache_control: {
       ...dict(extra),
