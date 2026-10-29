@@ -6,8 +6,8 @@ import { workerd } from '../hosts/workerd.ts';
 import { nanosecondsPerCall, share } from '../measure.ts';
 
 // Each adapter call as a share of the least its server does for the same
-// call. Over ten runs the shares read 1.24 at most, a set on Workers; one more
-// round trip in a get read 2.0 on both, which is what this is here to catch.
+// call. The shares read 1.31 at most on the CI runner, an increment on Valkey.
+// One more round trip in a get read 2.0 on both, which this is here to catch.
 
 // biome-ignore lint/complexity/useLiteralKeys: the compiler wants the bracket
 const url = process.env['REDIS_URL'];
@@ -55,10 +55,8 @@ describe.skipIf(url === undefined)('on Valkey', () => {
     },
   ])(
     'a $call through the adapter takes about what the bare client takes',
-    async ({ call, motty, bare }) => {
-      const taken = await share(bare, motty, timed, 200);
-      console.log('SHARE valkey', call, taken);
-      expect(taken).toBeLessThan(1.5);
+    async ({ motty, bare }) => {
+      expect(await share(bare, motty, timed, 200)).toBeLessThan(1.5);
     },
     60_000,
   );
@@ -108,7 +106,6 @@ describe('on Workers', () => {
         (subject) => nanosecondsPerCall(subject, 1),
         200,
       );
-      console.log('SHARE workers', call, taken);
       expect(taken).toBeLessThan(1.5);
     },
     60_000,
