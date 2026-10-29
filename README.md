@@ -239,6 +239,30 @@ taking turns in one process. Cold start is the median of five runs of 21 starts,
 process and taken before the timed calls. Run `bun gates/bench/rivals/compare.ts` to measure it
 yourself.
 
+### Storage
+
+Each storage adapter is timed against the least its server does for the same call. For Redis
+that is Bun's own client sending one command, and for Workers a bare Durable Object making plain
+key-value calls. A gate runs the comparison on every change and fails when an adapter call takes
+1.5 times the bare one. One more round trip in a call reads 2.0.
+
+| Call | Redis | Share of the bare client | Durable Object | Share of the bare object |
+| --- | ---: | ---: | ---: | ---: |
+| Get | 0.24 ms | 1.00× | 21 µs | 1.06–1.09× |
+| Set with an expiry | 0.24 ms | 1.00× | 25 µs | 1.05–1.06× |
+| Increment with an expiry | 0.25 ms | 1.04× | 61–86 µs | 1.10–1.11× |
+
+With 100 calls in flight the Redis adapter makes 226,000 gets, 181,000 sets and 131,000
+increments a second. With 50 in flight the Durable Object makes 46,000 gets a second, and 13,000
+to 17,000 increments of one key. Increments made at once all count, and none is lost.
+
+The figures were measured on 2026-10-29 on an Apple M4 Max with Bun 1.4.4, against Valkey 9.1.2
+in a local container and a Durable Object in workerd 2026-10-25 on the same machine. A time is the
+median of 5,000 calls made one after another, with a value of 512 bytes. A share is the median
+over 200 rounds the two take in turn, and the range is over five runs. On Cloudflare the trip to
+the object costs more than any figure here. Run `bun test gates/test/storage.test.ts` with
+`REDIS_URL` set to measure the shares yourself.
+
 ## Status
 
 The packages are on npm under the `@mottyjs` scope, all at one version. Until `1.0.0` a minor
