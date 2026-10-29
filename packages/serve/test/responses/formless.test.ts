@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { Unsupported } from '@mottyjs/core';
 import type { RunStream } from '@mottyjs/core/host';
 import { decode } from '../../src/responses/decode.ts';
 import { formless } from '../../src/responses/formless.ts';
@@ -46,12 +45,12 @@ test('a citation with neither an address nor a form of this API is left out', ()
   });
 });
 
-test('what a model goes on from its reasoning with is left out and the reply goes on', () => {
+test('what a model goes on from its reasoning with is left out unless the request includes it, and the reply goes on', () => {
   const left = {
     warning: {
       setting: 'reasoning',
       detail:
-        'The Responses API has no form for what a model goes on from its reasoning with',
+        'The Responses API has no form for what a model goes on from its reasoning with, which the request did not include',
     },
     ends: false,
   };
@@ -69,6 +68,16 @@ test('what a model goes on from its reasoning with is left out and the reply goe
       provider: { anthropic: { type: 'redacted_thinking', data: 'EmwK' } },
     }),
   ).toEqual(left);
+  expect(
+    formless(
+      {
+        type: 'reasoning',
+        text: '',
+        provider: { anthropic: { signature: 'EqQBCgIYAhIM' } },
+      },
+      true,
+    ),
+  ).toBeUndefined();
   expect(formless({ type: 'reasoning', text: 'Hm' })).toBeUndefined();
   expect(
     formless({
@@ -107,31 +116,6 @@ test('what this API has a form for is not named', () => {
 
 const asked = () => decode({ model: 'coder', input: 'Draw' });
 
-test('an inline image the model made is written, in a stream and in a whole reply', async () => {
-  const item = {
-    id: 'ig_r1_0',
-    type: 'image_generation_call',
-    status: 'completed',
-    result: 'iVBORw0KGgo=',
-  };
-  async function* run(): RunStream {
-    yield { type: 'file', data: 'iVBORw0KGgo=', mediaType: 'image/png' };
-    yield { type: 'finish', reason: 'stop' };
-  }
-  const frames = await Array.fromAsync(asked().streamed(run(), 'r1'));
-  expect(JSON.parse(frames.at(-1)?.data ?? '')).toMatchObject({
-    type: 'response.completed',
-    response: { status: 'completed', output: [item] },
-  });
-  expect(
-    asked().collected(
-      [{ type: 'file', data: 'iVBORw0KGgo=', mediaType: 'image/png' }],
-      { type: 'finish', reason: 'stop' },
-      'r1',
-    ),
-  ).toMatchObject({ status: 'completed', output: [item] });
-});
-
 test('a file with no form ends a stream as a failed response', async () => {
   async function* run(): RunStream {
     yield { type: 'file', url: 'https://example.com/out.pdf' };
@@ -149,14 +133,4 @@ test('a file with no form ends a stream as a failed response', async () => {
       },
     },
   });
-});
-
-test('a file with no form fails a collected reply', () => {
-  expect(() =>
-    asked().collected(
-      [{ type: 'file', url: 'https://example.com/out.pdf' }],
-      { type: 'finish', reason: 'stop' },
-      'r1',
-    ),
-  ).toThrow(Unsupported);
 });

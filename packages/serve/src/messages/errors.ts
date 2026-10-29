@@ -38,6 +38,7 @@ function typeTo({ code, status = 500 }: ErrorFacts): string {
       return 'invalid_request_error';
     case 'unsupported':
     case 'invalid_request':
+      if (status === 404) return 'not_found_error';
       return status === 413 ? 'request_too_large' : 'invalid_request_error';
     case 'upstream_refused':
     case 'upstream_failed':

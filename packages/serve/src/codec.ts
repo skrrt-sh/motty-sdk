@@ -15,11 +15,20 @@ import type { Effort } from './wire/effort.ts';
 import type { Dict } from './wire/json.ts';
 import type { Clean } from './wire/upstream-failure.ts';
 
+// A chunk a reply in this API has no form for. One that ends the reply is
+// part of the answer; any other only annotates it, and what annotates is
+// left out while reasoning text beside it stays.
+export type Formless = (
+  chunk: Chunk,
+) => { warning: LeftOut; ends: boolean } | undefined;
+
 // The reply is encoded by what decoding returned, because how it is written
-// depends on what the caller asked for: muted reasoning, usage in the stream.
+// depends on what the caller asked for: muted reasoning, usage in the stream,
+// and what it has a form for.
 export type Decoded = {
   request: Omit<ChatRequest, 'id' | 'headers'>;
   stream: boolean;
+  formless: Formless;
   // Whoever serves picks the HTTP status from the first event, so an error
   // met here is written the way this API ends a stream that failed.
   streamed: (events: RunStream, id: string) => AsyncIterable<ServerSentEvent>;
@@ -91,17 +100,15 @@ export type Codec = {
     body: Json;
     leftOut: LeftOut[];
   };
-  // A chunk a reply in this API has no form for. One that ends the reply is
-  // part of the answer; any other only annotates it, and what annotates is
-  // left out while reasoning text beside it stays.
-  formless: (chunk: Chunk) => { warning: LeftOut; ends: boolean } | undefined;
   // Always exactly one terminal event, also when the upstream's stream ends
   // without one.
   // What the connection's holder cuts from an upstream's words is cut from
-  // a failure as it is read, before any of it is shortened.
+  // a failure as it is read, before any of it is shortened. The tools read
+  // the reply as the request sent them.
   events: (
     messages: AsyncIterable<ServerSentEvent>,
     clean?: Clean,
+    tools?: Prompt['tools'],
   ) => EventStream;
   failure: (
     status: number,

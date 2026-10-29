@@ -21,7 +21,12 @@ import {
   toFacts,
   unexpected,
 } from './data/errors.ts';
-import { isTerminal, type StreamEvent, type Usage } from './data/event.ts';
+import {
+  isTerminal,
+  type StreamEvent,
+  type Usage,
+  usageOf,
+} from './data/event.ts';
 import type { ChatRequest, Json } from './data/message.ts';
 
 // A decision provider's adapter carries only the decision call.
@@ -184,7 +189,7 @@ function isAmount(cost: unknown): cost is number {
 
 function costed(event: StreamEvent, model: string, price: Price): StreamEvent {
   if (!isTerminal(event) || event.usage === undefined) return event;
-  const cost = price(model, event.usage);
+  const cost = price(model, usageOf(event.usage));
   return isAmount(cost) ? { ...event, usage: { ...event.usage, cost } } : event;
 }
 
@@ -418,6 +423,11 @@ export function hosting(motty: Marked, options: HostOptions) {
     asked: Signed & Partial<Asked>,
   ): Promise<Admitted | Caller | undefined> {
     const id = givenId(asked.id) ?? crypto.randomUUID();
+    // The host's own mistake, as an id it may not give: told no caller, the
+    // motty would ask the caller to sign in for what the host got wrong.
+    if (asked.caller?.id === '') {
+      throw new Error('The caller the host gave has no id');
+    }
     const headers = new Headers(asked.headers);
     let failed: Sealed[] | undefined;
     // Until the request's own signal is made, the caller's is all of it.
@@ -450,7 +460,9 @@ export function hosting(motty: Marked, options: HostOptions) {
       headers.delete(name);
       if (auth === undefined || caller !== undefined || !token) continue;
       try {
-        caller = await auth.verify(token);
+        const verified = await auth.verify(token);
+        // An empty id names nobody, as a token that states none.
+        caller = verified?.id === '' ? undefined : verified;
       } catch (thrown) {
         // No motty ran, so no record comes: the host is told here, and the
         // caller by whoever asked, of the thrown value as it is.
@@ -491,7 +503,8 @@ export function hosting(motty: Marked, options: HostOptions) {
     if (duration !== undefined) {
       signals.push(AbortSignal.timeout(duration));
     }
-    signal = AbortSignal.any(signals);
+    // One signal is its own sum, and summing it costs more than admitting.
+    signal = signals.length === 1 ? stop.signal : AbortSignal.any(signals);
     // A price that throws leaves the call as the upstream told it: what was
     // spent is counted, and the host reads of its price on the report.
     const quote: Price | undefined =

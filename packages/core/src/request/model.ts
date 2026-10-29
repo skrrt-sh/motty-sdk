@@ -24,7 +24,7 @@ import {
 } from './answer.ts';
 import { current, mayGoUnawaited, openCall } from './context.ts';
 import { wired } from './output-schema.ts';
-import { close, onAbort, reader, reasonOf } from './wait.ts';
+import { close, onAbort, reader, readOut, reasonOf } from './wait.ts';
 
 export type Model = {
   complete: <Schema extends OutputSchema = OutputSchema>(
@@ -46,8 +46,6 @@ export type Call = (
 export type Read = IteratorResult<StreamEvent, undefined>;
 
 const calls = new WeakMap<Model, Call>();
-
-const readOut: Read = { done: true, value: undefined };
 
 // A call given up with no reason, as when its phase ends, is ended by these:
 // no error is made for an ending nobody may ever read.
@@ -125,11 +123,22 @@ function entering(result: IteratorResult<unknown>): StreamEvent | string {
   );
 }
 
-// A finish is given whole: its entry takes the id and the warnings by name.
+// Named one by one: a field a host put beside the usage is no count, and a
+// finish has no code.
 function usageAndCode(last: Terminal) {
-  return last.type === 'error'
-    ? { ...last.usage, code: last.error.code, message: last.error.message }
-    : { ...last.usage, ...last };
+  if (last.type === 'error') {
+    return {
+      ...last.usage,
+      code: last.error.code,
+      message: last.error.message,
+    };
+  }
+  const { usage, id, warnings } = last;
+  return {
+    ...usage,
+    ...(id === undefined ? {} : { id }),
+    ...(warnings === undefined ? {} : { warnings }),
+  };
 }
 
 export function model(name: string): NamedModel {

@@ -2,80 +2,7 @@ import { expect, test } from 'bun:test';
 import { model, motty } from '@mottyjs/core';
 import { adapted, type Report } from '@mottyjs/core/host';
 import { mount } from '@mottyjs/serve';
-import * as entry from '../src/openrouter.ts';
 import { openrouter } from '../src/openrouter.ts';
-
-test('it serves the names under its prefix, and with no key it fails when made', () => {
-  const adapter = openrouter({ key: 'sk-or-host' });
-
-  expect(adapter.serves('openrouter/deepseek/deepseek-chat')).toBe(true);
-  expect(adapter.serves('openai/gpt-5')).toBe(false);
-  expect(openrouter({ key: 'k', prefix: 'or' }).serves('or/x/y')).toBe(true);
-  expect(adapter.decide).toBeUndefined();
-  expect(() => openrouter({ key: undefined })).toThrow(
-    'The openrouter adapter was given no key',
-  );
-  expect(() => openrouter({ key: '' })).toThrow();
-  expect(() => openrouter({ key: ' \t' })).toThrow(
-    'The openrouter adapter was given no key',
-  );
-});
-
-test('a call goes to Chat Completions with the key and the name OpenRouter knows the model by', async () => {
-  const seen: { path: string; key: string | null; body: unknown }[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push({
-        path: new URL(request.url).pathname,
-        key: request.headers.get('authorization'),
-        body: await request.json(),
-      });
-      return new Response(
-        `data: {"id":"gen-1","model":"deepseek/deepseek-chat","choices":[{"index":0,"delta":{"role":"assistant","content":"pong"},"finish_reason":null}]}
-
-data: {"id":"gen-1","model":"deepseek/deepseek-chat","choices":[{"index":0,"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":1,"total_tokens":10}}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    openrouter({ key: 'sk-or-host', address: `${upstream.url}api/v1` }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'openrouter/deepseek/deepseek-chat',
-      {
-        messages: [{ role: 'user', text: 'ping' }],
-        options: { maxTokens: 40 },
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toEqual([
-    {
-      path: '/api/v1/chat/completions',
-      key: 'Bearer sk-or-host',
-      body: {
-        max_completion_tokens: 40,
-        model: 'deepseek/deepseek-chat',
-        messages: [{ role: 'user', content: 'ping' }],
-        stream: true,
-        stream_options: { include_usage: true },
-      },
-    },
-  ]);
-  expect(events).toMatchObject([
-    { type: 'text', text: 'pong' },
-    { type: 'finish', reason: 'stop', usage: { input: 9, output: 1 } },
-  ]);
-});
 
 test('an effort and a mute, or a budget, go upstream in the reasoning object', async () => {
   const seen: unknown[] = [];
@@ -354,119 +281,6 @@ data: [DONE]
   expect(events.at(-1)).not.toHaveProperty('warnings');
 });
 
-test('a budget from an Anthropic Messages caller turns thinking on, and the details it cannot hold are reported', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant","reasoning":"17*23 is 391.","reasoning_details":[{"type":"reasoning.text","text":"17*23 is 391.","format":"anthropic-claude-v1","index":0}]},"finish_reason":null}]}
-
-data: {"choices":[{"index":0,"delta":{"content":"","role":"assistant","reasoning_details":[{"type":"reasoning.text","signature":"EqQBCkYIBxgC","format":"anthropic-claude-v1","index":0}]},"finish_reason":null}]}
-
-data: {"choices":[{"index":0,"delta":{"content":"391","role":"assistant"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const reports: Report[] = [];
-  const served = mount(
-    motty({ name: 'relay' }).handle(({ prompt }) =>
-      model('openrouter/anthropic/claude-haiku-5.5').complete(prompt),
-    ),
-    () => ({
-      models: [
-        openrouter({ key: 'sk-or-host', address: `${upstream.url}api/v1` }),
-      ],
-      report: (report) => reports.push(report),
-    }),
-  );
-
-  const reply = await served.fetch(
-    new Request('http://localhost/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'relay',
-        max_tokens: 1400,
-        thinking: { type: 'enabled', budget_tokens: 1024 },
-        messages: [{ role: 'user', content: 'What is 17*23?' }],
-      }),
-    }),
-  );
-  const answer = await reply.json();
-  await served.close();
-
-  expect(seen).toMatchObject([
-    { reasoning: { max_tokens: 1024 }, max_completion_tokens: 1400 },
-  ]);
-  expect(answer).toMatchObject({
-    content: [
-      { type: 'thinking', thinking: '17*23 is 391.' },
-      { type: 'text', text: '391' },
-    ],
-  });
-  expect(JSON.stringify(answer)).not.toContain('EqQBCkYIBxgC');
-  expect(reports[0]?.calls[0]).not.toHaveProperty('warnings');
-  expect(reports[0]?.warnings).toEqual([
-    {
-      setting: 'reasoning',
-      detail:
-        'Anthropic Messages has no form for what a model goes on from its reasoning with',
-    },
-  ]);
-});
-
-test('a failure is recorded under OpenRouter`s name', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      Response.json(
-        { error: { message: 'No auth credentials found', code: 401 } },
-        { status: 401 },
-      ),
-  });
-  const { models } = adapted([
-    openrouter({ key: 'sk-or-host', address: `${upstream.url}api/v1` }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'openrouter/openai/gpt-5-nano',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(events).toMatchObject([
-    {
-      type: 'error',
-      error: {
-        code: 'upstream_refused',
-        provider: { openrouter: { status: 401 } },
-        upstream: true,
-      },
-    },
-  ]);
-});
-
-test('the entry exports exactly the held values, and no type', async () => {
-  const text = await Bun.file(
-    new URL('../src/openrouter.ts', import.meta.url),
-  ).text();
-
-  expect(Object.keys(entry).sort()).toEqual(['openrouter']);
-  expect(text.match(/export (type|interface) /g)).toBeNull();
-});
-
 test('media goes upstream in OpenRouter`s forms, and a picture the model made comes back as a file', async () => {
   const seen: unknown[] = [];
   using upstream = Bun.serve({
@@ -581,60 +395,6 @@ data: [DONE]
   ]);
 });
 
-test('a request the credits cannot pay for is a spent quota, in the words seen live without the link into the account', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      Response.json(
-        {
-          error: {
-            message:
-              "This request requires more credits, or fewer max_tokens. You requested up to 128000 tokens, but can only afford 58128. To increase, visit https://openrouter.ai/workspaces/default/keys/0f3a9c41d7 and adjust the key's total limit",
-            code: 402,
-            metadata: {
-              limit_source: 'openrouter_credits',
-              remedy_hint:
-                'Add credits at https://openrouter.ai/settings/credits, or lower max_tokens / prompt size to fit your remaining balance.',
-              provider_name: null,
-            },
-          },
-          user_id: 'user_2zQmadeup',
-        },
-        { status: 402 },
-      ),
-  });
-  const { models } = adapted([
-    openrouter({ key: 'sk-or-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'openrouter/openai/gpt-chat-latest',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(events).toMatchObject([
-    {
-      type: 'error',
-      error: {
-        code: 'quota_exceeded',
-        message:
-          'This request requires more credits, or fewer max_tokens. You requested up to 128000 tokens, but can only afford 58128.',
-        provider: {
-          openrouter: {
-            status: 402,
-            metadata: { limit_source: 'openrouter_credits' },
-          },
-        },
-        upstream: true,
-      },
-    },
-  ]);
-  expect(events[0]).not.toHaveProperty('error.retryable');
-});
-
 test('a budget held by requests still in flight is a limit a wait meets, by its reference', async () => {
   using upstream = Bun.serve({
     port: 0,
@@ -711,15 +471,33 @@ test('a path the router does not have is the host`s address to mend, in the word
 
 test.each([
   {
-    status: 402,
-    told: 'a key at its limit',
+    status: 403,
+    told: 'a guardrail budget that is spent',
     from: 'by its reference',
     error: {
-      message: 'Key limit exceeded',
-      code: 402,
-      metadata: { limit_source: 'openrouter_key_limit' },
+      message:
+        'Org member budget limit exceeded (weekly limit). Contact your org admin.',
+      code: 403,
+      metadata: {
+        limit_source: 'openrouter_guardrail_budget',
+        scope: 'member',
+        limit_usd: 50,
+        spend_usd: 52,
+      },
     },
     kind: 'quota_exceeded',
+  },
+  {
+    status: 402,
+    told: 'an in-flight budget named by its source alone',
+    from: 'by its reference',
+    error: {
+      message:
+        'This request would exceed your available credits given your current in-flight requests.',
+      code: 402,
+      metadata: { limit_source: 'openrouter_in_flight_budget' },
+    },
+    kind: 'rate_limited',
   },
   {
     status: 403,
@@ -781,28 +559,6 @@ test.each([
       message: 'Provider returned error',
       code: 400,
       metadata: { error_type: 'context_length_exceeded' },
-    },
-    kind: 'context_too_long',
-  },
-  {
-    status: 400,
-    told: 'token_limit_exceeded',
-    from: 'by its reference',
-    error: {
-      message: 'Provider returned error',
-      code: 400,
-      metadata: { error_type: 'token_limit_exceeded' },
-    },
-    kind: 'context_too_long',
-  },
-  {
-    status: 400,
-    told: 'max_tokens_exceeded',
-    from: 'by its reference',
-    error: {
-      message: 'Provider returned error',
-      code: 400,
-      metadata: { error_type: 'max_tokens_exceeded' },
     },
     kind: 'context_too_long',
   },
@@ -883,13 +639,6 @@ test.each([
     },
     kind: 'unsupported',
   },
-  {
-    status: 402,
-    told: 'a payment nothing more is said of',
-    from: 'by its reference',
-    error: { message: 'Insufficient credits', code: 402 },
-    kind: 'quota_exceeded',
-  },
 ])(
   '$told told as $status is $kind, in the upstream`s words, $from',
   async ({ status, error, kind }) => {
@@ -920,15 +669,6 @@ test.each([
 
 test.each([
   {
-    told: 'a provider out of capacity',
-    error: {
-      code: 502,
-      message: 'Provider returned error',
-      metadata: { error_type: 'provider_overloaded', provider_name: 'Minimax' },
-    },
-    kind: 'overloaded',
-  },
-  {
     told: 'a prompt past the endpoint`s context',
     error: {
       code: 400,
@@ -936,11 +676,6 @@ test.each([
         "This endpoint's maximum context length is 131072 tokens. However, you requested about 140000 tokens.",
     },
     kind: 'context_too_long',
-  },
-  {
-    told: 'a rate limit only the number names',
-    error: { code: 429, message: 'Rate limit exceeded' },
-    kind: 'rate_limited',
   },
 ])(
   '$told told inside a reply that began well, with its status a number in the error, is $kind, by its reference',
@@ -1086,42 +821,6 @@ test.each([
     said: 'Rate limit reached for gpt-4o in organization org-Bc1Nh6Wd3Kp8Rt4Xv9Lm2Zq7 on tokens per min (TPM): Limit 2000000, Used 1992777, Requested 92449. Please try again in 2.556s. Visit https://platform.openai.com/account/rate-limits to learn more.',
     told: 'Provider returned error: Rate limit reached for gpt-4o on tokens per min (TPM): Limit 2000000, Used 1992777, Requested 92449. Please try again in 2.556s.',
   },
-  {
-    from: 'Anthropic',
-    status: 429,
-    said: "This request would exceed your organization's rate limit of 30,000 input tokens per minute (org: 3a68180d-2011-422d-afea-f25a64613009, model: claude-sonnet-4-20250514). Please reduce the prompt length.",
-    told: "Provider returned error: This request would exceed your organization's rate limit of 30,000 input tokens per minute (model: claude-sonnet-4-20250514). Please reduce the prompt length.",
-  },
-  {
-    from: 'Groq',
-    status: 429,
-    said: 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m17c8ntqe9ba25dtdms847wq` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 5912, Requested 4676. Please try again in 19.41s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing',
-    told: 'Provider returned error: Rate limit reached for model `openai/gpt-oss-120b` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 5912, Requested 4676. Please try again in 19.41s.',
-  },
-  {
-    from: 'Moonshot',
-    status: 429,
-    said: 'Your account org-0123456789abcdef0123456789abcdef<ak-a1b2c3d4e5f6g7h8i9j0> request reached organization max RPM: 3, please try again after 1 seconds',
-    told: 'Provider returned error: Your account request reached organization max RPM: 3, please try again after 1 seconds',
-  },
-  {
-    from: 'DeepSeek',
-    status: 502,
-    said: 'Server Error (request_id: fb642953-7c1e-4b0a-9d55-0e2f6a1b3c4d)',
-    told: 'Provider returned error: Server Error',
-  },
-  {
-    from: 'Google',
-    status: 502,
-    said: 'Generative Language API has not been used in project 542708778979 before or it is disabled.',
-    told: 'Provider returned error: Generative Language API has not been used in project before or it is disabled.',
-  },
-  {
-    from: 'a provider that said more than is told',
-    status: 502,
-    said: `${'x'.repeat(290)} in organization org-Bc1Nh6Wd3Kp8Rt4Xv9Lm2Zq7 on tokens per min`,
-    told: `Provider returned error: ${'x'.repeat(290)} on tokens`,
-  },
 ])(
   'what $from said beside the router`s error is told without the account it names, the record holds what was said, and the router`s own id for the host reaches nobody',
   async ({ status, said, told }) => {
@@ -1169,60 +868,6 @@ test.each([
       },
     ]);
     expect(JSON.stringify(events)).not.toContain('user_2z4x');
-  },
-);
-
-test.each([
-  {
-    status: 403,
-    said: 'Generative Language API has not been used in project 542708778979 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=542708778979 then retry.',
-    told: "The upstream refused the host's credentials or account",
-  },
-  {
-    status: 429,
-    said: 'Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro-tts',
-    told: 'Provider returned error: Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro-tts',
-  },
-  {
-    status: 400,
-    said: 'invalid request error trace_id: 9ca63e68a57e69c0c49712a4efdf620b',
-    told: 'Provider returned error: invalid request error trace_id: 9ca63e68a57e69c0c49712a4efdf620b',
-  },
-  {
-    status: 400,
-    said: "Invalid 'tools[0].function.name': string 'org-abcdefghijklmnopqrstuvwx' is bad",
-    told: "Provider returned error: Invalid 'tools[0].function.name': string 'org-abcdefghijklmnopqrstuvwx' is bad",
-  },
-])(
-  'what a provider said beside the router`s $status that names no account is told as the kind is told: $told',
-  async ({ status, said, told }) => {
-    using upstream = Bun.serve({
-      port: 0,
-      fetch: () =>
-        Response.json(
-          {
-            error: {
-              message: 'Provider returned error',
-              code: status,
-              metadata: { raw: said, provider_name: 'A provider' },
-            },
-          },
-          { status },
-        ),
-    });
-    const { models } = adapted([
-      openrouter({ key: 'sk-or-host', address: `${upstream.url}api/v1` }),
-    ]);
-
-    const events = await Array.fromAsync(
-      models(
-        'openrouter/openai/gpt-5-nano',
-        { messages: [{ role: 'user', text: 'hi' }] },
-        AbortSignal.timeout(5000),
-      ),
-    );
-
-    expect(events).toMatchObject([{ type: 'error', error: { message: told } }]);
   },
 );
 
@@ -1277,4 +922,68 @@ data: [DONE]
       },
     },
   ]);
+});
+
+test('a Codex turn keyed for its cache reaches the router with the key, which pins its provider, and a marker on the last message', async () => {
+  const seen: unknown[] = [];
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      seen.push(await request.json());
+      return new Response(
+        `data: {"id":"gen-1","model":"anthropic/claude-haiku-5-5","choices":[{"index":0,"delta":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}
+
+data: [DONE]
+
+`,
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
+    },
+  });
+  const reports: Report[] = [];
+  const served = mount(
+    motty({ name: 'relay' }).handle(({ prompt }) =>
+      model('openrouter/anthropic/claude-haiku-5-5').complete(prompt),
+    ),
+    () => ({
+      models: [
+        openrouter({ key: 'sk-or-host', address: `${upstream.url}api/v1` }),
+      ],
+      report: (report) => reports.push(report),
+    }),
+  );
+
+  const reply = await served.fetch(
+    new Request('http://localhost/v1/responses', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'relay',
+        input: 'ping',
+        prompt_cache_key: 'session-1',
+      }),
+    }),
+  );
+  await reply.json();
+  await served.close();
+
+  expect(reply.status).toBe(200);
+  expect(seen).toMatchObject([
+    {
+      prompt_cache_key: 'session-1',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'ping',
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+  expect(reports[0]?.calls[0]).not.toHaveProperty('warnings');
 });

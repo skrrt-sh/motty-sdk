@@ -1,5 +1,5 @@
-import { version as sdk } from '../../package.json';
 import type { Description } from '../contract.ts';
+import { version as sdk } from '../version.ts';
 import type { Chain, Step, Target } from './builder.ts';
 
 type HookRun = Extract<Step, { kind: 'route' }>['choose'];

@@ -37,8 +37,13 @@ export function writer(
   let open: string | undefined;
   let calling = false;
   let input = '';
+  let over = false;
   const begun = new Set<string>();
-  const waiting = new Map<string, { block: Dict; json: string }>();
+  const waiting = new Map<
+    string,
+    { block: Dict; json: string; over: boolean }
+  >();
+  const queued: (Chunk | Progress | Terminal)[] = [];
   const delta = (fields: Dict): Dict => ({
     type: 'content_block_delta',
     index,
@@ -88,7 +93,13 @@ export function writer(
       ? [delta({ type: 'signature_delta', signature })]
       : []),
   ];
-  return (event) => {
+  // A call is unfinished until its input parses or its upstream says it ended.
+  const unfinished = (json: string, ended: boolean): boolean =>
+    !ended && inputOf(json) === undefined;
+  const busy = (): boolean =>
+    (calling && unfinished(input, over)) ||
+    [...waiting.values()].some((held) => unfinished(held.json, held.over));
+  const write = (event: Chunk | Progress | Terminal): Dict[] => {
     switch (event.type) {
       case 'progress':
         return shown ? thought(`progress ${event.piece}`, event.text) : [];
@@ -115,18 +126,21 @@ export function writer(
       }
       case 'tool_call': {
         const { id, name = '', arguments: json } = event;
+        const ended = event.ended === true;
         const key = `tool ${id}`;
         if (open === key) {
           input += json;
+          over ||= ended;
           return argued(json);
         }
         const held = waiting.get(id);
         if (held !== undefined) {
-          waiting.set(id, { ...held, json: held.json + json });
+          held.json += json;
+          held.over ||= ended;
           return [];
         }
-        // Its block has ended and cannot be opened again. Input cut there
-        // does not parse, so the caller sees a failed call, not a wrong one.
+        // Its block ended once its input was finished, and a block cannot
+        // be opened again, so only what follows a finished call lands here.
         if (begun.has(id)) return [];
         begun.add(id);
         const type = event.hosted === true ? 'server_tool_use' : 'tool_use';
@@ -137,13 +151,14 @@ export function writer(
           name,
           input: {},
         };
-        if (calling && (waiting.size > 0 || inputOf(input) === undefined)) {
-          waiting.set(id, { block, json });
+        if (calling && (waiting.size > 0 || unfinished(input, over))) {
+          waiting.set(id, { block, json, over: ended });
           return [];
         }
         const start = within(key, block);
         calling = true;
         input = json;
+        over = ended;
         return [...start, ...argued(json)];
       }
       case 'provider': {
@@ -180,6 +195,27 @@ export function writer(
       case 'tool_result':
       case 'file':
         return [];
+    }
+  };
+  const replayed = (): Dict[] => queued.splice(0).flatMap(write);
+  // Anything else would end the open call's block and write the waiting
+  // ones cut short, so it waits until every call's input is finished. The
+  // end writes the calls, then what waited, whatever state they are in.
+  return (event) => {
+    switch (event.type) {
+      case 'tool_call': {
+        const out = write(event);
+        return queued.length === 0 || busy() ? out : [...out, ...replayed()];
+      }
+      case 'finish':
+      case 'error':
+        return [...closed(), ...replayed(), ...write(event)];
+      default:
+        if (queued.length > 0 || busy()) {
+          queued.push(event);
+          return [];
+        }
+        return write(event);
     }
   };
 }

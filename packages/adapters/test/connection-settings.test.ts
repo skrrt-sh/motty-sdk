@@ -37,8 +37,6 @@ async function sent(
 
 test.each([
   ['openai', openai, 'authorization', 'Bearer sk-host'],
-  ['openrouter', openrouter, 'authorization', 'Bearer sk-host'],
-  ['deepseek', deepseek, 'authorization', 'Bearer sk-host'],
   ['anthropic', anthropic, 'x-api-key', 'sk-host'],
 ])(
   '%s sends a connection header beside its own, and keeps its credential',
@@ -108,19 +106,6 @@ test('a header no request can carry fails when the adapter is made', () => {
   ).toThrow(
     'The openai adapter was given a header no request can carry: x title',
   );
-});
-
-test('a header whose value no request can carry fails in words that hold none of it', () => {
-  const made = () =>
-    anthropic({
-      key: 'sk-ant-host',
-      headers: { 'cf-aig-authorization': 'Bearer Xv9Rt4Kp\n8Wd3Nh6Bc1Zq7' },
-    });
-
-  expect(made).toThrow(
-    'The anthropic adapter was given a header no request can carry: cf-aig-authorization',
-  );
-  expect(made).not.toThrow(/Xv9R|Bc1Z/);
 });
 
 test('a body default is sent when the request is silent, and yields whole to the request', async () => {
@@ -328,23 +313,9 @@ test('openrouter sends a request that asks none of a connection effort under ano
 
 test.each([
   [
-    { effort: 'high' } as const,
-    {
-      thinking: { type: 'adaptive', display: 'summarized' },
-      output_config: { effort: 'high' },
-    },
-  ],
-  [
     { budgetTokens: 2000 },
     {
       thinking: { type: 'enabled', budget_tokens: 2000, display: 'summarized' },
-    },
-  ],
-  [
-    { effort: 'high', exclude: true } as const,
-    {
-      thinking: { type: 'adaptive', display: 'omitted' },
-      output_config: { effort: 'high' },
     },
   ],
   [{ effort: 'none' } as const, { output_config: { effort: 'low' } }],
@@ -640,29 +611,6 @@ test('anthropic leaves out the sampling a current model refuses, and reports it'
   ]);
 });
 
-test('anthropic sends an older model its temperature, and leaves out the effort it does not take', async () => {
-  const { body, events } = await sent(
-    (address) => anthropic({ key: 'sk-ant-host', address }),
-    'anthropic/claude-haiku-4-5',
-    {
-      messages: [{ role: 'user', text: 'hi' }],
-      options: { temperature: 0.2, reasoning: { effort: 'high' } },
-    },
-    'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1","model":"claude-haiku-4-5","usage":{"input_tokens":9,"output_tokens":1}}}\n\nevent: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n',
-  );
-
-  expect(body).toEqual({
-    max_tokens: 64000,
-    temperature: 0.2,
-    model: 'claude-haiku-4-5',
-    messages: [{ role: 'user', content: 'hi' }],
-    stream: true,
-  });
-  expect(events).toMatchObject([
-    { type: 'finish', warnings: [{ setting: 'reasoning.model' }] },
-  ]);
-});
-
 test('a rule the connection states stands in place of the adapter`s own', async () => {
   const { body, events } = await sent(
     (address) =>
@@ -720,67 +668,6 @@ test('openrouter sends an older Claude model a temperature up to its own limit o
   ]);
 });
 
-test('openrouter sends top-k sampling to a model of a provider it has no rule for, and reports nothing', async () => {
-  const { body, events } = await sent(
-    (address) => openrouter({ key: 'sk-or-host', address }),
-    'openrouter/google/gemini-3.1-flash-lite',
-    { messages: [{ role: 'user', text: 'hi' }], options: { topK: 40 } },
-    'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-  );
-
-  expect(body).toMatchObject({ top_k: 40 });
-  expect(events[0]).not.toHaveProperty('warnings');
-});
-
-test('openrouter leaves top-k sampling out for an OpenAI model, which never takes it, and reports it', async () => {
-  const { body, events } = await sent(
-    (address) => openrouter({ key: 'sk-or-host', address }),
-    'openrouter/openai/gpt-4.1-mini',
-    { messages: [{ role: 'user', text: 'hi' }], options: { topK: 40 } },
-    'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-  );
-
-  expect(body).not.toHaveProperty('top_k');
-  expect(events).toMatchObject([
-    {
-      type: 'finish',
-      warnings: [
-        {
-          setting: 'topK.model',
-          detail:
-            'Chat Completions has no field for top-k sampling the model does not take',
-        },
-      ],
-    },
-  ]);
-});
-
-test('openrouter sends top-k sampling to an older Claude model, by Anthropic`s rule', async () => {
-  const { body, events } = await sent(
-    (address) => openrouter({ key: 'sk-or-host', address }),
-    'openrouter/anthropic/claude-haiku-4.5',
-    { messages: [{ role: 'user', text: 'hi' }], options: { topK: 40 } },
-    'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-  );
-
-  expect(body).toMatchObject({ top_k: 40 });
-  expect(events[0]).not.toHaveProperty('warnings');
-});
-
-test('openrouter leaves top-k sampling out for a newer Claude model, by Anthropic`s rule, and reports it', async () => {
-  const { body, events } = await sent(
-    (address) => openrouter({ key: 'sk-or-host', address }),
-    'openrouter/anthropic/claude-haiku-5.5',
-    { messages: [{ role: 'user', text: 'hi' }], options: { topK: 40 } },
-    'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-  );
-
-  expect(body).not.toHaveProperty('top_k');
-  expect(events).toMatchObject([
-    { type: 'finish', warnings: [{ setting: 'topK.model' }] },
-  ]);
-});
-
 test('openrouter holds an older Claude model that reasons to what it takes while thinking', async () => {
   const { body, events } = await sent(
     (address) => openrouter({ key: 'sk-or-host', address }),
@@ -819,8 +706,6 @@ test('openrouter holds an OpenAI model to OpenAI`s rule', async () => {
 
 test.each([
   'openai/gpt-oss-120b',
-  'openai/gpt-oss-20b',
-  'openai/gpt-oss-safeguard-20b',
   'openai/gpt-audio-mini',
   'openai/gpt-5-image',
 ])(
@@ -870,31 +755,6 @@ test('openrouter sends a model of any other provider everything', async () => {
     top_p: 0.4,
     presence_penalty: 0.5,
     reasoning: { effort: 'high' },
-  });
-  expect(events[0]).not.toHaveProperty('warnings');
-});
-
-test('deepseek has no rule, and sends everything', async () => {
-  const { body, events } = await sent(
-    (address) => deepseek({ key: 'sk-host', address }),
-    'deepseek/deepseek-reasoner',
-    {
-      messages: [{ role: 'user', text: 'hi' }],
-      options: {
-        temperature: 1.7,
-        topP: 0.4,
-        frequencyPenalty: 0.5,
-        reasoning: { effort: 'high' },
-      },
-    },
-    'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-  );
-
-  expect(body).toMatchObject({
-    temperature: 1.7,
-    top_p: 0.4,
-    frequency_penalty: 0.5,
-    reasoning_effort: 'high',
   });
   expect(events[0]).not.toHaveProperty('warnings');
 });

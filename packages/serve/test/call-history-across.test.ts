@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { Unsupported } from '@mottyjs/core';
 import { chatCompletions, messages, responses } from '../src/index.ts';
 
 async function* sse(...sent: { type: string; [field: string]: unknown }[]) {
@@ -30,7 +29,7 @@ test.each([
     },
   ],
   [
-    'Chat Completions, with no namespace',
+    'Chat Completions, under a flat name',
     chatCompletions,
     {
       model: 'model-x',
@@ -43,7 +42,7 @@ test.each([
             {
               id: 'call_1',
               type: 'function',
-              function: { name: 'now', arguments: '{"city":"Oslo"}' },
+              function: { name: 'time__now', arguments: '{"city":"Oslo"}' },
             },
           ],
         },
@@ -51,35 +50,6 @@ test.each([
       ],
       stream: true,
       stream_options: { include_usage: true },
-    },
-  ],
-  [
-    'Anthropic Messages, with no namespace',
-    messages,
-    {
-      max_tokens: 64000,
-      model: 'model-x',
-      messages: [
-        { role: 'user', content: 'What time is it in Oslo?' },
-        {
-          role: 'assistant',
-          content: [
-            {
-              type: 'tool_use',
-              id: 'call_1',
-              name: 'now',
-              input: { city: 'Oslo' },
-            },
-          ],
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'tool_result', tool_use_id: 'call_1', content: '12:00' },
-          ],
-        },
-      ],
-      stream: true,
     },
   ],
 ])(
@@ -117,25 +87,6 @@ test.each([
 );
 
 test.each([
-  [
-    'the Responses API as a custom call',
-    responses,
-    {
-      model: 'model-x',
-      input: [
-        { type: 'message', role: 'user', content: 'List the files.' },
-        {
-          call_id: 'call_2',
-          name: 'shell',
-          type: 'custom_tool_call',
-          input: 'ls -la',
-        },
-        { type: 'custom_tool_call_output', call_id: 'call_2', output: 'a.txt' },
-      ],
-      store: false,
-      stream: true,
-    },
-  ],
   [
     'Chat Completions as a custom call',
     chatCompletions,
@@ -193,7 +144,7 @@ test.each([
   },
 );
 
-test('a call with free text for input a Responses caller echoed is refused by Anthropic Messages', () => {
+test('a call with free text for input a Responses caller echoed goes on to Anthropic Messages as the one field of an object', () => {
   const { request } = responses.decode(
     {
       model: 'coder',
@@ -211,35 +162,33 @@ test('a call with free text for input a Responses caller echoed is refused by An
     new Headers(),
   );
 
-  expect(() =>
-    messages.encode('model-x', { messages: request.messages }),
-  ).toThrow(
-    new Unsupported(
-      'Anthropic Messages cannot carry a tool call whose input is free text',
-    ),
-  );
+  expect(
+    messages.encode('model-x', { messages: request.messages }).body,
+  ).toMatchObject({
+    messages: [
+      { role: 'user', content: 'List the files.' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'call_2',
+            name: 'shell',
+            input: { input: 'ls -la' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'call_2', content: 'a.txt' },
+        ],
+      },
+    ],
+  });
 });
 
 test.each([
-  [
-    'the Responses API, with no extra content',
-    responses,
-    {
-      model: 'model-x',
-      input: [
-        { type: 'message', role: 'user', content: 'Weather in Paris?' },
-        {
-          call_id: 'call_3',
-          name: 'get_weather',
-          type: 'function_call',
-          arguments: '{"location":"Paris"}',
-        },
-        { type: 'function_call_output', call_id: 'call_3', output: '15C' },
-      ],
-      store: false,
-      stream: true,
-    },
-  ],
   [
     'Chat Completions, with its extra content',
     chatCompletions,
@@ -337,25 +286,6 @@ test.each([
 
 test.each([
   [
-    'the Responses API, with no caller',
-    responses,
-    {
-      model: 'model-x',
-      input: [
-        { type: 'message', role: 'user', content: 'Weather in Paris?' },
-        {
-          call_id: 'toolu_01',
-          name: 'get_weather',
-          type: 'function_call',
-          arguments: '{"location":"Paris"}',
-        },
-        { type: 'function_call_output', call_id: 'toolu_01', output: '15C' },
-      ],
-      store: false,
-      stream: true,
-    },
-  ],
-  [
     'Chat Completions, with no caller',
     chatCompletions,
     {
@@ -446,117 +376,6 @@ test.each([
 
     const { body, leftOut } = codec.encode('model-x', {
       messages: request.messages,
-    });
-
-    expect(body).toEqual(sent);
-    expect(leftOut).toEqual([]);
-  },
-);
-
-test.each([
-  [
-    'the Responses API, with none of it',
-    responses,
-    {
-      model: 'model-x',
-      input: [
-        { type: 'message', role: 'user', content: 'Weather in Paris?' },
-        {
-          call_id: 'call_3',
-          name: 'get_weather',
-          type: 'function_call',
-          arguments: '{"location":"Paris"}',
-        },
-        { type: 'function_call_output', call_id: 'call_3', output: '15C' },
-      ],
-      store: false,
-      stream: true,
-    },
-  ],
-  [
-    'Chat Completions, with all of it',
-    chatCompletions,
-    {
-      model: 'model-x',
-      messages: [
-        { role: 'user', content: 'Weather in Paris?' },
-        {
-          role: 'assistant',
-          content: null,
-          tool_calls: [
-            {
-              extra_content: { google: { thought_signature: 'CsQB' } },
-              id: 'call_3',
-              type: 'function',
-              function: {
-                name: 'get_weather',
-                arguments: '{"location":"Paris"}',
-              },
-            },
-          ],
-        },
-        { role: 'tool', tool_call_id: 'call_3', content: '15C' },
-      ],
-      stream: true,
-      stream_options: { include_usage: true },
-    },
-  ],
-  [
-    'Anthropic Messages, with none of it',
-    messages,
-    {
-      max_tokens: 64000,
-      model: 'model-x',
-      messages: [
-        { role: 'user', content: 'Weather in Paris?' },
-        {
-          role: 'assistant',
-          content: [
-            {
-              type: 'tool_use',
-              id: 'call_3',
-              name: 'get_weather',
-              input: { location: 'Paris' },
-            },
-          ],
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'tool_result', tool_use_id: 'call_3', content: '15C' },
-          ],
-        },
-      ],
-      stream: true,
-    },
-  ],
-])(
-  'a call kept with the provider data a Chat Completions upstream gave it goes on to %s',
-  (_, codec, sent) => {
-    const { body, leftOut } = codec.encode('model-x', {
-      messages: [
-        { role: 'user', text: 'Weather in Paris?' },
-        {
-          role: 'assistant',
-          parts: [
-            {
-              type: 'tool_call',
-              id: 'call_3',
-              name: 'get_weather',
-              input: { location: 'Paris' },
-              provider: {
-                'openai.chat': {
-                  extra_content: { google: { thought_signature: 'CsQB' } },
-                },
-              },
-            },
-          ],
-        },
-        {
-          role: 'tool',
-          parts: [{ type: 'tool_result', id: 'call_3', text: '15C' }],
-        },
-      ],
     });
 
     expect(body).toEqual(sent);

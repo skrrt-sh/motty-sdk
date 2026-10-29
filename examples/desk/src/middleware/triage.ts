@@ -1,19 +1,10 @@
-import { motty, think, type ChatRequest } from "@mottyjs/core";
+import { motty, said, think, type ChatRequest } from "@mottyjs/core";
 import { choice, noul, score } from "@mottyjs/decision";
 import { jev } from "../models";
 import { tuning, type Tuning } from "../settings";
 import { conversation, type Case } from "./conversation";
 
 export type Triage = Pick<Case, "category" | "urgent"> & { abusive: boolean };
-
-// A tool result is the agent's turn, so after one the customer has said nothing new to judge
-function saidLast({ messages }: ChatRequest): string | undefined {
-  const last = messages.at(-1);
-  if (last?.role !== "user") return undefined;
-  if (last.parts === undefined) return last.text;
-  const said = last.parts.flatMap((part) => (part.type === "text" ? [part.text] : []));
-  return said.join("\n") || undefined;
-}
 
 async function triaged(
   request: ChatRequest,
@@ -26,12 +17,14 @@ async function triaged(
     urgent: remembered?.urgent ?? false,
     abusive: false,
   };
-  const said = saidLast(request);
-  if (said === undefined) return asBefore;
+  // A tool result is the agent's turn, so after one the customer has said nothing new to judge
+  const last = request.messages.at(-1);
+  const text = last?.role === "user" ? said(last) : "";
+  if (text === "") return asBefore;
 
   think("Reading your message");
   try {
-    const { abuse, category, urgency } = await jev.decide(said, {
+    const { abuse, category, urgency } = await jev.decide(text, {
       abuse: noul({
         instructions: "Is this message abuse of the support staff: threats, slurs or harassment?",
         criteria: { false: "An angry or rude customer with a real complaint" },

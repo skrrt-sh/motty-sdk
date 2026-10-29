@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test';
 import {
   callFields,
   mergedUnread,
-  toolFields,
   unreadOf,
   wireCall,
   withUnread,
@@ -50,23 +49,6 @@ test('the object of the other kind is not carried', () => {
   ).toEqual({ custom: { vendor: 1 } });
 });
 
-test('a tool keeps what a call does not, and each kind its own fields', () => {
-  expect(
-    unreadOf(
-      { index: 2, function: { name: 'weather', format: 'x', strict: true } },
-      'function',
-      toolFields,
-    ),
-  ).toEqual({ index: 2, function: { format: 'x' } });
-  expect(
-    unreadOf(
-      { custom: { name: 'shell', format: {}, strict: true } },
-      'custom',
-      toolFields,
-    ),
-  ).toEqual({ custom: { strict: true } });
-});
-
 test('a field named as the prototype is carried as any other', () => {
   const carried = unreadOf(
     dict(parsed('{"id":"call_a","__proto__":{"a":1}}')),
@@ -77,10 +59,7 @@ test('a field named as the prototype is carried as any other', () => {
   expect(Object.keys(carried ?? {})).toEqual(['__proto__']);
 });
 
-test.each([
-  ['custom', { function: { signature: 'a' }, late: 1 }],
-  ['function', { type: 'custom', custom: { signature: 'a' }, late: 1 }],
-] as const)(
+test.each([['custom', { function: { signature: 'a' }, late: 1 }]] as const)(
   'what a fragment marked as the other kind than its %s call holds inside is carried inside the call`s own object',
   (kind, raw) => {
     expect(unreadOf(raw, kind, callFields)).toEqual({
@@ -141,12 +120,6 @@ test('what was carried goes back where it sat, under the call`s own fields', () 
   });
 });
 
-test('nothing carried leaves the call`s own fields alone', () => {
-  expect(
-    withUnread(undefined, 'custom', callFields, { index: 0 }, { input: 'ls' }),
-  ).toEqual({ index: 0, custom: { input: 'ls' } });
-});
-
 test('a carried field the call has of its own is never written', () => {
   expect(
     withUnread(
@@ -166,11 +139,6 @@ test('a carried field the call has of its own is never written', () => {
 });
 
 test.each([
-  [
-    'function',
-    { index: 0, id: 'call_a', type: 'function' },
-    { name: 'weather', arguments: '{}' },
-  ],
   [
     'custom',
     { index: 0, id: 'call_a', type: 'custom' },

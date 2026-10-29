@@ -1,17 +1,7 @@
 import type { Storage } from '@mottyjs/core/host';
 import { RedisClient } from 'bun';
 import { parsed } from './json.ts';
-
-// The server counts whole milliseconds and refuses none. A time that is no
-// count is the caller's mistake, so it is named before any call.
-function milliseconds(ttl: number): number {
-  if (!(ttl >= 1) || !Number.isSafeInteger(ttl)) {
-    throw new Error(
-      `A time to live is a positive, whole number of milliseconds, and ${ttl} is not`,
-    );
-  }
-  return ttl;
-}
+import { milliseconds } from './ttl.ts';
 
 // Run by the server as one step, so no other command comes between the read
 // and the addition. The expiry is set only on the key this call made.

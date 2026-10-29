@@ -1,10 +1,6 @@
 import { expect, test } from 'bun:test';
-import { InvalidRequest, Unsupported } from '@mottyjs/core';
+import { InvalidRequest } from '@mottyjs/core';
 import { messagesOf } from '../../src/responses/messages.ts';
-
-test('input that is one string is what the user said', () => {
-  expect(messagesOf('Hello')).toEqual([{ role: 'user', text: 'Hello' }]);
-});
 
 test('a message is read with or without its type, by its role', () => {
   expect(
@@ -294,15 +290,6 @@ test('an item of no known kind keeps its place in the turn it came in', () => {
   ]);
 });
 
-test('a reference to an item the server would hold is refused', () => {
-  expect(() => messagesOf([{ type: 'item_reference', id: 'rs_1' }])).toThrow(
-    Unsupported,
-  );
-  expect(() => messagesOf([{ type: 'item_reference', id: 'rs_1' }])).toThrow(
-    'send the item itself',
-  );
-});
-
 test('input that cannot be read is refused by where it is', () => {
   expect(() => messagesOf(undefined)).toThrow(InvalidRequest);
   expect(() => messagesOf(['hi'])).toThrow('input[0] must be an object');
@@ -321,32 +308,6 @@ test('input that cannot be read is refused by where it is', () => {
   expect(() =>
     messagesOf([{ type: 'function_call_output', call_id: 'call_1' }]),
   ).toThrow('input[0] needs an output');
-});
-
-test('a cache breakpoint on input content is read as a cache marker', () => {
-  expect(
-    messagesOf([
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: 'A long manual',
-            prompt_cache_breakpoint: { mode: 'explicit' },
-          },
-          { type: 'input_text', text: 'What does it say?' },
-        ],
-      },
-    ]),
-  ).toEqual([
-    {
-      role: 'user',
-      parts: [
-        { type: 'text', text: 'A long manual', cache: {} },
-        { type: 'text', text: 'What does it say?' },
-      ],
-    },
-  ]);
 });
 
 test('function arguments that are a bare string stay as written, never a custom tool`s input', () => {

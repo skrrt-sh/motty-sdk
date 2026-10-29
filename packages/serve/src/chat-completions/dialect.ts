@@ -1,7 +1,8 @@
 import type { FinishReason, Json, Options, Part } from '@mottyjs/core/host';
+import { joined } from '../wire/details.ts';
 import { type Effort, nearest } from '../wire/effort.ts';
 import type { Leaving } from '../wire/fieldless.ts';
-import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
+import { type Dict, dict, given, list } from '../wire/json.ts';
 import type { Cut, FailureReader } from '../wire/upstream-failure.ts';
 import { family, hinted } from './family.ts';
 import { wrapped } from './think-tags.ts';
@@ -64,6 +65,10 @@ export type Dialect = {
   // of OpenAI's own models refuse, or a router's `cache_control`, which has
   // a lifetime.
   breakpoints?: true | 'cache_control';
+  // Where a marker's lifetime goes, if not on the marker: nowhere, as an
+  // upstream that keeps one five minutes alone, or in the request's
+  // `prompt_cache_options`, as one that caches every prefix by itself.
+  lifetime?: '5m' | 'prompt_cache_options';
   // Headers that say what the body may hold, by name in lower case: sent
   // from the hint or the option of that name, and never in the body.
   carried?: readonly string[];
@@ -73,37 +78,12 @@ export type Dialect = {
   endings?: { readonly [word: string]: FinishReason };
   // Its own words for a reply that did not end: the call failed.
   broken?: readonly string[];
-  // `cached_tokens` at the top of usage, where a model sends no details.
+  // `cached_tokens` at the top of usage, where a model sends no details:
+  // the details and DeepSeek's `prompt_cache_hit_tokens` outrank it.
   flat?: true;
 };
 
 export const plain: Dialect = { name: family };
-
-// A reply streams one detail as fragments of one type and index: its text
-// grows, and what signs it is said once.
-export function joined(fragments: readonly Json[]): Json[] {
-  const whole = new Map<string, Map<string, Json>>();
-  for (const fragment of fragments) {
-    if (!isDict(fragment)) continue;
-    const { type, index } = fragment;
-    const key =
-      typeof index === 'number' ? `${type} ${index}` : `${whole.size}`;
-    const held = whole.get(key) ?? new Map<string, Json>();
-    for (const [name, value] of Object.entries(fragment)) {
-      const had = held.get(name);
-      if (
-        typeof had === 'string' &&
-        typeof value === 'string' &&
-        (name === 'text' || name === 'summary' || name === 'data')
-      ) {
-        held.set(name, had + value);
-      } else if (value !== null || had === undefined) held.set(name, value);
-    }
-    whole.set(key, held);
-  }
-  // Made from entries, a name that is the prototype's is a field like any.
-  return [...whole.values()].map((held) => Object.fromEntries(held));
-}
 
 // Every field that asks for reasoning, under any dialect's name.
 export const reasoningWords = [

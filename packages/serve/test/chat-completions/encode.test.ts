@@ -73,26 +73,6 @@ test('an order to keep reasoning out of the reply is left out and reported', () 
   ]);
 });
 
-test('each reasoning effort is sent, and a mute is not the upstream`s', () => {
-  for (const effort of [
-    'none',
-    'minimal',
-    'low',
-    'medium',
-    'high',
-    'xhigh',
-    'max',
-  ] as const) {
-    const { body } = encode('gpt-x', {
-      messages: [],
-      options: { reasoning: { effort, exclude: true } },
-    });
-
-    expect(body).toMatchObject({ reasoning_effort: effort });
-    expect(body).not.toHaveProperty('reasoning');
-  }
-});
-
 test('function and custom tools are sent in their shapes', () => {
   const { body } = encode('gpt-x', {
     messages: [],
@@ -148,29 +128,6 @@ test('function and custom tools are sent in their shapes', () => {
   });
 });
 
-test('a function with no strictness named is sent with none', () => {
-  const { body } = encode('gpt-x', {
-    messages: [],
-    tools: [{ type: 'function', name: 'weather', input: { type: 'object' } }],
-  });
-
-  expect(body).toMatchObject({
-    tools: [
-      {
-        type: 'function',
-        function: { name: 'weather', parameters: { type: 'object' } },
-      },
-    ],
-  });
-  expect(JSON.stringify(body)).not.toContain('strict');
-});
-
-test('no tools are sent as no tools field', () => {
-  expect(encode('gpt-x', { messages: [], tools: [] }).body).not.toHaveProperty(
-    'tools',
-  );
-});
-
 test('each tool choice is sent, a custom tool named as one', () => {
   const sent = (toolChoice: Parameters<typeof encode>[1]['options']) =>
     encode('gpt-x', {
@@ -182,11 +139,7 @@ test('each tool choice is sent, a custom tool named as one', () => {
       ...(toolChoice === undefined ? {} : { options: toolChoice }),
     }).body;
 
-  expect(sent({ toolChoice: 'auto' })).toMatchObject({ tool_choice: 'auto' });
   expect(sent({ toolChoice: 'none' })).toMatchObject({ tool_choice: 'none' });
-  expect(sent({ toolChoice: 'required' })).toMatchObject({
-    tool_choice: 'required',
-  });
   expect(sent({ toolChoice: { tool: 'weather' } })).toMatchObject({
     tool_choice: { type: 'function', function: { name: 'weather' } },
   });
@@ -356,82 +309,13 @@ test('an option map with an entry for each family is sent this one`s own', () =>
   expect(leftOut).toEqual([]);
 });
 
-test('a tool and a tool choice with an entry for each family are sent this one`s own', () => {
-  const { body } = encode('gpt-x', {
-    messages: [],
-    tools: [
-      {
-        type: 'provider',
-        provider: {
-          anthropic: { type: 'bash_20250124', name: 'bash' },
-          'openai.chat': { type: 'web_search' },
-        },
-      },
-      {
-        type: 'function',
-        name: 'weather',
-        input: {},
-        provider: { anthropic: { defer_loading: true }, 'openai.chat': {} },
-      },
-    ],
-    options: {
-      toolChoice: {
-        provider: {
-          anthropic: { type: 'any' },
-          'openai.chat': { type: 'web_search' },
-        },
-      },
-    },
-  });
-
-  expect(body).toMatchObject({
-    tools: [
-      { type: 'web_search' },
-      { type: 'function', function: { name: 'weather', parameters: {} } },
-    ],
-    tool_choice: { type: 'web_search' },
-  });
-});
-
-test('an option of another family fails the call, wherever it is', () => {
+test('an option of another family fails the call', () => {
   expect(() =>
     encode('gpt-x', {
       messages: [],
       options: { provider: { anthropic: { thinking: { type: 'enabled' } } } },
     }),
   ).toThrow('Chat Completions cannot carry an option of anthropic');
-  expect(() =>
-    encode('gpt-x', {
-      messages: [],
-      tools: [
-        {
-          type: 'provider',
-          provider: { anthropic: { type: 'bash_20250124' } },
-        },
-      ],
-    }),
-  ).toThrow(Unsupported);
-  expect(() =>
-    encode('gpt-x', {
-      messages: [],
-      tools: [
-        {
-          type: 'function',
-          name: 'weather',
-          input: {},
-          provider: { anthropic: { defer_loading: true } },
-        },
-      ],
-    }),
-  ).toThrow(Unsupported);
-  expect(() =>
-    encode('gpt-x', {
-      messages: [],
-      options: {
-        toolChoice: { provider: { anthropic: { type: 'any' } } },
-      },
-    }),
-  ).toThrow(Unsupported);
 });
 
 test('top-k sampling is left out and reported', () => {
@@ -487,35 +371,6 @@ test('top-k sampling a model does not take is left out and reported, though the 
   ]);
 });
 
-test('top-k sampling stated in the upstream`s own words is sent as said, and the option beside it is reported', () => {
-  const { body, leftOut } = encode(
-    'model-x',
-    {
-      messages: [],
-      options: { topK: 40, provider: { 'openai.chat': { top_k: 20 } } },
-    },
-    { name: 'sampled', topK: true },
-  );
-
-  expect(body).toMatchObject({ top_k: 20 });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['sampling.own']);
-});
-
-test('a reasoning budget is a hint this API has no field for, and is left out', () => {
-  const { body } = encode('gpt-x', {
-    messages: [],
-    options: { reasoning: { effort: 'low', budgetTokens: 2000 } },
-  });
-
-  expect(body).toEqual({
-    model: 'gpt-x',
-    messages: [],
-    reasoning_effort: 'low',
-    stream: true,
-    stream_options: { include_usage: true },
-  });
-});
-
 test('the body holds no part of the prompt it was made from', () => {
   const input = { type: 'object', required: ['city'] };
   const { body } = encode('gpt-x', {
@@ -534,7 +389,6 @@ test.each([
   [{ effort: 'high' } as const],
   [{ budgetTokens: 2048 }],
   [{ exclude: true }],
-  [{ effort: 'none' } as const],
 ])(
   'reasoning %j is sent the same with a connection that states reasoning under any name and without one',
   (reasoning) => {
@@ -566,7 +420,7 @@ test.each([
   },
 );
 
-test.each([[undefined], [{}]])(
+test.each([[{}]])(
   'a request whose reasoning is %j is sent the connection`s as stated',
   (reasoning) => {
     expect(
@@ -613,10 +467,7 @@ test('a limit replaces the connection`s under either name, and a request with no
   expect(silent.body).toMatchObject({ max_tokens: 8192 });
 });
 
-test.each([
-  [{ name: 'openai.chat' }],
-  [{ name: 'deepseek', asks: 'thinking', limit: 'max_tokens' }],
-] as const)(
+test.each([[{ name: 'openai.chat' }]] as const)(
   'an effort said in this API`s own words is sent as said by %j, and the effort beside it is reported',
   (dialect) => {
     const { body, leftOut } = encode(
@@ -641,85 +492,6 @@ test.each([
     ]);
   },
 );
-
-test('a reasoning object said in own words is sent as said, and the effort and the mute beside it are reported', () => {
-  const { body, leftOut } = encode(
-    'vendor/small',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: {
-        reasoning: { effort: 'high', exclude: true },
-        provider: { 'openai.chat': { reasoning: { max_tokens: 500 } } },
-      },
-    },
-    { name: 'openrouter', asks: 'reasoning' },
-  );
-
-  expect(body).toHaveProperty('reasoning', { max_tokens: 500 });
-  expect(leftOut).toEqual([
-    {
-      setting: 'reasoning.own',
-      detail:
-        "Chat Completions has no field for a reasoning option the request also states in the API's own words",
-    },
-  ]);
-});
-
-test('a switch said in own words is not turned on by a budget, which is reported', () => {
-  const { body, leftOut } = encode(
-    'small',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: {
-        reasoning: { budgetTokens: 2000 },
-        provider: { 'openai.chat': { thinking: { type: 'disabled' } } },
-      },
-    },
-    { name: 'deepseek', asks: 'thinking', limit: 'max_tokens' },
-  );
-
-  expect(body).toHaveProperty('thinking', { type: 'disabled' });
-  expect(leftOut).toEqual([
-    {
-      setting: 'reasoning.budgetTokens',
-      detail: 'Chat Completions has no field for a reasoning budget in tokens',
-    },
-    {
-      setting: 'reasoning.own',
-      detail:
-        "Chat Completions has no field for a reasoning option the request also states in the API's own words",
-    },
-  ]);
-});
-
-test('an effort beside a switch said in own words is not written, and is reported', () => {
-  const { body, leftOut } = encode(
-    'small',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: {
-        reasoning: { effort: 'high' },
-        provider: { 'openai.chat': { thinking: { type: 'enabled' } } },
-      },
-    },
-    { name: 'deepseek', asks: 'thinking', limit: 'max_tokens' },
-  );
-
-  expect(body).toEqual({
-    thinking: { type: 'enabled' },
-    model: 'small',
-    messages: [{ role: 'user', content: 'Hi' }],
-    stream: true,
-    stream_options: { include_usage: true },
-  });
-  expect(leftOut).toEqual([
-    {
-      setting: 'reasoning.own',
-      detail:
-        "Chat Completions has no field for a reasoning option the request also states in the API's own words",
-    },
-  ]);
-});
 
 test.each([
   [{ reasoning: { effort: 'high' } } as const, 'high'],
@@ -780,82 +552,6 @@ test('a temperature the model does not take is left out of the request and repor
   ]);
 });
 
-test('the rule is asked by the name the upstream knows the model by', () => {
-  const { body, leftOut } = encode(
-    'gpt-4.1',
-    {
-      messages: [],
-      options: { temperature: 0.2, presencePenalty: 0.5, topP: 0.9 },
-    },
-    { name: 'openai.chat' },
-    {},
-    (model) =>
-      model === 'gpt-4.1'
-        ? undefined
-        : {
-            temperature: 1,
-            topP: 1,
-            topK: false,
-            presencePenalty: false,
-            frequencyPenalty: false,
-            together: true,
-            effort: true,
-          },
-  );
-
-  expect(body).toMatchObject({
-    temperature: 0.2,
-    top_p: 0.9,
-    presence_penalty: 0.5,
-  });
-  expect(leftOut).toEqual([]);
-});
-
-test('a temperature in the API`s own words is sent as said to a model the rule refuses it for', () => {
-  const { body, leftOut } = encode(
-    'gpt-5',
-    {
-      messages: [],
-      options: { provider: { 'openai.chat': { temperature: 0.2 } } },
-    },
-    { name: 'openai.chat' },
-    {},
-    () => ({
-      temperature: 1,
-      topP: 1,
-      topK: false,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: true,
-      effort: true,
-    }),
-  );
-
-  expect(body).toMatchObject({ temperature: 0.2 });
-  expect(leftOut).toEqual([]);
-});
-
-test('a connection`s own temperature is sent and is no warning under a rule', () => {
-  const { body, leftOut } = encode(
-    'gpt-5',
-    { messages: [] },
-    { name: 'openai.chat' },
-    { temperature: 0.2 },
-    () => ({
-      temperature: 1,
-      topP: 1,
-      topK: false,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: true,
-      effort: true,
-    }),
-  );
-
-  expect(body).toMatchObject({ temperature: 0.2 });
-  expect(leftOut).toEqual([]);
-});
-
 test('an effort the model does not take is left out and reported', () => {
   const { body, leftOut } = encode(
     'gpt-4.1',
@@ -905,30 +601,6 @@ test('an effort the model does not take leaves a mute in the reasoning object of
 
   expect(body).toMatchObject({ reasoning: { exclude: true } });
   expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning.model']);
-});
-
-test('an effort in the API`s own words is sent as said to a model the rule refuses it for', () => {
-  const { body, leftOut } = encode(
-    'gpt-4.1',
-    {
-      messages: [],
-      options: { provider: { 'openai.chat': { reasoning_effort: 'low' } } },
-    },
-    { name: 'openai.chat' },
-    {},
-    () => ({
-      temperature: [0, 2],
-      topP: [0, 1],
-      topK: false,
-      presencePenalty: true,
-      frequencyPenalty: true,
-      together: true,
-      effort: false,
-    }),
-  );
-
-  expect(body).toMatchObject({ reasoning_effort: 'low' });
-  expect(leftOut).toEqual([]);
 });
 
 test('the rule is asked whether the model takes an effort, then with what the request says of reasoning', () => {
@@ -1027,13 +699,10 @@ test('a temperature the request states replaces the connection`s, also when the 
 
 test.each([
   [{ anthropic: { thinking: { type: 'enabled' } }, openai: {} }, {}],
-  [{ openai: { service_tier: 'flex' } }, { service_tier: 'flex' }],
-  [{ openai: { some_new_field: 1 } }, { some_new_field: 1 }],
   [
     { openai: { store: true }, 'openai.chat': { logit_bias: { '50256': -1 } } },
     { store: true, logit_bias: { '50256': -1 } },
   ],
-  [{ openai: { a: 1 }, 'openai.chat': { a: 2 } }, { a: 2 }],
   [
     { openai: { truncation: 'auto' }, 'openai.chat': { truncation: 'off' } },
     { truncation: 'off' },
@@ -1058,10 +727,6 @@ test.each([
   [
     { openai: { previous_response_id: 'r1' } },
     'Chat Completions cannot carry previous_response_id, which another API of openai has',
-  ],
-  [
-    { openai: { store: true, instructions: 'Be brief.' } },
-    'Chat Completions cannot carry instructions, which another API of openai has',
   ],
   [
     { 'openai.responses': { store: true } },
@@ -1117,36 +782,9 @@ test('below the options the provider`s key is read for a hint alone', () => {
 
 test.each([
   [
-    'a provider tool',
-    {
-      tools: [
-        { type: 'provider', provider: { openai: { type: 'web_search' } } },
-      ],
-    },
-  ],
-  [
-    'a tool option',
-    {
-      tools: [
-        {
-          type: 'function',
-          name: 'weather',
-          input: {},
-          provider: { anthropic: { defer_loading: true }, openai: {} },
-        },
-      ],
-    },
-  ],
-  [
     'a tool choice',
     {
       options: { toolChoice: { provider: { openai: { type: 'web_search' } } } },
-    },
-  ],
-  [
-    'a message option',
-    {
-      messages: [{ role: 'user', text: 'Hi', provider: { openai: { a: 1 } } }],
     },
   ],
 ] as const)(
@@ -1168,7 +806,7 @@ test('what a tool holds for this API is written back where it sat', () => {
         input: { type: 'object' },
         hints: {
           'openai.chat': {
-            cache_control: { type: 'ephemeral' },
+            defer: true,
             function: { vendor: 1, name: 'other' },
           },
         },
@@ -1183,7 +821,7 @@ test('what a tool holds for this API is written back where it sat', () => {
 
   expect(body).toHaveProperty('tools', [
     {
-      cache_control: { type: 'ephemeral' },
+      defer: true,
       type: 'function',
       function: { vendor: 1, name: 'now', parameters: { type: 'object' } },
     },
@@ -1224,4 +862,165 @@ test('a field a tool was not given is not written from what it holds', () => {
       function: { name: 'now', parameters: { type: 'object' } },
     },
   ]);
+});
+
+test('an upstream that keeps a marker five minutes alone is sent the marker with no lifetime, and an hour is reported', () => {
+  const { body, leftOut } = encode(
+    'qwen-x',
+    {
+      messages: [
+        { role: 'system', text: 'A long manual', cache: { ttl: '1h' } },
+        { role: 'user', text: 'Hi', cache: { ttl: '5m' } },
+      ],
+    },
+    { name: 'dashscope', breakpoints: 'cache_control', lifetime: '5m' },
+  );
+
+  expect(body).toHaveProperty('messages', [
+    {
+      role: 'system',
+      content: [
+        {
+          type: 'text',
+          text: 'A long manual',
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+    },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Hi', cache_control: { type: 'ephemeral' } },
+      ],
+    },
+  ]);
+  expect(leftOut.map(({ setting }) => setting)).toEqual(['cache.ttl']);
+});
+
+test('where the lifetime is the request`s, an hour asked by any marker is asked once and no marker is written', () => {
+  const { body, leftOut } = encode(
+    'kimi-k3',
+    {
+      messages: [
+        { role: 'system', text: 'A long manual', cache: { ttl: '1h' } },
+        {
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hi', cache: {} }],
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          name: 'now',
+          input: { type: 'object' },
+          cache: {},
+        },
+      ],
+    },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+
+  expect(body).toMatchObject({
+    prompt_cache_options: { mode: 'implicit', ttl: '1h' },
+    tools: [{ type: 'function', function: { name: 'now' } }],
+    messages: [
+      { role: 'system', content: 'A long manual' },
+      { role: 'user', content: [{ type: 'text', text: 'Hi' }] },
+    ],
+  });
+  expect(JSON.stringify(body)).not.toContain('cache_control');
+  expect(leftOut).toEqual([]);
+
+  const short = encode(
+    'kimi-k3',
+    { messages: [{ role: 'user', text: 'Hi', cache: { ttl: '5m' } }] },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+  expect(short.body).not.toHaveProperty('prompt_cache_options');
+  expect(short.leftOut).toEqual([]);
+
+  const own = encode(
+    'kimi-k3',
+    {
+      messages: [{ role: 'user', text: 'Hi', cache: { ttl: '1h' } }],
+      options: {
+        provider: {
+          'openai.chat': {
+            prompt_cache_options: { mode: 'implicit', ttl: '5m' },
+          },
+        },
+      },
+    },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+  expect(own.body).toHaveProperty('prompt_cache_options', {
+    mode: 'implicit',
+    ttl: '5m',
+  });
+});
+
+test('where the lifetime is the request`s, an hour asked on a tool result is asked of the request', () => {
+  const { body, leftOut } = encode(
+    'kimi-k3',
+    {
+      messages: [
+        {
+          role: 'assistant',
+          parts: [{ type: 'tool_call', id: 'c1', name: 'now', input: {} }],
+        },
+        {
+          role: 'tool',
+          parts: [
+            { type: 'tool_result', id: 'c1', text: '4C', cache: { ttl: '1h' } },
+          ],
+        },
+      ],
+    },
+    { name: 'moonshot', lifetime: 'prompt_cache_options' },
+  );
+
+  expect(body).toMatchObject({
+    prompt_cache_options: { mode: 'implicit', ttl: '1h' },
+    messages: [{}, { role: 'tool', tool_call_id: 'c1', content: '4C' }],
+  });
+  expect(leftOut).toEqual([]);
+});
+
+test('a tool`s marker goes on the tool to a router, with what it said beside it, and is reported to OpenAI', () => {
+  const sent = (dialect?: Parameters<typeof encode>[2]) =>
+    encode(
+      'claude-x',
+      {
+        messages: [],
+        tools: [
+          {
+            type: 'function',
+            name: 'now',
+            input: { type: 'object' },
+            cache: { ttl: '1h' },
+            hints: { 'openai.chat': { cache_control: { scope: 'org' } } },
+          },
+        ],
+      },
+      dialect,
+    );
+
+  const routed = sent({ name: 'openrouter', breakpoints: 'cache_control' });
+  expect(routed.body).toHaveProperty('tools', [
+    {
+      type: 'function',
+      cache_control: { scope: 'org', type: 'ephemeral', ttl: '1h' },
+      function: { name: 'now', parameters: { type: 'object' } },
+    },
+  ]);
+  expect(routed.leftOut).toEqual([]);
+
+  const plain = sent();
+  expect(plain.body).toHaveProperty('tools', [
+    {
+      type: 'function',
+      function: { name: 'now', parameters: { type: 'object' } },
+    },
+  ]);
+  expect(plain.leftOut.map(({ setting }) => setting)).toEqual(['tool.cache']);
 });

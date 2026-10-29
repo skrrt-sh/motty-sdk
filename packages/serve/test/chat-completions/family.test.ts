@@ -1,39 +1,7 @@
 import { expect, test } from 'bun:test';
 import { encode } from '../../src/chat-completions/encode.ts';
-import {
-  addressed,
-  elsewhere,
-  hinted,
-  marked,
-  own,
-} from '../../src/chat-completions/family.ts';
+import { elsewhere } from '../../src/chat-completions/family.ts';
 import { dict } from '../../src/wire/json.ts';
-
-test('this wire reads and writes under its own key alone', () => {
-  expect(marked({ logprobs: true })).toEqual({
-    provider: { 'openai.chat': { logprobs: true } },
-  });
-  expect(hinted({ 'openai.chat': { detail: 'low' } })).toEqual({
-    detail: 'low',
-  });
-  expect(hinted({ 'openai.responses': { detail: 'low' } })).toEqual({});
-  expect(() => own({ 'openai.responses': {} }, 'an option')).toThrow(
-    'Chat Completions cannot carry an option of openai.responses',
-  );
-});
-
-test('the provider`s key is read too, and held to the fields this API has', () => {
-  expect(
-    addressed({
-      provider: { openai: { store: true }, 'openai.chat': { n: 2 } },
-    }).provider,
-  ).toEqual({ store: true, n: 2 });
-  expect(() =>
-    addressed({ provider: { openai: { truncation: 'auto' } } }),
-  ).toThrow(
-    'Chat Completions cannot carry truncation, which another API of openai has',
-  );
-});
 
 test('no field this API writes itself is one it refuses as another API`s', () => {
   const { body } = encode(

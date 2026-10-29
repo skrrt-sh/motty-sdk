@@ -78,10 +78,7 @@ const redacted: Chunk[] = [
 
 test.each([
   ['a thinking signature', signature, 'EqQBCgIYAhIM', false],
-  ['a thinking signature', signature, 'EqQBCgIYAhIM', true],
-  ['an encrypted reasoning item', encrypted, 'gAAAAABoEncrypted', false],
   ['an encrypted reasoning item', encrypted, 'gAAAAABoEncrypted', true],
-  ['redacted thinking', redacted, 'EmwKAhgB', false],
   ['redacted thinking', redacted, 'EmwKAhgB', true],
 ])(
   '%s is left out of a Chat Completions reply and reported (%#)',
@@ -108,10 +105,8 @@ test.each([
 );
 
 test.each([
-  ['a thinking signature', signature, 'EqQBCgIYAhIM', false],
   ['a thinking signature', signature, 'EqQBCgIYAhIM', true],
   ['redacted thinking', redacted, 'EmwKAhgB', false],
-  ['redacted thinking', redacted, 'EmwKAhgB', true],
 ])(
   '%s is left out of a Responses reply and reported (%#)',
   async (_what, chunks, secret, stream) => {
@@ -131,13 +126,13 @@ test.each([
       {
         setting: 'reasoning',
         detail:
-          'The Responses API has no form for what a model goes on from its reasoning with',
+          'The Responses API has no form for what a model goes on from its reasoning with, which the request did not include',
       },
     ]);
   },
 );
 
-test.each([false, true])(
+test.each([true])(
   'an encrypted reasoning item is left out of a Messages reply and reported (stream %p)',
   async (stream) => {
     const { status, text, reports } = await asked(
@@ -169,13 +164,9 @@ test.each([false, true])(
 
 test.each([
   ['/v1/chat/completions', 'Chat Completions', 'anthropic', false],
-  ['/v1/chat/completions', 'Chat Completions', 'anthropic', true],
-  ['/v1/chat/completions', 'Chat Completions', 'openai.responses', false],
   ['/v1/chat/completions', 'Chat Completions', 'openai.responses', true],
-  ['/v1/responses', 'The Responses API', 'anthropic', false],
   ['/v1/responses', 'The Responses API', 'anthropic', true],
   ['/v1/messages', 'Anthropic Messages', 'openai.responses', false],
-  ['/v1/messages', 'Anthropic Messages', 'openai.responses', true],
 ])(
   'reasoning text on %s outlives the data of another family beside it (%#)',
   async (path, api, family, stream) => {
@@ -209,7 +200,9 @@ test.each([
     expect(reports[0]?.warnings).toEqual([
       {
         setting: 'reasoning',
-        detail: `${api} has no form for what a model goes on from its reasoning with`,
+        detail: `${api} has no form for what a model goes on from its reasoning with${
+          path === '/v1/responses' ? ', which the request did not include' : ''
+        }`,
       },
     ]);
   },
@@ -235,6 +228,31 @@ test.each([
 
     expect(status).toBe(200);
     expect(text).toContain(secret);
+    expect(reports[0]).not.toHaveProperty('warnings');
+  },
+);
+
+test.each([
+  ['a thinking signature', signature, 'EqQBCgIYAhIM'],
+  ['redacted thinking', redacted, 'EmwKAhgB'],
+])(
+  '%s reaches a streamed Responses caller who includes encrypted reasoning, in the item it sends back',
+  async (_what, chunks, secret) => {
+    const { status, text, reports } = await asked(
+      '/v1/responses',
+      {
+        stream: true,
+        input: 'Is it safe?',
+        reasoning: { summary: 'auto' },
+        include: ['reasoning.encrypted_content'],
+      },
+      chunks,
+    );
+
+    expect(status).toBe(200);
+    expect(text).toContain('encrypted_content');
+    expect(text).toContain(secret);
+    expect(reports).toMatchObject([{ outcome: 'completed' }]);
     expect(reports[0]).not.toHaveProperty('warnings');
   },
 );

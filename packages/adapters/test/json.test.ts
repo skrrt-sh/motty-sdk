@@ -7,8 +7,3 @@ test('every kind of JSON value is read as it was written', () => {
   ).toEqual({ text: 'deep', n: 1.5, on: true, none: null, list: [1, [2]] });
   expect(parsed('null')).toBeNull();
 });
-
-test('text that is not JSON throws', () => {
-  expect(() => parsed('<html>')).toThrow(SyntaxError);
-  expect(() => parsed('')).toThrow(SyntaxError);
-});

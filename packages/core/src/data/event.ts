@@ -235,19 +235,10 @@ function count(name: string, value: unknown): value is number {
   return name === 'cost' ? Number.isFinite(value) : Number.isSafeInteger(value);
 }
 
-function sound(usage: unknown): usage is Usage {
-  if (!loose(usage)) return false;
-  for (const name of counts) {
-    const reported = usage[name];
-    if (reported !== undefined && !count(name, reported)) return false;
-  }
-  return true;
-}
-
-// Whoever reports usage, a host or a plugin: a wrong count is dropped and the
-// rest kept, and usage with nothing wrong is given back as it is.
+// Whoever reports usage, a host or a plugin: only the counts Usage names are
+// copied and a wrong count is dropped. Anything else an upstream reports is
+// its provider's to carry.
 export function usageOf(reported: unknown): Usage {
-  if (sound(reported)) return reported;
   const usage: Usage = {};
   if (loose(reported)) {
     for (const name of counts) {
@@ -259,9 +250,9 @@ export function usageOf(reported: unknown): Usage {
 }
 
 function counted(event: Terminal): Terminal {
-  if (event.usage === undefined) return event;
-  const usage = usageOf(event.usage);
-  return usage === event.usage ? event : { ...event, usage };
+  return event.usage === undefined
+    ? event
+    : { ...event, usage: usageOf(event.usage) };
 }
 
 // A failure that enters came from outside unless its host says it is the

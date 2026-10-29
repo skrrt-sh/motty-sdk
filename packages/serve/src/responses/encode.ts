@@ -2,12 +2,13 @@ import type { JsonOutput, Prompt } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, without } from '../wire/json.ts';
+import { offered } from '../wire/offered.ts';
 import { customNames } from '../wire/openai-tools.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
-import { addressed } from './family.ts';
+import { addressed, family } from './family.ts';
 import { field } from './fields.ts';
 import { inputOf } from './items.ts';
-import { choiceBody, toolBody } from './tools.ts';
+import { choiceBody, toolsBody } from './tools.ts';
 
 type Options = NonNullable<Prompt['options']>;
 
@@ -95,7 +96,12 @@ export function encode(
   const custom = customNames(prompt.tools);
   const { hints, provider, leftOut } = addressed(options);
   const { toolChoice } = options;
-  const tools = (prompt.tools ?? []).map((tool) => toolBody(left, tool));
+  const tools = toolsBody(
+    left,
+    offered(left, family, prompt.tools, toolChoice),
+  );
+  // Every tool left out as only offered leaves nothing to choose among.
+  const choosing = tools.length > 0 || (prompt.tools?.length ?? 0) === 0;
   const input = inputOf(left, prompt.messages, custom);
   const reasoning = reasoningOf(
     left,
@@ -133,8 +139,10 @@ export function encode(
     ...(tools.length === 0 ? {} : { tools }),
     ...given({
       tool_choice:
-        toolChoice === undefined ? undefined : choiceBody(toolChoice, custom),
-      parallel_tool_calls: options.parallelToolCalls,
+        toolChoice === undefined || !choosing
+          ? undefined
+          : choiceBody(toolChoice, custom),
+      parallel_tool_calls: choosing ? options.parallelToolCalls : undefined,
       max_output_tokens: options.maxTokens,
       user: options.user,
     }),
@@ -148,9 +156,19 @@ export function encode(
         : { format: formatOf(prompt.output) }),
     }),
   });
+  // A request with a cache key is cached by it, which is what a marker this
+  // API had no place for asked. A key holds no lifetime, so a ttl is still lost.
+  const { prompt_cache_key: key } = body;
+  const keyed = typeof key === 'string';
+  const marks = ['cache', 'cache.outside'];
   return {
     path: '/responses',
-    leftOut: [...left.leftOut(), ...leftOut],
+    leftOut: [
+      ...left
+        .leftOut()
+        .filter(({ setting }) => !keyed || !marks.includes(setting)),
+      ...leftOut,
+    ],
     headers: {
       'content-type': 'application/json',
       accept: 'text/event-stream',

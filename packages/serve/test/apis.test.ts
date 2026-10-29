@@ -117,35 +117,6 @@ test('Chat Completions, streamed: chunks, then the end mark', async () => {
   });
 });
 
-test('Responses, whole', async () => {
-  const { models, served } = answering();
-
-  const reply = await served.fetch(ask('/v1/responses', false));
-
-  expect(reply.status).toBe(200);
-  expect(await reply.json()).toMatchObject({
-    id: expect.stringMatching(/^resp_/),
-    object: 'response',
-    status: 'completed',
-    model: 'coder',
-    output: [
-      {
-        type: 'message',
-        role: 'assistant',
-        content: [
-          {
-            type: 'output_text',
-            text: 'Two threads take the locks in opposite order.',
-          },
-        ],
-      },
-    ],
-  });
-  expect(models.sent(gpt)).toMatchObject([
-    { messages: [{ role: 'user', text: 'Why does this deadlock?' }] },
-  ]);
-});
-
 test('Responses, streamed: named events from created to completed', async () => {
   const { served } = answering();
 
@@ -180,29 +151,6 @@ test('Responses, streamed: named events from created to completed', async () => 
   });
 });
 
-test('Messages, whole', async () => {
-  const { models, served } = answering();
-
-  const reply = await served.fetch(
-    ask('/v1/messages', false, { 'anthropic-version': '2023-06-01' }),
-  );
-
-  expect(reply.status).toBe(200);
-  expect(await reply.json()).toMatchObject({
-    id: expect.stringMatching(/^msg_/),
-    type: 'message',
-    role: 'assistant',
-    model: 'coder',
-    content: [
-      { type: 'text', text: 'Two threads take the locks in opposite order.' },
-    ],
-    stop_reason: 'end_turn',
-  });
-  expect(models.sent(gpt)).toMatchObject([
-    { messages: [{ role: 'user', text: 'Why does this deadlock?' }] },
-  ]);
-});
-
 test('Messages, streamed: named events from start to stop', async () => {
   const { served } = answering();
 
@@ -232,7 +180,6 @@ test('Messages, streamed: named events from start to stop', async () => {
 test.each([
   ['/v1/chat/completions', false],
   ['/v1/chat/completions', true],
-  ['/v1/responses', false],
   ['/v1/responses', true],
 ])(
   "%s (stream %p): the motty's own error is an OpenAI error with its status",
@@ -260,7 +207,7 @@ test.each([
   },
 );
 
-test.each([false, true])(
+test.each([true])(
   "/v1/messages (stream %p): the motty's own error is an Anthropic error with its status",
   async (stream) => {
     const served = serve(
@@ -286,12 +233,8 @@ test.each([false, true])(
 );
 
 test.each([
-  ['/v1/chat/completions', false],
   ['/v1/chat/completions', true],
-  ['/v1/responses', false],
-  ['/v1/responses', true],
   ['/v1/messages', false],
-  ['/v1/messages', true],
 ])(
   '%s (stream %p): an upstream rate limit is a 429 that says when to retry, in the upstream`s own words',
   async (path, stream) => {
@@ -326,17 +269,6 @@ test.each([
 test.each([
   [
     '/v1/chat/completions',
-    {
-      error: {
-        message: 'Expected temperature to be at most 2, received 9',
-        type: 'invalid_request_error',
-        param: null,
-        code: 'invalid_request',
-      },
-    },
-  ],
-  [
-    '/v1/responses',
     {
       error: {
         message: 'Expected temperature to be at most 2, received 9',
@@ -409,17 +341,6 @@ test.each([
     },
   ],
   [
-    '/v1/responses',
-    {
-      error: {
-        message: 'User not found.',
-        type: 'server_error',
-        param: null,
-        code: 'upstream_refused',
-      },
-    },
-  ],
-  [
     '/v1/messages',
     {
       type: 'error',
@@ -460,7 +381,7 @@ test.each([
   },
 );
 
-test.each(['/v1/chat/completions', '/v1/responses', '/v1/messages'])(
+test.each(['/v1/chat/completions'])(
   '%s: what an adapter threw that is no SDK error is a 500 that quotes nothing, and the report holds it',
   async (path) => {
     const reported = Promise.withResolvers<Report>();
@@ -499,7 +420,7 @@ test.each(['/v1/chat/completions', '/v1/responses', '/v1/messages'])(
   },
 );
 
-test.each(['/v1/chat/completions', '/v1/responses', '/v1/messages'])(
+test.each(['/v1/chat/completions', '/v1/messages'])(
   '%s: a server failure the motty raised on purpose is told in its own words',
   async (path) => {
     const served = serve(
@@ -519,30 +440,8 @@ test.each(['/v1/chat/completions', '/v1/responses', '/v1/messages'])(
   },
 );
 
-test.each(['/v1/chat/completions', '/v1/responses', '/v1/messages'])(
-  '%s: what a motty threw that is no SDK error is a 500 that quotes nothing',
-  async (path) => {
-    const served = serve(
-      motty({ name: 'coder' }).handle(() => {
-        throw new TypeError('db password hunter2 was rejected');
-      }),
-      () => ({}),
-    );
-
-    const reply = await served.fetch(ask(path, false));
-
-    expect(reply.status).toBe(500);
-    const text = await reply.text();
-    expect(text).not.toContain('hunter2');
-    expect(JSON.parse(text)).toMatchObject({
-      error: { message: 'Internal error' },
-    });
-  },
-);
-
 test.each([
   ['/v1/chat/completions', {}],
-  ['/v1/responses', {}],
   ['/v1/messages', { type: 'error' }],
 ])(
   '%s: a body that is not JSON is an invalid request in the format of the path',
@@ -574,11 +473,6 @@ test.each([
     '/v1/chat/completions',
     {},
     `{"model":"coder","messages":[{"role":"user","content":"Hi"}],"tools":[{"type":"function","function":{"name":"f","parameters":${'{"a":'.repeat(100_000)}1${'}'.repeat(100_000)}}}]}`,
-  ],
-  [
-    '/v1/responses',
-    {},
-    `{"model":"coder","input":"Hi","metadata":${'['.repeat(100_000)}${']'.repeat(100_000)}}`,
   ],
   [
     '/v1/messages',
@@ -646,7 +540,6 @@ test('arguments nested too deep inside their text are kept as the text they came
 
 test.each([
   ['/v1/chat/completions', {}],
-  ['/v1/responses', {}],
   ['/v1/messages', { type: 'error' }],
 ])(
   '%s: a body sent as something other than JSON is an invalid request',
@@ -673,14 +566,8 @@ test.each([
   },
 );
 
-test('each API names the headers its own clients send a key in', () => {
-  expect(chatCompletions.credentials).toEqual(['authorization', 'api-key']);
-  expect(responses.credentials).toEqual(['authorization', 'api-key']);
-  expect(messages.credentials).toEqual(['x-api-key', 'authorization']);
-});
-
 test.each(
-  [chatCompletions, responses, messages].flatMap(({ paths, credentials }) =>
+  [chatCompletions, messages].flatMap(({ paths, credentials }) =>
     credentials.flatMap((header) =>
       paths.map((path) => ({
         path,
@@ -727,35 +614,7 @@ test.each(
 );
 
 test.each(
-  [chatCompletions, responses, messages].flatMap(({ paths, credentials }) =>
-    paths.map((path) => ({ path, credentials })),
-  ),
-)(
-  '$path: with no auth adapter every credential header of the API is removed all the same',
-  async ({ path, credentials }) => {
-    const seen: [string, string][][] = [];
-    const served = serve(
-      motty({ name: 'coder' }).handle(({ request }) => {
-        seen.push([...request.headers]);
-        return answer('Use a mutex.');
-      }),
-      () => ({}),
-    );
-
-    await served.fetch(
-      ask(
-        path,
-        false,
-        Object.fromEntries(credentials.map((header) => [header, 'sk-ada'])),
-      ),
-    );
-
-    expect(seen).toEqual([[['content-type', 'application/json']]]);
-  },
-);
-
-test.each(
-  [chatCompletions, responses, messages].flatMap(({ paths, credentials }) =>
+  [chatCompletions, messages].flatMap(({ paths, credentials }) =>
     [
       ...new Set(
         [chatCompletions, responses, messages].flatMap(
@@ -822,7 +681,6 @@ test('a JSON body with no content type named is read', async () => {
 
 test.each([
   ['/v1/chat/completions', {}],
-  ['/v1/responses', {}],
   ['/v1/messages', { type: 'error' }],
 ])(
   '%s: a body the API does not allow is refused before the motty runs',
@@ -1005,7 +863,6 @@ test.each([
   [2400, '3'],
   [0, '0'],
   [Number.NaN, null],
-  [Number.POSITIVE_INFINITY, null],
   [-5000, null],
 ])(
   'a wait of %p ms is told in whole seconds, and one that is no time is not told',

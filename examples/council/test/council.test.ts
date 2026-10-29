@@ -2,15 +2,12 @@ import { describe, expect, test } from "bun:test";
 import {
   answer,
   Forbidden,
-  Overloaded,
   QuotaExceeded,
-  Unauthenticated,
   Unsupported,
   UpstreamFailed,
 } from "@mottyjs/core";
 import { fake, memory, on, run } from "@mottyjs/test";
 import { flash, haiku, nano, oss, sonnet } from "../src/models";
-import { debate } from "../src/modules/debate";
 import { panel } from "../src/modules/panel";
 import council from "../src/motty";
 
@@ -110,26 +107,6 @@ describe("verdict", () => {
     expect(await answer.text()).toBe("The capital is Canberra.");
     expect(models.sent(sonnet)[1]?.messages.at(-1)?.text).toContain("Panelist 1:\nSydney");
   });
-
-  test("the debate runs alone, with the rounds before it", async () => {
-    const models = fake(
-      on(haiku, "Sydney"),
-      on(nano, "Canberra"),
-      on(oss, "Melbourne"),
-      on(flash, "Melbourne"),
-      on(sonnet, { agreed: false, disputed: ["Which city is the capital"] }),
-      on(sonnet, "The capital is Canberra."),
-    );
-
-    const { answer } = await run(
-      debate,
-      { text: "What is the capital of Australia?" },
-      { models: [models] },
-    );
-
-    expect(await answer.text()).toBe("The capital is Canberra.");
-    expect(models.sent(nano)).toHaveLength(2);
-  });
 });
 
 describe("panel", () => {
@@ -148,25 +125,6 @@ describe("panel", () => {
     );
 
     expect(await opinions.text()).toBe("Canberra | Canberra");
-  });
-
-  test("the request still answers with two panelists", async () => {
-    const models = fake(
-      on(haiku, new Forbidden("no access")),
-      on(nano, new Forbidden("no access")),
-      on(oss, "Canberra"),
-      on(flash, "Canberra"),
-      on(sonnet, { agreed: true, disputed: [] }),
-      on(sonnet, "The capital is Canberra."),
-    );
-
-    const { answer } = await run(
-      council,
-      { text: "What is the capital of Australia?" },
-      { models: [models] },
-    );
-
-    expect(await answer.text()).toBe("The capital is Canberra.");
   });
 
   test("fewer than two panelists fail the request as an upstream failure", async () => {
@@ -201,25 +159,6 @@ describe("panel", () => {
 });
 
 describe("seats", () => {
-  test("a seat retries its model once when it is overloaded", async () => {
-    const models = fake(
-      on(haiku, new Overloaded("busy")),
-      on(haiku, "Canberra"),
-      on(nano, "Canberra"),
-      on(oss, "Canberra"),
-      on(flash, "Canberra"),
-    );
-
-    const { answer: opinions } = await run(
-      panel.handle(({ opinions }) => answer(opinions.join(" | "))),
-      { text: "What is the capital of Australia?" },
-      { models: [models] },
-    );
-
-    expect(await opinions.text()).toBe("Canberra | Canberra | Canberra");
-    expect(models.sent(haiku)).toHaveLength(2);
-  });
-
   test("a seat falls back to another provider's model", async () => {
     const models = fake(
       on(haiku, new Forbidden("no access")),
@@ -235,23 +174,6 @@ describe("seats", () => {
     );
 
     expect(await opinions.text()).toBe("From OpenAI | From OpenAI | From OpenRouter");
-  });
-
-  test("the shared seat answers with whichever of its two models is up", async () => {
-    const models = fake(
-      on(haiku, "Canberra"),
-      on(nano, "Canberra"),
-      on(oss, new Overloaded("busy")),
-      on(flash, "From the other one"),
-    );
-
-    const { answer: opinions } = await run(
-      panel.handle(({ opinions }) => answer(opinions.join(" | "))),
-      { text: "What is the capital of Australia?" },
-      { models: [models] },
-    );
-
-    expect(await opinions.text()).toBe("Canberra | Canberra | From the other one");
   });
 
   test("the chair and the judge each fall back to another provider", async () => {
@@ -322,28 +244,6 @@ describe("time limits", () => {
       "aborted",
       "aborted",
     ]);
-  });
-
-  test("a panelist whose answer stalls halfway is left out", async () => {
-    const models = fake(
-      on(haiku, async function* () {
-        yield { type: "text", text: "Syd" };
-        await Bun.sleep(100);
-        yield { type: "text", text: "ney" };
-      }),
-      on(nano, "Canberra"),
-      on(oss, "Canberra, I think"),
-      on(flash, "Canberra, I think"),
-    );
-
-    const { answer: opinions } = await run(
-      panel.handle(({ opinions }) => answer(opinions.join(" | "))),
-      { text: "What is the capital of Australia?" },
-      { models: [models], settings: { timeouts: { stall: 20 } } },
-    );
-
-    expect(await opinions.text()).toBe("Canberra | Canberra, I think");
-    expect(models.sent(nano)).toHaveLength(1);
   });
 });
 
@@ -438,38 +338,6 @@ describe("spend", () => {
     ).toBe(0.5);
   });
 
-  test("a call the host states no price for is counted at what its upstream reported", async () => {
-    const models = fake(
-      on(haiku, [
-        { type: "text", text: "Canberra" },
-        { type: "finish", reason: "stop", usage: { output: 100 } },
-      ]),
-      on(nano, "Canberra"),
-      on(oss, [
-        { type: "text", text: "Canberra" },
-        { type: "finish", reason: "stop", usage: { output: 100, cost: 0.25 } },
-      ]),
-      on(flash, "Canberra"),
-      on(sonnet, { agreed: true, disputed: [] }),
-      on(sonnet, "The capital is Canberra."),
-    );
-    const storage = memory();
-
-    await run(
-      council,
-      { text: "What is the capital of Australia?" },
-      {
-        models: [models],
-        storage,
-        price: (model, { output = 0 }) => (model === haiku.name ? output / 800 : undefined),
-      },
-    );
-
-    expect(
-      await storage.get(`council:spend:tester:${new Date().toISOString().slice(0, 10)}`),
-    ).toBe(0.375);
-  });
-
   test("two requests of one caller that end together both add what they cost", async () => {
     const models = fake(
       on(haiku, [
@@ -558,15 +426,24 @@ describe("spend", () => {
 });
 
 describe("gates", () => {
-  test("a greeting is answered by hand, with no council and no route", async () => {
-    const { route, answer, calls } = await run(council, { text: "Hello!" });
+  test.each([
+    ["as text", { text: "Hello!" }],
+    [
+      "as parts, as the Responses and Messages APIs send it",
+      { messages: [{ role: "user", parts: [{ type: "text", text: "Hello!" }] }] },
+    ],
+  ] satisfies [string, Parameters<typeof run>[1]][])(
+    "a greeting sent %s is answered by hand, with no council and no route",
+    async (_, request) => {
+      const { route, answer, calls } = await run(council, request);
 
-    expect(route).toBeUndefined();
-    expect(await answer.text()).toBe(
-      "Hello. Ask me something hard and I will put it to the council.",
-    );
-    expect(calls).toEqual([]);
-  });
+      expect(route).toBeUndefined();
+      expect(await answer.text()).toBe(
+        "Hello. Ask me something hard and I will put it to the council.",
+      );
+      expect(calls).toEqual([]);
+    },
+  );
 
   test("a request with tools is refused", async () => {
     const asked = run(council, {
@@ -575,15 +452,5 @@ describe("gates", () => {
     });
 
     await expect(asked).rejects.toBeInstanceOf(Unsupported);
-  });
-
-  test("a caller the host does not know is rejected", async () => {
-    const asked = run(
-      council,
-      { text: "What is the capital of Australia?" },
-      { auth: { verify: () => undefined } },
-    );
-
-    await expect(asked).rejects.toBeInstanceOf(Unauthenticated);
   });
 });

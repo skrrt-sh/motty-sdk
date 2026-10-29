@@ -41,8 +41,13 @@ const kimi: Parameters<typeof chatCompletionsIn>[0] = {
 
 // Kimi's models ask for reasoning in different words, and each refuses the
 // other's: the newest always reasons at one of three efforts, K2 has a
-// switch and no effort, and a coding or an older model has neither.
-const leveled = chatCompletionsIn({ ...kimi, efforts: ['low', 'high', 'max'] });
+// switch and no effort, and a coding or an older model has neither. Only
+// the newest keeps its cache an hour when asked, for the whole request.
+const leveled = chatCompletionsIn({
+  ...kimi,
+  efforts: ['low', 'high', 'max'],
+  lifetime: 'prompt_cache_options',
+});
 const switched = chatCompletionsIn({ ...kimi, asks: 'thinking', efforts: [] });
 const wordless = chatCompletionsIn({ ...kimi, efforts: [] });
 

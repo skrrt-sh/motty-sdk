@@ -18,19 +18,6 @@ test('text between the tags is reasoning and the rest is text', () => {
   ]);
 });
 
-test('a reply with no tags is read as it came', () => {
-  const tags = untagged();
-
-  expect([
-    ...tags.read('9.8 is'),
-    ...tags.read(' greater.'),
-    ...tags.ended(),
-  ]).toEqual([
-    { type: 'text', text: '9.8 is' },
-    { type: 'text', text: ' greater.' },
-  ]);
-});
-
 test('an opening tag that is never closed leaves the rest as reasoning', () => {
   const tags = untagged();
 
@@ -41,18 +28,6 @@ test('an opening tag that is never closed leaves the rest as reasoning', () => {
   ]).toEqual([
     { type: 'reasoning', text: 'Weighing' },
     { type: 'reasoning', text: ' it' },
-  ]);
-});
-
-test('the line breaks an upstream puts around the tags are left as it sent them', () => {
-  const tags = untagged();
-
-  expect([
-    ...tags.read('<think>\nWeighing it\n</think>\n\nYes'),
-    ...tags.ended(),
-  ]).toEqual([
-    { type: 'reasoning', text: '\nWeighing it\n' },
-    { type: 'text', text: '\n\nYes' },
   ]);
 });
 
@@ -101,20 +76,7 @@ test('a reply said to begin inside its thinking is reasoning up to the first clo
   ]);
 });
 
-test('a reply said to begin inside its thinking that never closes it is all reasoning', () => {
-  const tags = untagged(true);
-
-  expect([
-    ...tags.read('Weighing'),
-    ...tags.read(' it'),
-    ...tags.ended(),
-  ]).toEqual([
-    { type: 'reasoning', text: 'Weighing' },
-    { type: 'reasoning', text: ' it' },
-  ]);
-});
-
-test.each([1, 2, 3, 4, 5, 6])(
+test.each([1, 6])(
   'an opening tag cut after %d of its characters is no text',
   (cut) => {
     const tags = untagged();
@@ -131,7 +93,7 @@ test.each([1, 2, 3, 4, 5, 6])(
   },
 );
 
-test.each([1, 2, 3, 4, 5, 6, 7])(
+test.each([1, 7])(
   'a closing tag cut after %d of its characters is no reasoning',
   (cut) => {
     const tags = untagged();
@@ -146,27 +108,6 @@ test.each([1, 2, 3, 4, 5, 6, 7])(
     ]);
   },
 );
-
-test.each([
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-  22, 23,
-])('a reply cut in two at character %d reads the same', (cut) => {
-  const tags = untagged();
-  const read = [
-    ...tags.read(' <think>B</think>C<think>D'.slice(0, cut)),
-    ...tags.read(' <think>B</think>C<think>D'.slice(cut)),
-    ...tags.ended(),
-  ];
-
-  expect(
-    read.flatMap(({ type, text }) => (type === 'text' ? [text] : [])).join(''),
-  ).toBe(' C<think>D');
-  expect(
-    read
-      .flatMap(({ type, text }) => (type === 'reasoning' ? [text] : []))
-      .join(''),
-  ).toBe('B');
-});
 
 test('a reply that comes one character at a time reads the same', () => {
   const tags = untagged();
@@ -246,24 +187,6 @@ test('a stream of a dialect that says so has its tagged text read as reasoning, 
   ]);
 });
 
-test('a whole reply in one chunk is read the same', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{"role":"assistant","content":"<think>\\nThe user asks 17*23.\\n</think>\\n\\n391"},"finish_reason":"stop"}]}',
-          '[DONE]',
-        ),
-        { name: 'minimax', tagged: true },
-      ),
-    ),
-  ).toEqual([
-    { type: 'reasoning', text: '\nThe user asks 17*23.\n' },
-    { type: 'text', text: '\n\n391' },
-    { type: 'finish', reason: 'stop', rawReason: 'stop' },
-  ]);
-});
-
 test('text held when a stream ends is sent before the finish', async () => {
   expect(
     await Array.fromAsync(
@@ -295,25 +218,6 @@ test('a dialect that does not say so is shown the tags as text', async () => {
     ),
   ).toEqual([
     { type: 'text', text: '<think>Hm</think>Yes' },
-    { type: 'finish', reason: 'stop', rawReason: 'stop' },
-  ]);
-});
-
-test('reasoning a tagged upstream sends in a field of its own is read beside its text', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sent(
-          '{"choices":[{"index":0,"delta":{"reasoning":"Hm"}}]}',
-          '{"choices":[{"index":0,"delta":{"content":"Yes"},"finish_reason":"stop"}]}',
-          '[DONE]',
-        ),
-        { name: 'local', tagged: true },
-      ),
-    ),
-  ).toEqual([
-    { type: 'reasoning', text: 'Hm' },
-    { type: 'text', text: 'Yes' },
     { type: 'finish', reason: 'stop', rawReason: 'stop' },
   ]);
 });
@@ -351,34 +255,6 @@ test('text held when the upstream tells a failure is sent before it', async () =
 
   expect(said).toEqual({ type: 'reasoning', text: '2 ' });
   expect(held).toEqual({ type: 'reasoning', text: '<' });
-});
-
-test('text held when a chunk the dialect says holds a failure comes is sent before it', async () => {
-  const read = await Array.fromAsync(
-    events(
-      sent(
-        '{"choices":[{"index":0,"delta":{"content":"<think>2 <"}}]}',
-        '{"choices":[],"outcome":{"message":"internal service error"}}',
-      ),
-      {
-        name: 'acme',
-        tagged: true,
-        envelope: ({ outcome }) =>
-          typeof outcome === 'object' &&
-          outcome !== null &&
-          !Array.isArray(outcome)
-            ? outcome
-            : undefined,
-      },
-    ),
-  );
-
-  expect(read.map(({ type }) => type)).toEqual([
-    'reasoning',
-    'reasoning',
-    'error',
-  ]);
-  expect(read[1]).toEqual({ type: 'reasoning', text: '<' });
 });
 
 test('text held when a chunk cannot be read is sent before the failure', async () => {

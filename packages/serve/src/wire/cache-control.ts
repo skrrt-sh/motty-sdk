@@ -1,5 +1,5 @@
 import type { Cache, Json } from '@mottyjs/core/host';
-import { type Dict, given, isDict } from './json.ts';
+import { type Dict, dict, given, isDict, without } from './json.ts';
 import { invalid } from './refusals.ts';
 
 export function cacheOf(control: Json | undefined): { cache?: Cache } {
@@ -12,7 +12,25 @@ export function cacheOf(control: Json | undefined): { cache?: Cache } {
   return invalid('cache_control.ttl must be "5m" or "1h"');
 }
 
-export function cacheTo(cache: Cache | undefined): Dict {
-  if (cache === undefined) return {};
-  return { cache_control: given({ type: 'ephemeral', ttl: cache.ttl }) };
+// What a marker says beside its kind and lifetime, a scope among them, has
+// no neutral form, so its family keeps it to write back under the marker.
+export function cacheExtra(control: Json | undefined): Dict | undefined {
+  const extra = without(dict(control), ['type', 'ttl']);
+  return Object.keys(extra).length === 0 ? undefined : extra;
+}
+
+// With no neutral marker, an author's own whole one, which says its kind, is
+// sent as given; what was kept beside a marker taken away goes with it.
+export function cacheTo(cache: Cache | undefined, extra?: Json): Dict {
+  if (cache === undefined) {
+    const own = dict(extra);
+    const { type } = own;
+    return type === undefined ? {} : { cache_control: own };
+  }
+  return {
+    cache_control: {
+      ...dict(extra),
+      ...given({ type: 'ephemeral', ttl: cache.ttl }),
+    },
+  };
 }

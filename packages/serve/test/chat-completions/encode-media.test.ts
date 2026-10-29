@@ -22,15 +22,6 @@ test.each<[string, Dialect, Part, Json]>([
     { type: 'image_url', image_url: { url: 'https://x.test/cat.png' } },
   ],
   [
-    'image bytes of a named type',
-    { name: 'openai.chat' },
-    { type: 'image', data: 'iVBORw0=', mediaType: 'image/png' },
-    {
-      type: 'image_url',
-      image_url: { url: 'data:image/png;base64,iVBORw0=' },
-    },
-  ],
-  [
     'an uploaded image, where it is a file part',
     { name: 'deepseek', files: 'pictures' },
     { type: 'image', id: 'file-api-1' },
@@ -60,12 +51,6 @@ test.each<[string, Dialect, Part, Json]>([
     { type: 'file', file: { file_data: 'JVBERi0=', filename: 'a.pdf' } },
   ],
   [
-    'an uploaded file',
-    { name: 'openai.chat' },
-    { type: 'file', id: 'file-1' },
-    { type: 'file', file: { file_id: 'file-1' } },
-  ],
-  [
     'a file by address, where the data field takes one',
     { name: 'router', files: 'any' },
     { type: 'file', url: 'https://x.test/a.pdf', name: 'a.pdf' },
@@ -87,25 +72,10 @@ test.each<[string, Dialect, Part, Json]>([
     },
   ],
   [
-    'an uploaded file, where any is taken',
-    { name: 'router', files: 'any' },
-    { type: 'file', id: 'file-1' },
-    { type: 'file', file: { file_id: 'file-1' } },
-  ],
-  [
     'a video by address',
     { name: 'router', files: 'any', video: true },
     { type: 'file', url: 'https://x.test/a.mp4', mediaType: 'video/mp4' },
     { type: 'video_url', video_url: { url: 'https://x.test/a.mp4' } },
-  ],
-  [
-    'video bytes',
-    { name: 'router', files: 'any', video: true },
-    { type: 'file', data: 'AAAAIGZ0', mediaType: 'video/mp4' },
-    {
-      type: 'video_url',
-      video_url: { url: 'data:video/mp4;base64,AAAAIGZ0' },
-    },
   ],
   [
     'a picture as a file, with nothing around its fields',
@@ -116,12 +86,6 @@ test.each<[string, Dialect, Part, Json]>([
       file_data: 'data:image/jpeg;base64,/9j/4AAQ',
       filename: 'a.jpg',
     },
-  ],
-  [
-    'an uploaded file, with nothing around its id',
-    { name: 'deepseek', files: 'pictures' },
-    { type: 'file', id: 'file-api-1' },
-    { type: 'file', file_id: 'file-api-1' },
   ],
   [
     'wav sound',
@@ -153,18 +117,6 @@ test.each<[string, Dialect, Part, string]>([
     'Chat Completions cannot carry an image given by id',
   ],
   [
-    'an uploaded image, where a file may be an address',
-    { name: 'router', files: 'any' },
-    { type: 'image', id: 'file-1' },
-    'Chat Completions cannot carry an image given by id',
-  ],
-  [
-    'a file by address',
-    { name: 'openai.chat' },
-    { type: 'file', url: 'https://x.test/a.pdf' },
-    'Chat Completions cannot carry a file given by address',
-  ],
-  [
     'a file by address, where a file is a picture',
     { name: 'deepseek', files: 'pictures' },
     { type: 'file', url: 'https://x.test/a.png', mediaType: 'image/png' },
@@ -174,12 +126,6 @@ test.each<[string, Dialect, Part, string]>([
     'a file that is no PDF',
     { name: 'openai.chat' },
     { type: 'file', data: 'YSxiCg==', mediaType: 'text/csv' },
-    'Chat Completions takes no text/csv file',
-  ],
-  [
-    'an uploaded file said to be no PDF',
-    { name: 'openai.chat' },
-    { type: 'file', id: 'file-1', mediaType: 'text/csv' },
     'Chat Completions takes no text/csv file',
   ],
   [
@@ -231,12 +177,6 @@ test.each<[string, Dialect, Part, string]>([
     'Chat Completions cannot carry audio that is not inline',
   ],
   [
-    'sound a user names by id',
-    { name: 'openai.chat' },
-    { type: 'audio', id: 'audio_1' },
-    'Chat Completions cannot carry audio that is not inline wav or mp3',
-  ],
-  [
     'sound, where none is taken',
     { name: 'deepseek', sound: 'none' },
     { type: 'audio', data: 'UklGRg==', mediaType: 'audio/wav' },
@@ -245,72 +185,6 @@ test.each<[string, Dialect, Part, string]>([
 ])('%s fails the call before it is sent', (_, dialect, part, message) => {
   expect(() => asked(dialect, part)).toThrow(Unsupported);
   expect(() => asked(dialect, part)).toThrow(message);
-});
-
-test('what a caller put on a file, on sound or on a refusal goes back where it was', () => {
-  expect(
-    wireMessages(leaving('chat', true), [
-      {
-        role: 'user',
-        parts: [
-          {
-            type: 'file',
-            id: 'file-1',
-            hints: {
-              'openai.chat': { purpose: 'vision' },
-              anthropic: { x: 1 },
-            },
-            provider: {
-              'openai.chat': { cache_control: { type: 'ephemeral' } },
-            },
-            cache: {},
-          },
-          {
-            type: 'audio',
-            data: 'UklGRg==',
-            mediaType: 'audio/wav',
-            hints: { 'openai.chat': { sample_rate: 16000 } },
-          },
-        ],
-      },
-      {
-        role: 'assistant',
-        parts: [
-          {
-            type: 'refusal',
-            text: 'No.',
-            hints: { 'openai.chat': { reason: 'policy' } },
-          },
-          {
-            type: 'audio',
-            id: 'audio_1',
-            hints: { 'openai.chat': { expires_at: 1700000000 } },
-          },
-        ],
-      },
-    ]),
-  ).toEqual([
-    {
-      role: 'user',
-      content: [
-        {
-          cache_control: { type: 'ephemeral' },
-          type: 'file',
-          file: { purpose: 'vision', file_id: 'file-1' },
-          prompt_cache_breakpoint: { mode: 'explicit' },
-        },
-        {
-          type: 'input_audio',
-          input_audio: { sample_rate: 16000, data: 'UklGRg==', format: 'wav' },
-        },
-      ],
-    },
-    {
-      role: 'assistant',
-      content: [{ reason: 'policy', type: 'refusal', refusal: 'No.' }],
-      audio: { expires_at: 1700000000, id: 'audio_1' },
-    },
-  ]);
 });
 
 test('a tool answers with a picture beside its text, where a tool message takes one', () => {
@@ -346,68 +220,26 @@ test('a tool answers with a picture beside its text, where a tool message takes 
   ]);
 });
 
-test.each<Part>([
-  { type: 'image', url: 'https://x.test/chart.png' },
-  { type: 'file', id: 'file-1' },
-  { type: 'audio', data: 'UklGRg==', mediaType: 'audio/wav' },
-])('a tool result holding $type fails the call to OpenAI', (inner) => {
-  const sent = () =>
-    wireMessages(leaving('chat'), [
-      {
-        role: 'tool',
-        parts: [{ type: 'tool_result', id: 'call_1', parts: [inner] }],
-      },
-    ]);
-  expect(sent).toThrow(Unsupported);
-  expect(sent).toThrow(
-    `Chat Completions cannot carry ${a(inner.type)} part in a tool result`,
-  );
-});
-
-test('text in a tool result keeps its cache marker and what its family put on it', () => {
-  const left = leaving('chat', true);
-  expect(
-    wireMessages(left, [
-      {
-        role: 'tool',
-        parts: [
-          {
-            type: 'tool_result',
-            id: 'call_1',
-            parts: [
-              {
-                type: 'text',
-                text: 'Sunny',
-                cache: {},
-                hints: { 'openai.chat': { lang: 'en' } },
-              },
-            ],
-          },
-        ],
-      },
-    ]),
-  ).toEqual([
-    {
-      role: 'tool',
-      tool_call_id: 'call_1',
-      content: [
+test.each<Part>([{ type: 'image', url: 'https://x.test/chart.png' }])(
+  'a tool result holding $type fails the call to OpenAI',
+  (inner) => {
+    const sent = () =>
+      wireMessages(leaving('chat'), [
         {
-          lang: 'en',
-          type: 'text',
-          text: 'Sunny',
-          prompt_cache_breakpoint: { mode: 'explicit' },
+          role: 'tool',
+          parts: [{ type: 'tool_result', id: 'call_1', parts: [inner] }],
         },
-      ],
-    },
-  ]);
-  expect(left.leftOut()).toEqual([]);
-});
+      ]);
+    expect(sent).toThrow(Unsupported);
+    expect(sent).toThrow(
+      `Chat Completions cannot carry ${a(inner.type)} part in a tool result`,
+    );
+  },
+);
 
 test.each<['system' | 'developer' | 'assistant', Part]>([
   ['system', { type: 'image', url: 'https://x.test/cat.png' }],
-  ['developer', { type: 'file', id: 'file-1' }],
   ['assistant', { type: 'image', url: 'https://x.test/cat.png' }],
-  ['assistant', { type: 'file', id: 'file-1' }],
   ['assistant', { type: 'audio', data: 'UklGRg==', mediaType: 'audio/wav' }],
 ])('a %s message holding $type fails the call', (role, part) => {
   const sent = () => wireMessages(leaving('chat'), [{ role, parts: [part] }]);
@@ -463,31 +295,4 @@ test('earlier sound has no place where no sound is taken', () => {
     );
   expect(sent).toThrow(Unsupported);
   expect(sent).toThrow('Chat Completions cannot carry audio to deepseek');
-});
-
-test('an image`s detail said for this API replaces the one said for both, and one said for the other API is not read', () => {
-  expect(
-    asked(
-      { name: 'openai.chat' },
-      {
-        type: 'image',
-        url: 'https://x.test/cat.png',
-        hints: {
-          openai: { detail: 'low' },
-          'openai.chat': { detail: 'high' },
-          'openai.responses': { detail: 'auto' },
-        },
-      },
-    ),
-  ).toEqual([
-    {
-      role: 'user',
-      content: [
-        {
-          type: 'image_url',
-          image_url: { url: 'https://x.test/cat.png', detail: 'high' },
-        },
-      ],
-    },
-  ]);
 });

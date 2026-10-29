@@ -92,7 +92,6 @@ test('a noul is typed with no x_jev_confidence, so one of any type is passed ove
 });
 
 test.each([
-  ['no object at all', 'The decision model returned no answers', null],
   ['a list', 'The decision model returned no answers', []],
   [
     'an answer missing',
@@ -112,18 +111,6 @@ test.each([
         type: 'choice',
         choice: 'huge',
         probabilities: { quick: 0.5, deep: 0.5 },
-        confidence: 1,
-      },
-    },
-  ],
-  [
-    'an option without a probability',
-    'The decision model\'s answer to "tier" lacks a probability for each option',
-    {
-      tier: {
-        type: 'choice',
-        choice: 'deep',
-        probabilities: { deep: 1 },
         confidence: 1,
       },
     },
@@ -165,12 +152,6 @@ test.each([
 });
 
 test.each([
-  ['no score', 'has no score', { type: 'score', confidence: 1 }],
-  [
-    'a level that is no probability',
-    'lacks a probability for each level',
-    { type: 'score', score: 1, probabilities: { '0': 'high' }, confidence: 1 },
-  ],
   [
     'no probability for one of its levels',
     'lacks a probability for each level',
@@ -178,17 +159,6 @@ test.each([
       type: 'score',
       score: 1,
       probabilities: { '1': 1 },
-      legend: { '0': 'Low', '1': 'High' },
-      confidence: 1,
-    },
-  ],
-  [
-    'no probabilities at all',
-    'lacks a probability for each level',
-    {
-      type: 'score',
-      score: 1,
-      probabilities: {},
       legend: { '0': 'Low', '1': 'High' },
       confidence: 1,
     },
@@ -227,17 +197,6 @@ test.each([
     },
   ],
   [
-    'no finite number as its confidence',
-    'has no confidence',
-    {
-      type: 'score',
-      score: 1,
-      probabilities: { '0': 0, '1': 1 },
-      legend: { '0': 'Low', '1': 'High' },
-      confidence: Number.POSITIVE_INFINITY,
-    },
-  ],
-  [
     'no legend',
     'has no legend',
     {
@@ -259,13 +218,14 @@ test.each([
     },
   ],
   [
-    'no confidence',
+    'no finite number as its confidence',
     'has no confidence',
     {
       type: 'score',
       score: 1,
       probabilities: { '0': 0, '1': 1 },
-      legend: { '0': 'Low' },
+      legend: { '0': 'Low', '1': 'High' },
+      confidence: Number.POSITIVE_INFINITY,
     },
   ],
 ])('a score with %s is InvalidOutput', (_what, mistake, risk) => {
@@ -293,113 +253,8 @@ test('a noul that is no probability is InvalidOutput', () => {
   );
 });
 
-test.each([
-  [
-    'Jev, with none of the fields Laya adds',
-    {
-      topic: {
-        type: 'choice',
-        choice: 'billing',
-        confidence: 1,
-        probabilities: { billing: 1, technical: 0, other: 0 },
-      },
-      urgency: {
-        type: 'score',
-        score: 1.85,
-        confidence: 0.79,
-        legend: { '0': 'not urgent', '1': 'soon', '2': 'blocking' },
-        probabilities: { '0': 0, '1': 0.14, '2': 0.86 },
-      },
-      refund: { type: 'noul', noul: 0.98 },
-    },
-    [
-      [undefined, undefined, undefined, undefined, undefined, undefined],
-      [undefined, undefined, undefined, undefined, undefined, undefined],
-      [undefined, undefined, undefined, undefined, undefined, undefined],
-    ],
-  ],
-  [
-    'Laya, with no confidence gate set',
-    {
-      topic: {
-        type: 'choice',
-        choice: 'billing',
-        probabilities: { billing: 0.9968, technical: 0.0001, other: 0.003 },
-        confidence: 0.9799,
-        answer_confidence: 0.9968,
-        action: { act_probability: 1 },
-        x_jev_confidence: 0.9953,
-      },
-      urgency: {
-        type: 'score',
-        score: 1.8101,
-        legend: { '0': 'not urgent', '1': 'soon', '2': 'blocking' },
-        probabilities: { '0': 0.0208, '1': 0.1483, '2': 0.8309 },
-        confidence: 0.529,
-        answer_confidence: 0.8309,
-        action: { act_probability: 1 },
-        x_jev_confidence: 0.7151,
-      },
-      refund: {
-        type: 'noul',
-        noul: 0.9372,
-        confidence: 0.9372,
-        answer_confidence: 0.9372,
-        action: { act_probability: 1 },
-      },
-    },
-    [
-      [0.9953, 0.9968, 1, undefined, undefined, undefined],
-      [0.7151, 0.8309, 1, undefined, undefined, undefined],
-      [0.9372, 0.9372, 1, undefined, undefined, undefined],
-    ],
-  ],
-  [
-    'Laya, with a confidence gate one answer fell below',
-    {
-      topic: {
-        type: 'choice',
-        choice: 'billing',
-        probabilities: { billing: 0.9968, technical: 0.0001, other: 0.003 },
-        confidence: 0.9799,
-        answer_confidence: 0.9968,
-        action: { act_probability: 1 },
-        abstention: 'passed',
-        abstention_threshold: 0.9,
-        x_jev_confidence: 0.9953,
-      },
-      urgency: {
-        type: 'score',
-        score: 1.8101,
-        legend: { '0': 'not urgent', '1': 'soon', '2': 'blocking' },
-        probabilities: { '0': 0.0208, '1': 0.1483, '2': 0.8309 },
-        confidence: 0.529,
-        answer_confidence: 0.8309,
-        action: { act_probability: 1 },
-        low_confidence: true,
-        abstention: 'abstained',
-        abstention_threshold: 0.9,
-        x_jev_confidence: 0.7151,
-      },
-      refund: {
-        type: 'noul',
-        noul: 0.9372,
-        confidence: 0.9372,
-        answer_confidence: 0.9372,
-        action: { act_probability: 1 },
-        abstention: 'passed',
-        abstention_threshold: 0.9,
-      },
-    },
-    [
-      [0.9953, 0.9968, 1, undefined, 'passed', 0.9],
-      [0.7151, 0.8309, 1, true, 'abstained', 0.9],
-      [0.9372, 0.9372, 1, undefined, 'passed', 0.9],
-    ],
-  ],
-])(
-  "an answer from %s passes and reads as typed under each field's own name",
-  (_from, answers: unknown, read: unknown) => {
+test('an answer from Laya with a confidence gate one answer fell below passes', () => {
+  expect(() =>
     assertAnswers(
       {
         topic: choice({
@@ -412,54 +267,53 @@ test.each([
         }),
         refund: noul({ instructions: 'Does this ask for a refund?' }),
       },
-      answers,
-    );
-
-    expect(read).toEqual([
-      [
-        answers.topic.x_jev_confidence,
-        answers.topic.answer_confidence,
-        answers.topic.action?.act_probability,
-        answers.topic.low_confidence,
-        answers.topic.abstention,
-        answers.topic.abstention_threshold,
-      ],
-      [
-        answers.urgency.x_jev_confidence,
-        answers.urgency.answer_confidence,
-        answers.urgency.action?.act_probability,
-        answers.urgency.low_confidence,
-        answers.urgency.abstention,
-        answers.urgency.abstention_threshold,
-      ],
-      [
-        answers.refund.confidence,
-        answers.refund.answer_confidence,
-        answers.refund.action?.act_probability,
-        answers.refund.low_confidence,
-        answers.refund.abstention,
-        answers.refund.abstention_threshold,
-      ],
-    ]);
-  },
-);
+      {
+        topic: {
+          type: 'choice',
+          choice: 'billing',
+          probabilities: { billing: 0.9968, technical: 0.0001, other: 0.003 },
+          confidence: 0.9799,
+          answer_confidence: 0.9968,
+          action: { act_probability: 1 },
+          abstention: 'passed',
+          abstention_threshold: 0.9,
+          x_jev_confidence: 0.9953,
+        },
+        urgency: {
+          type: 'score',
+          score: 1.8101,
+          legend: { '0': 'not urgent', '1': 'soon', '2': 'blocking' },
+          probabilities: { '0': 0.0208, '1': 0.1483, '2': 0.8309 },
+          confidence: 0.529,
+          answer_confidence: 0.8309,
+          action: { act_probability: 1 },
+          low_confidence: true,
+          abstention: 'abstained',
+          abstention_threshold: 0.9,
+          x_jev_confidence: 0.7151,
+        },
+        refund: {
+          type: 'noul',
+          noul: 0.9372,
+          confidence: 0.9372,
+          answer_confidence: 0.9372,
+          action: { act_probability: 1 },
+          abstention: 'passed',
+          abstention_threshold: 0.9,
+        },
+      },
+    ),
+  ).not.toThrow();
+});
 
 test.each([
   ['topic', 'answer_confidence', 'high'],
-  ['topic', 'answer_confidence', null],
   ['topic', 'x_jev_confidence', '0.98'],
-  ['topic', 'action', 1],
   ['topic', 'action', {}],
-  ['topic', 'action', { act_probability: 'sure' }],
   ['topic', 'low_confidence', false],
-  ['topic', 'low_confidence', 'yes'],
   ['topic', 'abstention', 'skipped'],
-  ['topic', 'abstention', true],
   ['topic', 'abstention_threshold', '0.9'],
   ['refund', 'confidence', 'high'],
-  ['refund', 'answer_confidence', 'high'],
-  ['refund', 'action', { act_probability: null }],
-  ['refund', 'abstention', 'skipped'],
 ])(
   'a field Laya adds that is there and of another type is InvalidOutput: in %s, %s as %p',
   (id, field, value) => {

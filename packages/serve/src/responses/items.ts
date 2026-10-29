@@ -1,11 +1,11 @@
-import type { Json, Message, Part } from '@mottyjs/core/host';
+import type { Cache, Json, Message, Part } from '@mottyjs/core/host';
 import type { Leaving } from '../wire/fieldless.ts';
-import { type Dict, text, without } from '../wire/json.ts';
-import { breakpoint } from '../wire/openai-cache.ts';
+import { copied, type Dict, text, without } from '../wire/json.ts';
+import { asked, breakpoint } from '../wire/openai-cache.ts';
 import { a, unsupported } from '../wire/refusals.ts';
 import { inputContent } from './content.ts';
 import { carried, held, hinted, mine, own } from './family.ts';
-import { callNeutral, field } from './fields.ts';
+import { callNeutral, clientRun, field } from './fields.ts';
 
 type Call = Part & { type: 'tool_call' };
 type Result = Part & { type: 'tool_result' };
@@ -13,10 +13,19 @@ type Result = Part & { type: 'tool_result' };
 function callItem(left: Leaving, part: Call, custom: boolean): Dict {
   left.without('hosted', part.hosted);
   const written = part.raw ?? JSON.stringify(part.input);
+  const carried = { ...hinted(part.hints), ...mine(part.provider) };
+  if (clientRun(carried) !== undefined) {
+    const { input } = part;
+    const told = input === undefined ? written : copied(input);
+    return { ...carried, call_id: part.id, arguments: told };
+  }
+  // A call in a namespace is named apart from it everywhere but here.
+  const { namespace, name } = carried;
+  const spaced = typeof namespace === 'string' && typeof name === 'string';
   return {
-    ...without({ ...hinted(part.hints), ...mine(part.provider) }, callNeutral),
+    ...without(carried, callNeutral),
     call_id: part.id,
-    name: part.name,
+    name: spaced ? name : part.name,
     ...(custom
       ? {
           type: 'custom_tool_call',
@@ -26,14 +35,40 @@ function callItem(left: Leaving, part: Call, custom: boolean): Dict {
   };
 }
 
-function resultItem(left: Leaving, part: Result, custom: boolean): Dict {
+// A marker on a result sits on the last part of its output, as text parts
+// take one. Empty text is refused, and a key's implied marker is no ask.
+function resultItem(
+  left: Leaving,
+  part: Result,
+  custom: boolean,
+  held?: Cache,
+): Dict {
   left.without('hosted', part.hosted);
   left.without('tool_result.failed', part.failed);
+  const kept = carried(part, 'a tool result');
+  const cache = part.cache ?? held;
+  if (clientRun(kept) !== undefined) {
+    left.without('tool.cache', asked(cache));
+    return { ...kept, call_id: part.id };
+  }
+  const output =
+    part.text ?? part.parts.map((inner) => inputContent(left, inner));
+  const parts =
+    typeof output !== 'string'
+      ? output
+      : output === ''
+        ? []
+        : [{ type: 'input_text', text: output }];
+  const end = parts.at(-1);
+  const placed = cache !== undefined && left.marks && end !== undefined;
+  if (!placed) left.without('tool.cache', asked(cache));
   return {
-    ...carried(part, 'a tool result'),
+    ...kept,
     type: custom ? 'custom_tool_call_output' : 'function_call_output',
     call_id: part.id,
-    output: part.text ?? part.parts.map((inner) => inputContent(left, inner)),
+    output: placed
+      ? [...parts.slice(0, -1), { ...end, ...breakpoint(left, cache) }]
+      : output,
   };
 }
 
@@ -79,15 +114,21 @@ function items(
     role === 'assistant' || role === 'tool'
       ? undefined
       : message.parts.findLast((part) => !apart.includes(part.type));
-  if (closing === undefined) left.without('cache.outside', message.cache);
+  // With no content, an upstream that takes markers has one on the last result.
+  const answer =
+    closing === undefined && role !== 'assistant' && left.marks
+      ? message.parts.findLast((part) => part.type === 'tool_result')
+      : undefined;
+  if (closing === undefined && answer === undefined) {
+    left.without('cache.outside', message.cache);
+  }
   const input = (part: Part) => ({
     ...inputContent(left, part),
     ...(part === closing ? breakpoint(left, message.cache) : {}),
   });
   for (const part of message.parts) {
-    if (part.type === 'tool_call' || part.type === 'tool_result') {
-      left.without('tool.cache', part.cache);
-    } else if (part.type !== 'provider') {
+    if (part.type === 'tool_call') left.without('tool.cache', part.cache);
+    else if (part.type !== 'tool_result' && part.type !== 'provider') {
       const outside = role === 'assistant' || apart.includes(part.type);
       if (outside) left.without('cache.outside', part.cache);
     }
@@ -103,7 +144,14 @@ function items(
       }
       case 'tool_result':
         flushed();
-        out.push(resultItem(left, part, customCalls.has(part.id)));
+        out.push(
+          resultItem(
+            left,
+            part,
+            customCalls.has(part.id),
+            part === answer ? message.cache : undefined,
+          ),
+        );
         break;
       case 'reasoning': {
         // Reasoning this API did not sign, a motty's own progress or another
@@ -122,7 +170,13 @@ function items(
           break;
         }
         flushed();
-        out.push(item);
+        // A reply marks reasoning cut short, which OpenAI writes no status
+        // for and refuses one on input. Another router's own status stays.
+        out.push(
+          field(item, 'status') === 'incomplete'
+            ? without(item, ['status'])
+            : item,
+        );
         break;
       }
       case 'provider':
@@ -224,14 +278,16 @@ export function inputOf(
       continue;
     }
     const { text: said, cache } = message;
+    // Text stays a string unless a marker is written on it.
+    const marker = outside ? {} : breakpoint(left, cache);
     input.push({
       ...more,
       type: 'message',
       role: message.role,
       content:
-        outside || cache === undefined
+        Object.keys(marker).length === 0
           ? said
-          : [{ type: 'input_text', text: said, ...breakpoint(left, cache) }],
+          : [{ type: 'input_text', text: said, ...marker }],
     });
   }
   return { ...(instructions === undefined ? {} : { instructions }), input };

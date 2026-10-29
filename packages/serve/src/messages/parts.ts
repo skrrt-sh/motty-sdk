@@ -1,10 +1,17 @@
-import type { Cache, Content, Json, Media, Part } from '@mottyjs/core/host';
-import { cacheOf } from '../wire/cache-control.ts';
-import { type Dict, isDict } from '../wire/json.ts';
+import type {
+  Cache,
+  Content,
+  Json,
+  Media,
+  Part,
+  ProviderData,
+} from '@mottyjs/core/host';
+import { cacheExtra, cacheOf } from '../wire/cache-control.ts';
+import { type Dict, given, isDict } from '../wire/json.ts';
 import { invalid } from '../wire/refusals.ts';
-import { family, marked, noted } from './family.ts';
+import { family, marked, mine, noted } from './family.ts';
 
-type Marker = { cache?: Cache };
+type Marker = { cache?: Cache; hints?: ProviderData };
 
 function mediaOf(source: Json | undefined): Media | undefined {
   if (!isDict(source)) return undefined;
@@ -66,7 +73,9 @@ function callOf(fields: Dict, cache: Marker, hosted: boolean): Part {
     // Its own type marks a call this API's upstream ran as this API's. What
     // a caller's own call says beside its input came with the reply it
     // echoes, and another family answers the turn as well without it.
-    ...(hosted ? marked({ ...rest, type: 'server_tool_use' }) : noted(rest)),
+    ...(hosted
+      ? marked({ ...rest, type: 'server_tool_use' })
+      : noted({ ...mine(cache.hints), ...rest })),
   };
 }
 
@@ -89,7 +98,10 @@ function resultOf(fields: Dict, cache: Marker): Part {
 export function partsOf(raw: Json): Part[] {
   if (!isDict(raw)) invalid('A content block must be an object');
   const { type, cache_control: control, ...fields } = raw;
-  const cache = cacheOf(control);
+  const cache = {
+    ...cacheOf(control),
+    ...noted(given({ cache_control: cacheExtra(control) })),
+  };
   switch (type) {
     case 'text': {
       const { text, citations, ...rest } = fields;

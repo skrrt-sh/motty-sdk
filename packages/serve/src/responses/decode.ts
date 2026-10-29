@@ -1,5 +1,12 @@
-import type { Json, JsonOutput, Message, Options } from '@mottyjs/core/host';
+import type {
+  Chunk,
+  Json,
+  JsonOutput,
+  Message,
+  Options,
+} from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
+import { keyed, shared } from '../wire/cache-key.ts';
 import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import {
@@ -7,6 +14,7 @@ import {
   given as defined,
   dict,
   isDict,
+  list,
   text,
   without,
 } from '../wire/json.ts';
@@ -18,8 +26,9 @@ import { family, marked, noted } from './family.ts';
 import { field } from './fields.ts';
 import { formless } from './formless.ts';
 import { messagesOf } from './messages.ts';
+import { foundIn, spacesOf } from './namespaces.ts';
 import { collected, streamed } from './response.ts';
-import { choiceOf, toolOf } from './tools.ts';
+import { choiceOf, clientNames, toolOf } from './tools.ts';
 
 function given(body: Dict, key: string): Json | undefined {
   const { [key]: value } = body;
@@ -112,9 +121,9 @@ function optionsOf(body: Dict): Options {
   if (user !== undefined) options.user = user;
   // What may be left out when another family answers, then what may not.
   const dropped = [
+    'client_metadata',
     'include',
     'metadata',
-    'prompt_cache_key',
     'prompt_cache_retention',
     'prompt_cache_options',
     'safety_identifier',
@@ -128,6 +137,7 @@ function optionsOf(body: Dict): Options {
   const provider = {
     ...without(body, [
       ...dropped,
+      'prompt_cache_key',
       'model',
       'input',
       'instructions',
@@ -153,7 +163,11 @@ function optionsOf(body: Dict): Options {
     reasoning: meant(thinking),
     text: meant(writing),
   };
-  return { ...options, ...noted(meant(hints)), ...marked(provider) };
+  return {
+    ...options,
+    ...shared(noted(meant(hints)), given(body, 'prompt_cache_key')),
+    ...marked(provider),
+  };
 }
 
 // Instructions lead the conversation; the mark puts them back in their own
@@ -187,8 +201,10 @@ export function decode(body: Json): Decoded {
     invalid('tools must be a list');
   }
   refused(body);
-  const tools = (listed ?? []).map((tool, index) =>
-    toolOf(tool, `tools[${index}]`),
+  const { tools, spaced, named } = spacesOf(
+    listed ?? [],
+    foundIn(field(body, 'input')),
+    toolOf,
   );
   const options = optionsOf(body);
   const output = outputOf(field(given(body, 'text'), 'format'));
@@ -197,21 +213,31 @@ export function decode(body: Json): Decoded {
     // A caller who gets no reasoning from a model gets no progress either.
     muted: options.reasoning?.exclude === true || !('reasoning' in options),
     custom: customNames(tools),
+    spaced,
+    clients: clientNames(tools),
+    encrypted: list(given(body, 'include')).includes(
+      'reasoning.encrypted_content',
+    ),
   };
+  const shaped = (chunk: Chunk) => formless(chunk, asked.encrypted);
   return {
     request: {
       model,
-      messages: [
-        ...led(given(body, 'instructions')),
-        ...messagesOf(field(body, 'input')),
-      ],
+      messages: keyed(
+        [
+          ...led(given(body, 'instructions')),
+          ...messagesOf(field(body, 'input'), named),
+        ],
+        given(body, 'prompt_cache_key'),
+      ),
       tools,
       options,
       ...(output === undefined ? {} : { output }),
     },
     stream: stream === true,
-    streamed: (events, id) => streamed(asked, formed(events, formless), id),
+    formless: shaped,
+    streamed: (events, id) => streamed(asked, formed(events, shaped), id),
     collected: (events, finish, id) =>
-      collected(asked, formedWhole(events, formless), finish, id),
+      collected(asked, formedWhole(events, shaped), finish, id),
   };
 }

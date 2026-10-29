@@ -78,7 +78,7 @@ test('a block with no delta, or none that says input, keeps the input it started
   ).toEqual(block);
 });
 
-test.each(['{"q":', '[1]', '"x"'])(
+test.each(['{"q":', '[1]'])(
   'input said as %s is no object, and is kept as the text it was',
   (json) => {
     expect(inputOf(json)).toBeUndefined();

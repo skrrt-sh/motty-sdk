@@ -1,5 +1,6 @@
 import type { Json, Tool, ToolChoice } from '@mottyjs/core/host';
-import { type Dict, dict, isDict, list } from '../wire/json.ts';
+import { cacheExtra, cacheOf } from '../wire/cache-control.ts';
+import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
 import { parameterless } from '../wire/openai-tools.ts';
 import { invalid } from '../wire/refusals.ts';
 import { family, noted } from './family.ts';
@@ -30,13 +31,18 @@ export function toolOf(raw: Json): Tool {
     if (typeof name !== 'string') {
       invalid('A function tool needs a name');
     }
+    // A router's marker, as a client of this family writes one, is the
+    // tool's own, and what it says beside its kind goes back under it.
+    const { cache_control: control, ...rest } = raw;
+    const unread = unreadOf(rest, 'function', toolFields);
     return {
       type,
       name,
       ...described(description),
       input: isDict(parameters) ? parameters : parameterless(),
       ...(typeof strict === 'boolean' ? { strict } : {}),
-      ...noted(unreadOf(raw, 'function', toolFields) ?? {}),
+      ...cacheOf(control),
+      ...noted({ ...unread, ...given({ cache_control: cacheExtra(control) }) }),
     };
   }
   if (type === 'custom') {

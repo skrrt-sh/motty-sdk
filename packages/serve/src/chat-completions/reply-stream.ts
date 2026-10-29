@@ -64,8 +64,20 @@ export async function* streamed(
   };
   // A caller who asked for usage is sent the field on every chunk.
   const counted = given.usage ? { usage: null } : {};
-  const piece = pieces(given.muted, given.custom);
+  const { piece, ended } = pieces(given.muted, given.custom);
   let role: Dict = { role: 'assistant' };
+  function sent(added: Piece): ServerSentEvent {
+    const choice = {
+      index: 0,
+      delta: { ...role, ...delta(added) },
+      logprobs: logprobs(added),
+      finish_reason: null,
+    };
+    role = {};
+    return {
+      data: JSON.stringify({ ...head, choices: [choice], ...counted }),
+    };
+  }
   for await (const event of events) {
     if (event.type === 'error') {
       // A failed stream ends on an error frame and is never marked done, so
@@ -74,6 +86,7 @@ export async function* streamed(
       return;
     }
     if (event.type === 'finish') {
+      for (const added of ended()) yield sent(added);
       const fields = { ...head, ...replyFields(event) };
       const choice = {
         index: 0,
@@ -92,14 +105,6 @@ export async function* streamed(
       return;
     }
     const added = piece(event);
-    if (added === undefined) continue;
-    const choice = {
-      index: 0,
-      delta: { ...role, ...delta(added) },
-      logprobs: logprobs(added),
-      finish_reason: null,
-    };
-    role = {};
-    yield { data: JSON.stringify({ ...head, choices: [choice], ...counted }) };
+    if (added !== undefined) yield sent(added);
   }
 }

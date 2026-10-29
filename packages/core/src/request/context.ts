@@ -263,7 +263,7 @@ export function openCall(name: string, under?: AbortSignal): OpenCall {
   // Calls still in flight count too, or concurrent calls would pass the limit.
   if (limits.calls !== undefined && live.begun >= limits.calls) {
     throw new LimitReached(
-      `The request reached its limit of ${limits.calls} calls`,
+      `The request needs more model calls than the ${limits.calls} this host allows`,
     );
   }
   live.begun += 1;

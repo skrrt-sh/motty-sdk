@@ -8,6 +8,8 @@ type Reasoning = NonNullable<Options['reasoning']>;
 function effortOf(raw: Json | undefined): Reasoning['effort'] {
   switch (raw) {
     case undefined:
+    case null:
+      return undefined;
     case 'low':
     case 'medium':
     case 'high':

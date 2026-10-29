@@ -9,33 +9,47 @@ export type Bounds = { size: number; time: number };
 
 // What is left of the body is never read, so nothing more can be read from
 // the connection either.
-function cut(codec: Codec, status: number, message: string): Response {
-  const refusal = failed(codec, new InvalidRequest(message, { status }));
+function cut(codec: Codec, thrown: unknown): Response {
+  const refusal = failed(codec, thrown);
   refusal.headers.set('connection', 'close');
   return refusal;
 }
 
 // Counted as it is read: a stated length is the caller's word, and a body
-// may come with none.
+// may come with none. A shutdown that waited long enough stops it too.
 async function textOf(
   codec: Codec,
   request: Request,
   { size, time }: Bounds,
+  stopped: AbortSignal,
 ): Promise<string | Response> {
   const tooLarge = () =>
     cut(
       codec,
-      413,
-      `The body is larger than the ${size} bytes this server takes`,
+      new InvalidRequest(
+        `The body is larger than the ${size} bytes this server takes`,
+        { status: 413 },
+      ),
     );
   if (Number(request.headers.get('content-length')) > size) return tooLarge();
   if (request.body === null) return '';
   const reader = request.body.getReader();
-  let late = false;
-  const timer = setTimeout(() => {
-    late = true;
+  let ended: unknown;
+  const end = (why: unknown) => {
+    ended ??= why;
     reader.cancel().catch(() => {});
-  }, time);
+  };
+  const timer = setTimeout(
+    () =>
+      end(
+        new InvalidRequest(`The body did not arrive within ${time} ms`, {
+          status: 408,
+        }),
+      ),
+    time,
+  );
+  const stop = () => end(stopped.reason);
+  stopped.addEventListener('abort', stop);
   try {
     const decoder = new TextDecoder();
     let text = '';
@@ -50,11 +64,10 @@ async function textOf(
       }
       text += decoder.decode(value, { stream: true });
     }
-    return late
-      ? cut(codec, 408, `The body did not arrive within ${time} ms`)
-      : text + decoder.decode();
+    return ended === undefined ? text + decoder.decode() : cut(codec, ended);
   } finally {
     clearTimeout(timer);
+    stopped.removeEventListener('abort', stop);
   }
 }
 
@@ -62,6 +75,7 @@ export async function bodyOf(
   codec: Codec,
   request: Request,
   bounds: Bounds,
+  stopped: AbortSignal,
 ): Promise<Json | Response> {
   const type = request.headers.get('content-type');
   if (type !== null && !/\bjson\b/i.test(type)) {
@@ -69,7 +83,7 @@ export async function bodyOf(
       `The body must be JSON, sent as application/json and not as ${type}`,
     );
   }
-  const text = await textOf(codec, request, bounds);
+  const text = await textOf(codec, request, bounds, stopped);
   if (text instanceof Response) return text;
   const body = parsed(text);
   if (body === undefined) {

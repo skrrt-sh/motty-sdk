@@ -61,12 +61,16 @@ export function dashscope(
   return chat({
     // Thinking is a flag with a budget beside it. The newest model's effort
     // may not be sent with a budget, so it is left to the author's own words.
+    // A marked prefix is read at half the price of one cached by itself, and
+    // is kept five minutes alone.
     codec: chatCompletionsIn({
       name: 'dashscope',
       thought: 'reasoning_content',
       asks: 'enable_thinking',
       efforts: [],
       topK: true,
+      breakpoints: 'cache_control',
+      lifetime: '5m',
       failures,
     }),
     prefix,

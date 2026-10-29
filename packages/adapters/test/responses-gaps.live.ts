@@ -15,7 +15,7 @@ describe.skipIf(openrouterKey === undefined || openrouterKey === '')(
       const reports: Report[] = [];
       const served = mount(
         motty({ name: 'relay' }).handle(({ prompt }) =>
-          model('router/anthropic/claude-haiku-4.5').complete(prompt),
+          model('router/anthropic/claude-haiku-5.5').complete(prompt),
         ),
         () => ({
           models: [
@@ -77,7 +77,7 @@ describe.skipIf(openaiKey === undefined || openaiKey === '')(
       const reports: Report[] = [];
       const served = mount(
         motty({ name: 'relay' }).handle(({ prompt }) =>
-          model('openai/gpt-4.1-mini').complete(prompt),
+          model('openai/gpt-6-luna').complete(prompt),
         ),
         () => ({
           models: [

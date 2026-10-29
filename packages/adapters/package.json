@@ -1,7 +1,7 @@
 {
   "name": "@mottyjs/adapters",
   "version": "0.1.1",
-  "description": "Host-side adapters for a motty: model providers, Redis storage, and jwt and bearer auth.",
+  "description": "Host-side adapters for a motty: model providers, Redis and Durable Object storage, and jwt and bearer auth.",
   "keywords": [
     "motty",
     "llm",
@@ -10,8 +10,10 @@
     "anthropic",
     "openrouter",
     "redis",
+    "cloudflare-objects",
     "jwt",
-    "bun"
+    "bun",
+    "cloudflare-workers"
   ],
   "license": "Apache-2.0",
   "author": "Skrrt LLC",
@@ -38,96 +40,118 @@
     "./openai": {
       "@mottyjs/source": "./src/openai.ts",
       "types": "./dist/openai.d.ts",
-      "default": "./src/openai.ts"
+      "bun": "./src/openai.ts",
+      "default": "./dist/openai.js"
     },
     "./anthropic": {
       "@mottyjs/source": "./src/anthropic.ts",
       "types": "./dist/anthropic.d.ts",
-      "default": "./src/anthropic.ts"
+      "bun": "./src/anthropic.ts",
+      "default": "./dist/anthropic.js"
     },
     "./openrouter": {
       "@mottyjs/source": "./src/openrouter.ts",
       "types": "./dist/openrouter.d.ts",
-      "default": "./src/openrouter.ts"
+      "bun": "./src/openrouter.ts",
+      "default": "./dist/openrouter.js"
     },
     "./deepseek": {
       "@mottyjs/source": "./src/deepseek.ts",
       "types": "./dist/deepseek.d.ts",
-      "default": "./src/deepseek.ts"
+      "bun": "./src/deepseek.ts",
+      "default": "./dist/deepseek.js"
     },
     "./moonshot": {
       "@mottyjs/source": "./src/moonshot.ts",
       "types": "./dist/moonshot.d.ts",
-      "default": "./src/moonshot.ts"
+      "bun": "./src/moonshot.ts",
+      "default": "./dist/moonshot.js"
     },
     "./zai": {
       "@mottyjs/source": "./src/zai.ts",
       "types": "./dist/zai.d.ts",
-      "default": "./src/zai.ts"
+      "bun": "./src/zai.ts",
+      "default": "./dist/zai.js"
     },
     "./dashscope": {
       "@mottyjs/source": "./src/dashscope.ts",
       "types": "./dist/dashscope.d.ts",
-      "default": "./src/dashscope.ts"
+      "bun": "./src/dashscope.ts",
+      "default": "./dist/dashscope.js"
     },
     "./minimax": {
       "@mottyjs/source": "./src/minimax.ts",
       "types": "./dist/minimax.d.ts",
-      "default": "./src/minimax.ts"
+      "bun": "./src/minimax.ts",
+      "default": "./dist/minimax.js"
     },
     "./groq": {
       "@mottyjs/source": "./src/groq.ts",
       "types": "./dist/groq.d.ts",
-      "default": "./src/groq.ts"
+      "bun": "./src/groq.ts",
+      "default": "./dist/groq.js"
     },
     "./mistral": {
       "@mottyjs/source": "./src/mistral.ts",
       "types": "./dist/mistral.d.ts",
-      "default": "./src/mistral.ts"
+      "bun": "./src/mistral.ts",
+      "default": "./dist/mistral.js"
     },
     "./together": {
       "@mottyjs/source": "./src/together.ts",
       "types": "./dist/together.d.ts",
-      "default": "./src/together.ts"
+      "bun": "./src/together.ts",
+      "default": "./dist/together.js"
     },
     "./fireworks": {
       "@mottyjs/source": "./src/fireworks.ts",
       "types": "./dist/fireworks.d.ts",
-      "default": "./src/fireworks.ts"
+      "bun": "./src/fireworks.ts",
+      "default": "./dist/fireworks.js"
     },
     "./ollama": {
       "@mottyjs/source": "./src/ollama.ts",
       "types": "./dist/ollama.d.ts",
-      "default": "./src/ollama.ts"
+      "bun": "./src/ollama.ts",
+      "default": "./dist/ollama.js"
     },
     "./local": {
       "@mottyjs/source": "./src/local.ts",
       "types": "./dist/local.d.ts",
-      "default": "./src/local.ts"
+      "bun": "./src/local.ts",
+      "default": "./dist/local.js"
     },
     "./takes": {
       "@mottyjs/source": "./src/takes.ts",
       "types": "./dist/takes.d.ts",
-      "default": "./src/takes.ts"
+      "bun": "./src/takes.ts",
+      "default": "./dist/takes.js"
     },
     "./typesafe": {
       "@mottyjs/source": "./src/typesafe.ts",
       "types": "./dist/typesafe.d.ts",
-      "default": "./src/typesafe.ts"
+      "bun": "./src/typesafe.ts",
+      "default": "./dist/typesafe.js"
     },
     "./redis": {
       "@mottyjs/source": "./src/redis.ts",
       "types": "./dist/redis.d.ts",
-      "default": "./src/redis.ts"
+      "bun": "./src/redis.ts"
+    },
+    "./cloudflare": {
+      "@mottyjs/source": "./src/cloudflare.ts",
+      "types": "./dist/cloudflare.d.ts",
+      "workerd": "./dist/cloudflare.js"
     },
     "./jwt": {
       "@mottyjs/source": "./src/jwt.ts",
       "types": "./dist/jwt.d.ts",
-      "default": "./src/jwt.ts"
+      "bun": "./src/jwt.ts",
+      "default": "./dist/jwt.js"
     }
   },
   "scripts": {
-    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/adapters/src dist"
+    "prepack": "bun run --cwd ../.. build && rm -rf dist && cp -R ../../dist/adapters/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*",

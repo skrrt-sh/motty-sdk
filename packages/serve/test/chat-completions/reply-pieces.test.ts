@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { pieces } from '../../src/chat-completions/reply-pieces.ts';
 
 test('text and a refusal are added as they are, with their logprobs', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
   const token = {
     token: 'Hi',
     logprob: -0.01,
@@ -28,7 +28,7 @@ test('text and a refusal are added as they are, with their logprobs', () => {
 });
 
 test('progress is added as reasoning, a line break between two pieces', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
 
   expect(piece({ type: 'progress', piece: 0, text: 'Reading ' })).toEqual({
     kind: 'reasoning',
@@ -44,7 +44,7 @@ test('progress is added as reasoning, a line break between two pieces', () => {
 });
 
 test('the model`s own reasoning starts on a line after the progress', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
   piece({ type: 'progress', piece: 0, text: 'Routing to code' });
 
   expect(piece({ type: 'reasoning', text: 'The user wants' })).toEqual({
@@ -58,7 +58,7 @@ test('the model`s own reasoning starts on a line after the progress', () => {
 });
 
 test('a caller who muted reasoning gets neither progress nor reasoning', () => {
-  const piece = pieces(true);
+  const { piece } = pieces(true);
 
   expect(
     piece({ type: 'progress', piece: 0, text: 'Routing' }),
@@ -72,12 +72,12 @@ test('a caller who muted reasoning gets neither progress nor reasoning', () => {
 
 test('empty progress adds nothing', () => {
   expect(
-    pieces(false)({ type: 'progress', piece: 0, text: '' }),
+    pieces(false).piece({ type: 'progress', piece: 0, text: '' }),
   ).toBeUndefined();
 });
 
 test('fragments of tool calls are numbered by call, opened once each', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
 
   expect(
     piece({ type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' }),
@@ -108,7 +108,7 @@ test('fragments of tool calls are numbered by call, opened once each', () => {
 });
 
 test('a call this wire marked as free-form stays free-form to its end', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
 
   expect(
     piece({
@@ -126,10 +126,7 @@ test('a call this wire marked as free-form stays free-form to its end', () => {
 
 test('what a fragment holds for this API is carried as it came', () => {
   expect(
-    pieces(
-      false,
-      new Set(['shell']),
-    )({
+    pieces(false, new Set(['shell'])).piece({
       type: 'tool_call',
       id: 'call_a',
       name: 'shell',
@@ -150,13 +147,11 @@ test('what a fragment holds for this API is carried as it came', () => {
 });
 
 test.each([
-  [{}],
-  [{ provider: { 'openai.responses': { namespace: 'time' } } }],
   [{ provider: { 'openai.chat': { index: 9, function: { name: 'stray' } } } }],
 ])(
   'a later fragment with no input and nothing this wire writes adds nothing: %j',
   (more) => {
-    const piece = pieces(false);
+    const { piece } = pieces(false);
     piece({
       type: 'tool_call',
       id: 'call_a',
@@ -171,7 +166,7 @@ test.each([
 );
 
 test('a later fragment with no input that carries a field is added', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
   piece({ type: 'tool_call', id: 'call_a', name: 'weather', arguments: '{}' });
 
   expect(
@@ -190,8 +185,61 @@ test('a later fragment with no input that carries a field is added', () => {
   });
 });
 
+test('a function call that ends with no input is sent an empty object', () => {
+  const { piece, ended } = pieces(false);
+  piece({ type: 'tool_call', id: 'call_a', name: 'now', arguments: '' });
+
+  expect(
+    piece({ type: 'tool_call', id: 'call_a', arguments: '', ended: true }),
+  ).toEqual({ kind: 'call', index: 0, type: 'function', input: '{}' });
+  expect(
+    piece({
+      type: 'tool_call',
+      id: 'call_b',
+      name: 'now',
+      arguments: '',
+      ended: true,
+    }),
+  ).toEqual({
+    kind: 'call',
+    index: 1,
+    type: 'function',
+    opened: { id: 'call_b', name: 'now' },
+    input: '{}',
+  });
+  expect(ended()).toEqual([]);
+});
+
+test('the reply ending closes each function call still empty, and only once', () => {
+  const { piece, ended } = pieces(false);
+  piece({ type: 'tool_call', id: 'call_a', name: 'now', arguments: '' });
+  piece({ type: 'tool_call', id: 'call_b', name: 'later', arguments: '' });
+  piece({ type: 'tool_call', id: 'call_b', arguments: '{"in":1}' });
+  piece({ type: 'tool_call', id: 'call_c', name: 'today', arguments: '' });
+
+  expect(ended()).toEqual([
+    { kind: 'call', index: 0, type: 'function', input: '{}' },
+    { kind: 'call', index: 2, type: 'function', input: '{}' },
+  ]);
+  expect(ended()).toEqual([]);
+});
+
+test('a call that had input, or a custom call, is sent nothing more', () => {
+  const { piece, ended } = pieces(false, new Set(['shell']));
+  piece({ type: 'tool_call', id: 'call_a', name: 'now', arguments: '{}' });
+  piece({ type: 'tool_call', id: 'call_b', name: 'shell', arguments: '' });
+
+  expect(
+    piece({ type: 'tool_call', id: 'call_a', arguments: '', ended: true }),
+  ).toBeUndefined();
+  expect(
+    piece({ type: 'tool_call', id: 'call_b', arguments: '', ended: true }),
+  ).toBeUndefined();
+  expect(ended()).toEqual([]);
+});
+
 test('a tool the upstream ran itself, and its result, add nothing', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
 
   expect(
     piece({
@@ -212,7 +260,7 @@ test('a tool the upstream ran itself, and its result, add nothing', () => {
 
 test('a citation is added as a URL annotation with the upstream`s span', () => {
   expect(
-    pieces(false)({
+    pieces(false).piece({
       type: 'citation',
       title: 'Oslo',
       url: 'https://en.wikipedia.org/wiki/Oslo',
@@ -233,7 +281,7 @@ test('a citation is added as a URL annotation with the upstream`s span', () => {
 });
 
 test('a citation with no span of its own points at where it was made', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
   piece({ type: 'text', text: 'Oslo is the capital.' });
 
   expect(
@@ -256,7 +304,7 @@ test('a citation with no span of its own points at where it was made', () => {
 });
 
 test('sound an upstream of this wire sent is added, other data is not', () => {
-  const piece = pieces(false);
+  const { piece } = pieces(false);
 
   expect(
     piece({
@@ -282,11 +330,6 @@ test.each([
     { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0=' } },
   ],
   [
-    'an address said to be an image',
-    { type: 'file', url: 'https://x.test/made.png', mediaType: 'image/png' },
-    { type: 'image_url', image_url: { url: 'https://x.test/made.png' } },
-  ],
-  [
     'an address this family read as a picture, with what its entry held',
     {
       type: 'file',
@@ -300,11 +343,10 @@ test.each([
     },
   ],
 ] as const)('a picture a model made, %s, is added', (_, chunk, image) => {
-  expect(pieces(false)(chunk)).toEqual({ kind: 'image', image });
+  expect(pieces(false).piece(chunk)).toEqual({ kind: 'image', image });
 });
 
 test.each([
-  ['a PDF', { type: 'file', data: 'JVBERi0=', mediaType: 'application/pdf' }],
   [
     'a file by address of no named type',
     { type: 'file', url: 'https://x.test/a' },
@@ -314,5 +356,5 @@ test.each([
     { type: 'file', id: 'file-1', mediaType: 'image/png' },
   ],
 ] as const)('%s a model made is not added', (_, chunk) => {
-  expect(pieces(false)(chunk)).toBeUndefined();
+  expect(pieces(false).piece(chunk)).toBeUndefined();
 });

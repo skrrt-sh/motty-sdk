@@ -1,7 +1,7 @@
 {
   "name": "@mottyjs/serve",
   "version": "0.1.1",
-  "description": "The host side of a motty on Bun: serves it as a model over the Chat Completions, Responses and Messages APIs.",
+  "description": "The host side of a motty: serves it as a model over the Chat Completions, Responses and Messages APIs, on Bun or Cloudflare Workers.",
   "keywords": [
     "motty",
     "llm",
@@ -10,7 +10,8 @@
     "chat-completions",
     "responses-api",
     "messages-api",
-    "bun"
+    "bun",
+    "cloudflare-workers"
   ],
   "license": "Apache-2.0",
   "author": "Skrrt LLC",
@@ -37,47 +38,45 @@
     ".": {
       "@mottyjs/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
-      "default": "./src/index.ts"
+      "bun": "./src/index.ts",
+      "default": "./dist/index.js"
     },
     "./codec": {
       "@mottyjs/source": "./src/codec.ts",
       "types": "./dist/codec.d.ts",
-      "default": "./src/codec.ts"
+      "bun": "./src/codec.ts",
+      "default": "./dist/codec.js"
     },
     "./sse": {
       "@mottyjs/source": "./src/sse.ts",
       "types": "./dist/sse.d.ts",
-      "default": "./src/sse.ts"
+      "bun": "./src/sse.ts",
+      "default": "./dist/sse.js"
     },
     "./upstream-failure": {
       "@mottyjs/source": "./src/wire/upstream-failure.ts",
       "types": "./dist/wire/upstream-failure.d.ts",
-      "default": "./src/wire/upstream-failure.ts"
+      "bun": "./src/wire/upstream-failure.ts",
+      "default": "./dist/wire/upstream-failure.js"
     },
     "./messages-failure": {
       "@mottyjs/source": "./src/messages/errors.ts",
       "types": "./dist/messages/errors.d.ts",
-      "default": "./src/messages/errors.ts"
+      "bun": "./src/messages/errors.ts",
+      "default": "./dist/messages/errors.js"
     },
     "./retry-after": {
       "@mottyjs/source": "./src/wire/retry-after.ts",
       "types": "./dist/wire/retry-after.d.ts",
-      "default": "./src/wire/retry-after.ts"
+      "bun": "./src/wire/retry-after.ts",
+      "default": "./dist/wire/retry-after.js"
     }
   },
   "scripts": {
-    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/serve/src dist"
+    "prepack": "bun run --cwd ../.. build && rm -rf dist && cp -R ../../dist/serve/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*"
-  },
-  "peerDependencies": {
-    "@types/bun": ">=1.4.2"
-  },
-  "peerDependenciesMeta": {
-    "@types/bun": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@mottyjs/auth": "workspace:*",

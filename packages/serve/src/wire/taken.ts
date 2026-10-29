@@ -2,7 +2,7 @@ import type { Json, Options } from '@mottyjs/core/host';
 import type { Taken } from '../codec.ts';
 import { type Effort, nearest } from './effort.ts';
 import type { Leaving } from './fieldless.ts';
-import { type Dict, given } from './json.ts';
+import { type Dict, given, picked } from './json.ts';
 
 // What a request says of reasoning, read from the effort it is sent with:
 // an order not to reason, an effort or a budget, or nothing.
@@ -50,9 +50,7 @@ export function unsampled(defaults: Dict, options: Options): Dict {
     presence_penalty: presencePenalty,
     frequency_penalty: frequencyPenalty,
   });
-  return Object.fromEntries(
-    Object.entries(defaults).filter(([name]) => !Object.hasOwn(stated, name)),
-  );
+  return picked(defaults, (name) => !Object.hasOwn(stated, name));
 }
 
 // What the author said in the API's own words is sent as said, so the

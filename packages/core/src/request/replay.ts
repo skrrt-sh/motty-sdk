@@ -16,30 +16,10 @@ export async function* replayed<Item>(
   signal: AbortSignal | undefined,
 ): AsyncGenerator<Item, undefined> {
   let read = 0;
+  let stopped = false;
   let wake: (() => void) | undefined;
-  let giveUp: ((stop: unknown) => void) | undefined;
   let unfollow: (() => void) | undefined;
-  const park = (resolve: () => void, reject: (stop: unknown) => void) => {
-    wake = resolve;
-    giveUp = reject;
-  };
-
-  function follow(): () => void {
-    const unsubscribe = onArrival(() => wake?.());
-    const unwatch =
-      signal === undefined
-        ? undefined
-        : onAbort(
-            signal,
-            () => giveUp?.(stopReason(signal.reason)),
-            'afterTurn',
-          );
-    return () => {
-      unsubscribe();
-      unwatch?.();
-    };
-  }
-
+  let unwatch: (() => void) | undefined;
   try {
     while (true) {
       const item = buffer[read];
@@ -51,10 +31,28 @@ export async function* replayed<Item>(
       const now = state();
       if (now.at === 'finished') return;
       if (now.at === 'failed') throw now.error();
-      unfollow ??= follow();
-      await new Promise<void>(park);
+      unfollow ??= onArrival(() => wake?.());
+      // Followed once and the stop kept, so a stop told while no read waited
+      // still ends the next one.
+      unwatch ??=
+        signal &&
+        onAbort(
+          signal,
+          () => {
+            stopped = true;
+            wake?.();
+          },
+          'afterTurn',
+        );
+      if (!stopped) {
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+      }
+      if (stopped) throw stopReason(signal?.reason);
     }
   } finally {
     unfollow?.();
+    unwatch?.();
   }
 }

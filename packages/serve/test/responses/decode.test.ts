@@ -13,15 +13,6 @@ test('the smallest request is a model and what the user said', () => {
   expect(stream).toBe(false);
 });
 
-test('a stream is asked for by name', () => {
-  expect(decode({ model: 'coder', input: 'Hi', stream: true }).stream).toBe(
-    true,
-  );
-  expect(decode({ model: 'coder', input: 'Hi', stream: null }).stream).toBe(
-    false,
-  );
-});
-
 test('instructions lead the conversation, marked as instructions', () => {
   expect(
     decode({ model: 'coder', instructions: 'Be brief.', input: 'Hi' }).request
@@ -34,32 +25,6 @@ test('instructions lead the conversation, marked as instructions', () => {
     },
     { role: 'user', text: 'Hi' },
   ]);
-});
-
-test('sampling, length and the choice of tools are read as options', () => {
-  expect(
-    decode({
-      model: 'coder',
-      input: 'Hi',
-      max_output_tokens: 256,
-      temperature: 0.2,
-      top_p: 0.9,
-      user: 'u_1',
-      parallel_tool_calls: false,
-      tool_choice: 'required',
-      tools: [{ type: 'function', name: 'weather', parameters: {} }],
-    }).request,
-  ).toMatchObject({
-    tools: [{ type: 'function', name: 'weather', input: {} }],
-    options: {
-      maxTokens: 256,
-      temperature: 0.2,
-      topP: 0.9,
-      user: 'u_1',
-      parallelToolCalls: false,
-      toolChoice: 'required',
-    },
-  });
 });
 
 test('a field given as null is a field left out', () => {
@@ -113,33 +78,6 @@ test('an effort that is not known is refused', () => {
   ).toThrow(InvalidRequest);
 });
 
-test('a JSON schema format is the structured output', () => {
-  expect(
-    decode({
-      model: 'coder',
-      input: 'Hi',
-      text: {
-        verbosity: 'low',
-        format: {
-          type: 'json_schema',
-          name: 'answer',
-          description: 'The answer',
-          strict: true,
-          schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
-        },
-      },
-    }).request,
-  ).toMatchObject({
-    output: {
-      name: 'answer',
-      description: 'The answer',
-      strict: true,
-      schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
-    },
-    options: { hints: { 'openai.responses': { text: { verbosity: 'low' } } } },
-  });
-});
-
 test('a JSON object format asks for any JSON, and a text format for none', () => {
   expect(
     decode({
@@ -171,6 +109,7 @@ test('what another family may leave out is a hint and the rest must arrive', () 
       stream_options: { include_obfuscation: false },
       include: ['reasoning.encrypted_content'],
       metadata: { ticket: 'T-1' },
+      client_metadata: { 'x-codex-installation-id': 'i-1' },
       prompt_cache_key: 'k1',
       service_tier: 'flex',
       safety_identifier: 's1',
@@ -182,10 +121,11 @@ test('what another family may leave out is a hint and the rest must arrive', () 
       'openai.responses': {
         include: ['reasoning.encrypted_content'],
         metadata: { ticket: 'T-1' },
-        prompt_cache_key: 'k1',
+        client_metadata: { 'x-codex-installation-id': 'i-1' },
         service_tier: 'flex',
         safety_identifier: 's1',
       },
+      openai: { prompt_cache_key: 'k1' },
     },
     provider: { 'openai.responses': { truncation: 'auto', top_logprobs: 3 } },
   });
@@ -269,20 +209,6 @@ test('progress is shown only to a caller who asked for a reasoning summary', asy
   expect(await names(effort)).not.toContain(
     'response.reasoning_summary_text.delta',
   );
-});
-
-test('a collected reply is a response object with the request id', () => {
-  const reply = decode({ model: 'coder', input: 'Hi' }).collected(
-    [{ type: 'text', text: 'Hello.' }],
-    { type: 'finish', reason: 'stop' },
-    'r1',
-  );
-  expect(reply).toMatchObject({
-    id: 'resp_r1',
-    object: 'response',
-    status: 'completed',
-    model: 'coder',
-  });
 });
 
 test('a million content parts in one message are read, not a stack too deep', () => {

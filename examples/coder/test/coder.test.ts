@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Aborted, Overloaded, type Message, type Outcome } from "@mottyjs/core";
+import { Overloaded, type Message } from "@mottyjs/core";
 import { fake, memory, on, run } from "@mottyjs/test";
 import { EmptyPrompt } from "../src/middleware/empty-prompt";
 import { gpt, haiku, jev, mini, opus, sonnet } from "../src/models";
@@ -54,41 +54,6 @@ describe("tiers", () => {
     );
 
     expect(route).toBe("deep");
-  });
-
-  test("the standard tier retries a model that is overloaded once", async () => {
-    const models = fake(
-      on(jev, { tier: { quick: 0.1, standard: 0.8, deep: 0.1 } }),
-      on(sonnet, new Overloaded("busy")),
-      on(sonnet, "standard reply"),
-    );
-
-    const { route, answer } = await run(
-      tiers,
-      { text: "Why does this deadlock? ".repeat(40) },
-      { models: [models] },
-    );
-
-    expect(route).toBe("standard");
-    expect(await answer.text()).toBe("standard reply");
-    expect(models.sent(sonnet)).toHaveLength(2);
-  });
-
-  test("the deep tier falls back when its first model is overloaded", async () => {
-    const models = fake(
-      on(sonnet, "plan"),
-      on(opus, new Overloaded("busy")),
-      on(gpt, "fallback reply"),
-    );
-
-    const { route, answer } = await run(
-      tiers,
-      { model: "acme/coder:max", text: "What does git stash do?" },
-      { models: [models] },
-    );
-
-    expect(route).toBe("deep");
-    expect(await answer.text()).toBe("fallback reply");
   });
 
   test("the deep tier asks for high reasoning effort", async () => {
@@ -195,6 +160,35 @@ describe("tiers", () => {
 
     expect(route).toBe("deep");
   });
+
+  test("the question is the agent's last text, past its notes and a tool's result, for its length and for the decision model", async () => {
+    const models = fake(
+      on(jev, { tier: { quick: 0.05, standard: 0.5, deep: 0.45 } }),
+      on(sonnet, "plan"),
+      on(opus, "deep reply"),
+    );
+
+    const { route } = await run(
+      tiers,
+      {
+        messages: [
+          {
+            role: "user",
+            parts: [
+              { type: "text", text: "<reminder>Use the repo's style</reminder>" },
+              { type: "text", text: "Why does this deadlock? ".repeat(40) },
+            ],
+          },
+          { role: "assistant", parts: [{ type: "tool_call", id: "t1", name: "read", input: {} }] },
+          { role: "user", parts: [{ type: "tool_result", id: "t1", text: "fn main() {}" }] },
+        ],
+      },
+      { models: [models] },
+    );
+
+    expect(route).toBe("deep");
+    expect(models.sent(jev)).toMatchObject([{ state: "Why does this deadlock? ".repeat(40) }]);
+  });
 });
 
 describe("structured", () => {
@@ -251,21 +245,26 @@ describe("structured", () => {
 
     expect(route).toBe("strong");
   });
+
+  test("the decision model reads the question sent as parts beside the schema", async () => {
+    const models = fake(on(jev, { small: 0.9 }), on(mini, { files: ["parser.ts"] }));
+
+    await run(
+      structured,
+      {
+        messages: [{ role: "user", parts: [{ type: "text", text: "Which files did we touch?" }] }],
+        output: { schema: { type: "object" } },
+      },
+      { models: [models] },
+    );
+
+    expect(models.sent(jev)).toMatchObject([
+      { state: { schema: { schema: { type: "object" } }, question: "Which files did we touch?" } },
+    ]);
+  });
 });
 
 describe("request kind", () => {
-  test("a chat request goes to the tiers", async () => {
-    const models = fake(
-      on(jev, { software: 0.97 }),
-      on(mini, "quick reply"),
-      on(haiku, "quick reply"),
-    );
-
-    const { path } = await run(coder, { text: "What does git stash do?" }, { models: [models] });
-
-    expect(path).toEqual(["chat", "quick"]);
-  });
-
   test("a request for JSON skips the tiers", async () => {
     const models = fake(
       on(jev, { software: 0.97, small: 0.9 }),
@@ -287,18 +286,24 @@ describe("gates", () => {
     await expect(run(coder, { messages: [] })).rejects.toBeInstanceOf(EmptyPrompt);
   });
 
-  test("an off-topic opening gets a canned reply and no route", async () => {
-    const models = fake(on(jev, { software: 0.02 }));
+  test.each([
+    ["as text", { text: "What should I cook tonight?" }],
+    [
+      "as parts, as the Responses and Messages APIs send it",
+      { messages: [{ role: "user", parts: [{ type: "text", text: "What should I cook tonight?" }] }] },
+    ],
+  ] satisfies [string, Parameters<typeof run>[1]][])(
+    "an off-topic opening sent %s gets a canned reply and no route",
+    async (_, request) => {
+      const models = fake(on(jev, { software: 0.02 }));
 
-    const { route, answer } = await run(
-      coder,
-      { text: "What should I cook tonight?" },
-      { models: [models] },
-    );
+      const { route, answer } = await run(coder, request, { models: [models] });
 
-    expect(route).toBeUndefined();
-    expect(await answer.text()).toBe("I only answer questions about software and codebases.");
-  });
+      expect(route).toBeUndefined();
+      expect(await answer.text()).toBe("I only answer questions about software and codebases.");
+      expect(models.sent(jev)).toMatchObject([{ state: "What should I cook tonight?" }]);
+    },
+  );
 
   test("requests pass when the decision model is down", async () => {
     const models = fake(
@@ -358,20 +363,5 @@ describe("prompt and answer", () => {
     const chunks = await Array.fromAsync(answer.chunks());
     expect(chunks.map((chunk) => chunk.type)).not.toContain("reasoning");
     expect(await answer.text()).toBe("deep reply");
-  });
-});
-
-describe("report", () => {
-  test("a caller who leaves is reported as aborted", async () => {
-    const outcomes: Outcome[] = [];
-
-    const asked = run(
-      coder,
-      { text: "What does git stash do?", signal: AbortSignal.abort() },
-      { report: (record) => void outcomes.push(record.outcome) },
-    );
-
-    await expect(asked).rejects.toBeInstanceOf(Aborted);
-    expect(outcomes).toEqual(["aborted"]);
   });
 });

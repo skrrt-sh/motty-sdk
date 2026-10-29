@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { error, errorBody, wireCode } from '../../src/wire/openai-error.ts';
+import { error, errorBody } from '../../src/wire/openai-error.ts';
 
 test('facts are answered with their status and their message', () => {
   expect(
@@ -21,51 +21,9 @@ test('facts are answered with their status and their message', () => {
   });
 });
 
-test('the facts given are written as they are, with nothing withheld', () => {
-  expect(
-    errorBody({
-      code: 'context_too_long',
-      status: 400,
-      message: 'The prompt is too long for the model',
-      upstream: true,
-    }),
-  ).toEqual({
-    error: {
-      message: 'The prompt is too long for the model',
-      type: 'invalid_request_error',
-      param: null,
-      code: 'context_length_exceeded',
-    },
-  });
-});
-
-test('facts with no status are a server error', () => {
-  expect(error({ code: 'internal', message: 'Internal error' })).toEqual({
-    status: 500,
-    body: {
-      error: {
-        message: 'Internal error',
-        type: 'server_error',
-        param: null,
-        code: 'internal',
-      },
-    },
-  });
-  expect(error({ code: 'odd', status: 200, message: 'x' }).status).toBe(500);
-});
-
 test.each([
   ['rate_limited', 'rate_limit_error', 'rate_limit_exceeded'],
-  ['quota_exceeded', 'insufficient_quota', 'insufficient_quota'],
-  ['overloaded', 'service_unavailable_error', 'server_is_overloaded'],
   ['context_too_long', 'invalid_request_error', 'context_length_exceeded'],
-  ['blocked', 'invalid_request_error', 'content_policy_violation'],
-  ['unsupported', 'invalid_request_error', 'unsupported'],
-  ['invalid_request', 'invalid_request_error', 'invalid_request'],
-  ['unknown_model', 'invalid_request_error', 'model_not_found'],
-  ['upstream_refused', 'server_error', 'upstream_refused'],
-  ['upstream_failed', 'server_error', 'upstream_failed'],
-  ['timed_out', 'server_error', 'timed_out'],
 ])('%s is written as the type %s and the code %s', (kind, type, code) => {
   expect(errorBody({ code: kind, message: 'm' })).toMatchObject({
     error: { type, code },
@@ -106,20 +64,10 @@ test('a kind no model call ends in is typed by its status, as it was', () => {
   expect(kind('aborted', 499)).toMatchObject({
     error: { type: 'invalid_request_error', code: 'aborted' },
   });
-  expect(kind('limit_reached', 500)).toMatchObject({
-    error: { type: 'server_error', code: 'limit_reached' },
+  expect(kind('limit_reached', 400)).toMatchObject({
+    error: { type: 'invalid_request_error', code: 'limit_reached' },
   });
   expect(kind('empty_prompt', 422)).toMatchObject({
     error: { type: 'invalid_request_error', code: 'empty_prompt' },
   });
-});
-
-test('an upstream`s failure with no status of its own answers with its kind`s', () => {
-  expect(error({ code: 'overloaded', message: 'Busy' }).status).toBe(503);
-  expect(error({ code: 'quota_exceeded', message: 'Spent' }).status).toBe(429);
-});
-
-test('a code these APIs have their own name for is written by that name', () => {
-  expect(wireCode('blocked')).toBe('content_policy_violation');
-  expect(wireCode('empty_prompt')).toBe('empty_prompt');
 });

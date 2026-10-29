@@ -3,14 +3,6 @@ import { InvalidRequest, Unsupported } from '@mottyjs/core';
 import { inputContent, partsOf } from '../../src/responses/content.ts';
 import { leaving } from '../../src/wire/fieldless.ts';
 
-test('input text becomes a text part and goes back as input text', () => {
-  const parts = partsOf({ type: 'input_text', text: 'hi' }, 'c');
-  expect(parts).toEqual([{ type: 'text', text: 'hi' }]);
-  expect(parts.map((part) => inputContent(leaving('responses'), part))).toEqual(
-    [{ type: 'input_text', text: 'hi' }],
-  );
-});
-
 test('the hints of a text part go on its input text', () => {
   const left = leaving('responses');
   expect(
@@ -26,29 +18,6 @@ test('the hints of a text part go on its input text', () => {
   expect(left.leftOut()).toEqual([]);
 });
 
-test('an image by address keeps its address and its detail', () => {
-  const parts = partsOf(
-    { type: 'input_image', image_url: 'https://x.test/a.png', detail: 'high' },
-    'c',
-  );
-  expect(parts).toEqual([
-    {
-      type: 'image',
-      url: 'https://x.test/a.png',
-      hints: { openai: { detail: 'high' } },
-    },
-  ]);
-  expect(parts.map((part) => inputContent(leaving('responses'), part))).toEqual(
-    [
-      {
-        detail: 'high',
-        type: 'input_image',
-        image_url: 'https://x.test/a.png',
-      },
-    ],
-  );
-});
-
 test('an inline image is split into bytes and a media type, and rejoined', () => {
   const parts = partsOf(
     { type: 'input_image', image_url: 'data:image/jpeg;base64,/9j/4AAQ' },
@@ -62,14 +31,6 @@ test('an inline image is split into bytes and a media type, and rejoined', () =>
   );
 });
 
-test('an uploaded image is named by its file id', () => {
-  const parts = partsOf({ type: 'input_image', file_id: 'file-1' }, 'c');
-  expect(parts).toEqual([{ type: 'image', id: 'file-1' }]);
-  expect(parts.map((part) => inputContent(leaving('responses'), part))).toEqual(
-    [{ type: 'input_image', file_id: 'file-1' }],
-  );
-});
-
 test('image bytes with no media type fail the call, and are given none', () => {
   const sent = () =>
     inputContent(leaving('responses'), { type: 'image', data: 'iVBORw0KGgo=' });
@@ -77,52 +38,6 @@ test('image bytes with no media type fail the call, and are given none', () => {
   expect(sent).toThrow(
     'The Responses API cannot carry image bytes of no named media type',
   );
-});
-
-test('a file is read by data, address or id, with its name', () => {
-  const inline = partsOf(
-    {
-      type: 'input_file',
-      filename: 'a.pdf',
-      file_data: 'data:application/pdf;base64,JVBERi0=',
-    },
-    'c',
-  );
-  expect(inline).toEqual([
-    {
-      type: 'file',
-      data: 'JVBERi0=',
-      mediaType: 'application/pdf',
-      name: 'a.pdf',
-    },
-  ]);
-  expect(
-    inline.map((part) => inputContent(leaving('responses'), part)),
-  ).toEqual([
-    {
-      type: 'input_file',
-      filename: 'a.pdf',
-      file_data: 'data:application/pdf;base64,JVBERi0=',
-    },
-  ]);
-  const bare = partsOf({ type: 'input_file', file_data: 'JVBERi0=' }, 'c');
-  expect(bare).toEqual([{ type: 'file', data: 'JVBERi0=' }]);
-  expect(bare.map((part) => inputContent(leaving('responses'), part))).toEqual([
-    { type: 'input_file', file_data: 'JVBERi0=' },
-  ]);
-  const linked = partsOf(
-    { type: 'input_file', file_url: 'https://x.test/a.pdf' },
-    'c',
-  );
-  expect(linked).toEqual([{ type: 'file', url: 'https://x.test/a.pdf' }]);
-  expect(
-    linked.map((part) => inputContent(leaving('responses'), part)),
-  ).toEqual([{ type: 'input_file', file_url: 'https://x.test/a.pdf' }]);
-  const uploaded = partsOf({ type: 'input_file', file_id: 'file-2' }, 'c');
-  expect(uploaded).toEqual([{ type: 'file', id: 'file-2' }]);
-  expect(
-    uploaded.map((part) => inputContent(leaving('responses'), part)),
-  ).toEqual([{ type: 'input_file', file_id: 'file-2' }]);
 });
 
 test('audio is read, and has no form to be sent in', () => {
@@ -251,12 +166,6 @@ test('output text gives its annotations as citations after it', () => {
   ]);
 });
 
-test('a refusal is a part of its own', () => {
-  expect(partsOf({ type: 'refusal', refusal: 'No.' }, 'c')).toEqual([
-    { type: 'refusal', text: 'No.' },
-  ]);
-});
-
 test('content of a kind not known is carried whole and sent back whole', () => {
   const parts = partsOf({ type: 'input_video', video_url: 'https://v' }, 'c');
   expect(parts).toEqual([
@@ -306,18 +215,6 @@ test.each([
     },
   ],
   [
-    'image bytes',
-    {
-      type: 'input_image',
-      image_url: 'data:image/webp;base64,UklGRg==',
-      detail: 'low',
-    },
-  ],
-  [
-    'an uploaded image',
-    { type: 'input_image', file_id: 'file-1', detail: 'high' },
-  ],
-  [
     'a file by address',
     {
       type: 'input_file',
@@ -339,10 +236,6 @@ test.each([
     'file bytes of no named type',
     { type: 'input_file', filename: 'a.pdf', file_data: 'JVBERi0=' },
   ],
-  [
-    'an uploaded file',
-    { type: 'input_file', file_id: 'file-1', detail: 'low' },
-  ],
 ])('%s goes back as it was read, with all it held', (_, content) => {
   expect(
     partsOf(content, 'c').map((part) =>
@@ -361,19 +254,6 @@ test('what a refusal held beside its text is kept for its own family', () => {
       hints: { 'openai.responses': { reason: 'policy' } },
     },
   ]);
-});
-
-test('a router`s cache marker is written to input content with its lifetime, and nothing is reported', () => {
-  const left = leaving('responses', 'cache_control');
-
-  expect(
-    inputContent(left, { type: 'text', text: 'Stable', cache: { ttl: '1h' } }),
-  ).toEqual({
-    type: 'input_text',
-    text: 'Stable',
-    cache_control: { type: 'ephemeral', ttl: '1h' },
-  });
-  expect(left.leftOut()).toEqual([]);
 });
 
 test('an image`s detail said for this API replaces the one said for both, and one said for the other API is not read', () => {

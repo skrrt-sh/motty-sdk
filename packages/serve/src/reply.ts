@@ -6,7 +6,7 @@ import {
   type RunStream,
   toFacts,
 } from '@mottyjs/core/host';
-import type { Codec, Decoded, LeftOut } from './codec.ts';
+import type { Codec, Decoded, Formless, LeftOut } from './codec.ts';
 import { formatted } from './sse.ts';
 import { refusal, shown } from './wire/formless.ts';
 
@@ -51,7 +51,7 @@ export function failed(codec: Codec, thrown: unknown, id?: string): Response {
 // so the stream's next event is the failure and the record says why.
 export function watched(
   events: Events,
-  formless: Codec['formless'],
+  formless: Formless,
   told: { leftOut: Map<string, LeftOut>; stop: (reason: unknown) => void },
 ): Events {
   return {

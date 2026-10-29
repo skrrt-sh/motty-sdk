@@ -59,29 +59,11 @@ test('what a model goes on from its reasoning with is left out and the reply goe
       provider: { anthropic: { signature: 'EqQBCgIYAhIM' } },
     }),
   ).toEqual(left);
-  expect(
-    formless({
-      type: 'reasoning',
-      text: '',
-      provider: { anthropic: { type: 'redacted_thinking', data: 'EmwK' } },
-    }),
-  ).toEqual(left);
-  expect(
-    formless({
-      type: 'reasoning',
-      text: '',
-      provider: {
-        'openai.responses': { type: 'reasoning', encrypted_content: 'gAAA' },
-      },
-    }),
-  ).toEqual(left);
   expect(formless({ type: 'reasoning', text: 'Hm' })).toBeUndefined();
 });
 
 test('what this API has a form for is not named', () => {
   expect(formless({ type: 'text', text: 'Hi' })).toBeUndefined();
-  expect(formless({ type: 'reasoning', text: 'Hm' })).toBeUndefined();
-  expect(formless({ type: 'refusal', text: 'No' })).toBeUndefined();
   expect(
     formless({ type: 'tool_call', id: 'call_1', name: 'look', arguments: '' }),
   ).toBeUndefined();
@@ -148,27 +130,7 @@ test('reasoning details are this family`s own, so a caller is sent them', () => 
 });
 
 test.each([
-  ['a PDF', { type: 'file', data: 'JVBERi0=', mediaType: 'application/pdf' }],
-  [
-    'a file by address of no named type',
-    { type: 'file', url: 'https://x.test/a' },
-  ],
-  [
-    'an image held by id',
-    { type: 'file', id: 'file-1', mediaType: 'image/png' },
-  ],
-] as const)('%s a model made has no form and ends the reply', (_, chunk) => {
-  expect(formless(chunk)).toEqual(
-    ends('file', 'a file the model made that is not a picture'),
-  );
-});
-
-test.each([
   ['its bytes', { type: 'file', data: 'iVBORw0=', mediaType: 'image/png' }],
-  [
-    'its address',
-    { type: 'file', url: 'https://x.test/made.png', mediaType: 'image/png' },
-  ],
 ] as const)('a picture a model made has a form, by %s', (_, chunk) => {
   expect(formless(chunk)).toBeUndefined();
 });

@@ -36,6 +36,7 @@ export type {
   StandardSchema,
   Tool,
 } from './data/message.ts';
+export { said } from './data/message.ts';
 export { type Answer, answer } from './request/answer.ts';
 export type { Calls } from './request/context.ts';
 export { type Model, model, type NamedModel } from './request/model.ts';

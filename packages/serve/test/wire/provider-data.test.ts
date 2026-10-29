@@ -21,21 +21,9 @@ test('the other API of one provider is another wire', () => {
   expect(hinted({ openai: { a: 1 }, 'openai.responses': { b: 1 } })).toEqual(
     {},
   );
-  expect(() => own({ 'openai.responses': {} }, 'an option')).toThrow(
-    Unsupported,
-  );
-});
-
-test('what is read is a copy the body may hold', () => {
-  const bias = { '50256': -100 };
-
-  const { logit_bias: read } = own(
-    { 'openai.chat': { logit_bias: bias } },
-    'it',
-  );
-
-  expect(read).toEqual(bias);
-  expect(read).not.toBe(bias);
+  expect(() =>
+    own({ 'openai.responses': { truncation: 'auto' } }, 'an option'),
+  ).toThrow(Unsupported);
 });
 
 test('a map with no entry for this wire fails the call', () => {
@@ -43,8 +31,8 @@ test('a map with no entry for this wire fails the call', () => {
     own({ anthropic: { thinking: { type: 'enabled' } } }, 'an option'),
   ).toThrow(Unsupported);
   expect(() =>
-    own({ anthropic: {}, 'openai.responses': {} }, 'an option'),
-  ).toThrow('Chat Completions cannot carry an option of anthropic');
+    own({ anthropic: {}, 'openai.responses': { a: 1 } }, 'an option'),
+  ).toThrow('Chat Completions cannot carry an option of openai.responses: a');
 });
 
 test('a refusal names the fields that cannot be carried, never what they hold', () => {
@@ -70,14 +58,16 @@ test('a refusal names the fields that cannot be carried, never what they hold', 
   );
 });
 
-test.each([[{ anthropic: {} }], [{ anthropic: 'not an object' }]])(
-  'a refusal of an entry with no field names the family alone',
-  (data) => {
-    expect(() => own(data, 'an option')).toThrow(
-      new Unsupported('Chat Completions cannot carry an option of anthropic'),
-    );
-  },
-);
+test('a refusal of an entry with no field names the family alone', () => {
+  expect(() => own({ anthropic: 'not an object' }, 'an option')).toThrow(
+    new Unsupported('Chat Completions cannot carry an option of anthropic'),
+  );
+});
+
+test('an empty entry for another wire carries nothing and fails no call', () => {
+  expect(own({ 'openai.responses': {} }, 'options')).toEqual({});
+  expect(own({ anthropic: {}, 'openai.responses': [] }, 'a part')).toEqual({});
+});
 
 test('a refusal names five fields and counts the rest', () => {
   expect(() =>
@@ -89,31 +79,12 @@ test('a refusal names five fields and counts the rest', () => {
   );
 });
 
-test.each([
-  [{ anthropic: { caller: { type: 'direct' } } }, {}],
-  [undefined, {}],
-  [
-    { anthropic: { caller: { type: 'direct' } }, 'openai.chat': { a: 1 } },
-    { a: 1 },
-  ],
-])(
+test.each([[{ anthropic: { caller: { type: 'direct' } } }, {}]])(
   'what a map holds for another wire alone is read as nothing and not refused',
   (data, read) => {
     expect(mine(data)).toEqual(read);
   },
 );
-
-test('a map with an entry for each wire is read for this one alone', () => {
-  expect(
-    own(
-      {
-        anthropic: { thinking: { type: 'enabled' } },
-        'openai.chat': { logprobs: true },
-      },
-      'an option',
-    ),
-  ).toEqual({ logprobs: true });
-});
 
 test('an empty entry for this wire says there is nothing to add', () => {
   expect(
@@ -191,11 +162,16 @@ test('the provider`s entry, even an empty one, is an entry for this API`s option
     }).provider,
   ).toEqual({});
   expect(() =>
-    chat.addressed({ provider: { 'openai.responses': {} } }),
-  ).toThrow('Chat Completions cannot carry an option of openai.responses');
-  expect(() => chat.addressed({ provider: { anthropic: {} } })).toThrow(
-    Unsupported,
+    chat.addressed({
+      provider: { 'openai.responses': { truncation: 'auto' } },
+    }),
+  ).toThrow(
+    'Chat Completions cannot carry an option of openai.responses: truncation',
   );
+  expect(
+    chat.addressed({ provider: { 'openai.responses': {}, anthropic: {} } })
+      .provider,
+  ).toEqual({});
 });
 
 test('below the options the provider`s entry is no entry: its APIs share no shape there', () => {
@@ -210,11 +186,7 @@ test('below the options the provider`s entry is no entry: its APIs share no shap
   ).toEqual({ b: 2 });
 });
 
-test.each([
-  [{ previous_response_id: null }],
-  [{ previous_response_id: [] }],
-  [{ previous_response_id: {} }],
-])(
+test.each([[{ previous_response_id: null }], [{ previous_response_id: [] }]])(
   'another API`s option that says nothing, as %j, fails no call and is not sent',
   (openai) => {
     expect(

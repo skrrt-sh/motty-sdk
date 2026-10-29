@@ -18,7 +18,7 @@ import {
   type RequestState,
 } from '../request/context.ts';
 import { progress } from '../request/think.ts';
-import { onAbort } from '../request/wait.ts';
+import { onAbort, readOut } from '../request/wait.ts';
 import type { Outcome } from './builder.ts';
 
 type Sent = StreamEvent | Progress;
@@ -76,7 +76,7 @@ export function delivery(state: RequestState): Delivery {
     phase = { at: 'ended' };
     drop();
     if (asking.length === 0) return;
-    for (const give of asking.splice(0)) give({ done: true, value: undefined });
+    for (const give of asking.splice(0)) give(readOut);
   }
 
   function onStop(): void {
@@ -139,7 +139,7 @@ export function delivery(state: RequestState): Delivery {
         endStream();
         return Promise.resolve(stopRead());
       case 'ended':
-        return Promise.resolve({ done: true, value: undefined });
+        return Promise.resolve(readOut);
       default:
         return phase satisfies never;
     }
@@ -157,7 +157,7 @@ export function delivery(state: RequestState): Delivery {
       default:
         phase satisfies never;
     }
-    return Promise.resolve({ done: true, value: undefined });
+    return Promise.resolve(readOut);
   }
 
   async function pump(): Promise<void> {

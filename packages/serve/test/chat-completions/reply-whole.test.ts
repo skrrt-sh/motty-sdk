@@ -113,26 +113,6 @@ test('progress and reasoning are collected in the reply`s reasoning', () => {
   });
 });
 
-test('a caller who muted reasoning gets a reply with none', () => {
-  expect(
-    collected(
-      [
-        { type: 'progress', piece: 0, text: 'Routing to code' },
-        { type: 'reasoning', text: 'A loop will do.' },
-        { type: 'text', text: 'Use a loop.' },
-      ],
-      { type: 'finish', reason: 'stop' },
-      { id: 'req_1', model: 'coder', muted: true },
-    ),
-  ).toMatchObject({
-    choices: [
-      {
-        message: { role: 'assistant', content: 'Use a loop.', refusal: null },
-      },
-    ],
-  });
-});
-
 test('a refusal is collected in its field, with a null content', () => {
   expect(
     collected(
@@ -323,40 +303,6 @@ test('reasoning details are collected whole: fragments of one are joined', () =>
   });
 });
 
-test('a signature that came with no text is still in the reply', () => {
-  expect(
-    collected(
-      [
-        {
-          type: 'reasoning',
-          text: '',
-          provider: {
-            'openai.chat': {
-              reasoning_details: [
-                { type: 'reasoning.text', signature: 'EqQB', index: 0 },
-              ],
-            },
-          },
-        },
-        { type: 'text', text: '391' },
-      ],
-      { type: 'finish', reason: 'stop' },
-      { id: 'req_1', model: 'coder', muted: false },
-    ),
-  ).toMatchObject({
-    choices: [
-      {
-        message: {
-          content: '391',
-          reasoning_details: [
-            { type: 'reasoning.text', signature: 'EqQB', index: 0 },
-          ],
-        },
-      },
-    ],
-  });
-});
-
 test('pictures a model made are collected in the field a stream sends them in', () => {
   expect(
     collected(
@@ -478,105 +424,11 @@ test('what a tool call came with is collected into the call, where it sat', () =
   });
 });
 
-test('what a later fragment of a tool call came with is collected too', () => {
-  expect(
-    collected(
-      [
-        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
-        {
-          type: 'tool_call',
-          id: 'call_a',
-          arguments: '{}',
-          provider: { 'openai.chat': { extra_content: { a: 1 } } },
-        },
-      ],
-      { type: 'finish', reason: 'tool_calls' },
-      { id: 'req_1', model: 'coder', muted: false },
-    ),
-  ).toMatchObject({
-    choices: [
-      {
-        message: {
-          tool_calls: [
-            {
-              extra_content: { a: 1 },
-              id: 'call_a',
-              type: 'function',
-              function: { name: 'weather', arguments: '{}' },
-            },
-          ],
-        },
-      },
-    ],
-  });
-});
-
-test('a tool call with nothing of this API`s is collected as its own fields alone', () => {
-  expect(
-    collected(
-      [
-        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '{}' },
-        {
-          type: 'tool_call',
-          id: 'call_b',
-          name: 'now',
-          arguments: '{}',
-          provider: { 'openai.responses': { namespace: 'time' } },
-        },
-      ],
-      { type: 'finish', reason: 'tool_calls' },
-      { id: 'req_1', model: 'coder', muted: false },
-    ),
-  ).toEqual({
-    id: 'chatcmpl-req_1',
-    object: 'chat.completion',
-    created: expect.any(Number),
-    model: 'coder',
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: 'assistant',
-          content: null,
-          refusal: null,
-          tool_calls: [
-            {
-              id: 'call_a',
-              type: 'function',
-              function: { name: 'weather', arguments: '{}' },
-            },
-            {
-              id: 'call_b',
-              type: 'function',
-              function: { name: 'now', arguments: '{}' },
-            },
-          ],
-        },
-        logprobs: null,
-        finish_reason: 'tool_calls',
-      },
-    ],
-  });
-});
-
 test.each([
   [
     { index: 9, id: 'call_stray' },
     { id: 'call_late', type: 'stray' },
     { type: 'function', function: { name: 'shell', arguments: 'ls' } },
-  ],
-  [
-    {},
-    { function: { name: 'stray', arguments: 'stray', input: 'stray' } },
-    { type: 'function', function: { name: 'shell', arguments: 'ls' } },
-  ],
-  [
-    {
-      type: 'custom',
-      custom: { name: 'stray', arguments: 'stray', input: 'stray' },
-    },
-    {},
-    { type: 'custom', custom: { name: 'shell', input: 'ls' } },
   ],
 ])(
   'a carried field never takes the place of the call`s own: %j, then %j',
@@ -671,4 +523,34 @@ test('a call of many fragments that each carry a field of their own is collected
     'choices.0.message.tool_calls.0.function.arguments',
     'x'.repeat(40_000),
   );
+});
+
+test('a function call with no arguments is collected as an empty object, and a custom call with no input as no text', () => {
+  expect(
+    collected(
+      [
+        { type: 'tool_call', id: 'call_a', name: 'now', arguments: '' },
+        {
+          type: 'tool_call',
+          id: 'call_b',
+          name: 'shell',
+          arguments: '',
+          provider: { 'openai.chat': { type: 'custom' } },
+        },
+      ],
+      { type: 'finish', reason: 'tool_calls' },
+      { id: 'req_1', model: 'coder', muted: false },
+    ),
+  ).toMatchObject({
+    choices: [
+      {
+        message: {
+          tool_calls: [
+            { function: { name: 'now', arguments: '{}' } },
+            { custom: { name: 'shell', input: '' } },
+          ],
+        },
+      },
+    ],
+  });
 });

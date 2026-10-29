@@ -1,5 +1,6 @@
 import { type Answer, arrival, isAnswer } from './answer.ts';
 import { type RequestState, running } from './context.ts';
+import { readOut } from './wait.ts';
 
 type Delta = { piece: number; text: string };
 
@@ -46,7 +47,7 @@ function staged(): Stage {
       if (offer === undefined) {
         if (phase === 'open') return;
         phase = 'closed';
-        asking.shift()?.({ done: true, value: undefined });
+        asking.shift()?.(readOut);
         continue;
       }
       if ('text' in offer) {
@@ -100,7 +101,7 @@ function staged(): Stage {
       }),
     return: async () => {
       leave();
-      return { done: true, value: undefined };
+      return readOut;
     },
   };
 

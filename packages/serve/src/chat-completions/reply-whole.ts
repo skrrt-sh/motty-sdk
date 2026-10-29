@@ -1,8 +1,8 @@
 import type { Chunk, Finish, Json, Progress } from '@mottyjs/core/host';
+import { joined } from '../wire/details.ts';
 import type { Dict } from '../wire/json.ts';
-import { joined } from './dialect.ts';
 import { reasonWritten, replyFields } from './finish.ts';
-import { pieces } from './reply-pieces.ts';
+import { type Piece, pieces } from './reply-pieces.ts';
 import { type Kind, mergedUnread, wireCall } from './unread.ts';
 import { usageField } from './usage.ts';
 
@@ -31,7 +31,7 @@ export function collected(
     custom?: ReadonlySet<string>;
   },
 ): Json {
-  const piece = pieces(given.muted, given.custom);
+  const { piece, ended } = pieces(given.muted, given.custom);
   const said = { reasoning: '', content: '', refusal: '' };
   const tokens: { content: Json[]; refusal: Json[] } = {
     content: [],
@@ -48,8 +48,7 @@ export function collected(
   const details: Json[] = [];
   const images: Json[] = [];
   let audio: Map<string, Json> | undefined;
-  for (const event of events) {
-    const added = piece(event);
+  function add(added: Piece | undefined): void {
     switch (added?.kind) {
       case undefined:
         break;
@@ -87,6 +86,8 @@ export function collected(
         added satisfies never;
     }
   }
+  for (const event of events) add(piece(event));
+  for (const added of ended()) add(added);
   const probable = tokens.content.length + tokens.refusal.length > 0;
   const message = {
     role: 'assistant',

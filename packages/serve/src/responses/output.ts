@@ -1,5 +1,5 @@
 import type { Chunk, Json } from '@mottyjs/core/host';
-import { type Dict, list } from '../wire/json.ts';
+import { type Dict, list, parsed } from '../wire/json.ts';
 import { held } from './family.ts';
 import { field } from './fields.ts';
 
@@ -34,7 +34,8 @@ export type Call = {
   index: number;
   id: string;
   item: Dict;
-  holds: 'input' | 'arguments';
+  // A call of a tool the caller runs holds its arguments as an object.
+  holds: 'input' | 'arguments' | 'object';
   given: string;
 };
 
@@ -98,6 +99,10 @@ export function messageItem(message: Message, status: string): Dict {
 
 // A custom tool call has no status on this API.
 export function callItem({ item, holds, given }: Call, status: string): Dict {
+  // Before any of them came they are an empty object, never another type.
+  if (holds === 'object') {
+    return { ...item, status, arguments: parsed(given || '{}') ?? given };
+  }
   return {
     ...item,
     ...(holds === 'arguments' ? { status } : {}),

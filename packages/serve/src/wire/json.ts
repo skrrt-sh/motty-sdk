@@ -63,21 +63,44 @@ export function parsed(source: string): Json | undefined {
   }
 }
 
-// JSON has no undefined, so a field that was not given is left out. Made
-// from entries, a key named as the prototype is a key like any other.
-export function given(fields: { [key: string]: Json | undefined }): Dict {
-  const said: [string, Json][] = [];
-  for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined) said.push([key, value]);
+// Defined, not assigned, a key named as the prototype is a key like any
+// other. Assigned, a body's fields cost a fifth of building it from entries.
+function put(into: Dict, key: string, value: Json): void {
+  if (key !== '__proto__') into[key] = value;
+  else {
+    Object.defineProperty(into, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
-  return Object.fromEntries(said);
 }
 
-// Made from entries, a key named as the prototype is a key like any other.
+// JSON has no undefined, so a field that was not given is left out.
+export function given(fields: { [key: string]: Json | undefined }): Dict {
+  const said: Dict = {};
+  for (const key of Object.keys(fields)) {
+    const value = fields[key];
+    if (value !== undefined) put(said, key, value);
+  }
+  return said;
+}
+
+// The fields kept, in their order.
+export function picked(
+  fields: Dict,
+  keep: (key: string, value: Json) => boolean,
+): Dict {
+  const kept: Dict = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (keep(key, value)) put(kept, key, value);
+  }
+  return kept;
+}
+
 export function without(fields: Dict, names: readonly string[]): Dict {
-  return Object.fromEntries(
-    Object.entries(fields).filter(([key]) => !names.includes(key)),
-  );
+  return picked(fields, (key) => !names.includes(key));
 }
 
 function isList(value: ReadonlyJson): value is readonly ReadonlyJson[] {

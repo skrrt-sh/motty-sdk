@@ -1,8 +1,57 @@
-import type { Chunk, Json } from '@mottyjs/core/host';
-import { type Dict, list, text } from '../wire/json.ts';
+import type { Chunk, Json, ProviderData } from '@mottyjs/core/host';
+import { joined } from '../wire/details.ts';
+import {
+  copied,
+  type Dict,
+  dict,
+  isDict,
+  list,
+  parsed,
+  text,
+} from '../wire/json.ts';
 import { family } from './family.ts';
 import { field } from './fields.ts';
 import { ended, type Sent, thoughtItem, type Writing } from './output.ts';
+
+// What a model of another family goes on from its reasoning with is held
+// where this API's own is encrypted, as that family's data: the caller sends
+// the item back whole, and only that family reads it. Beside it is the text
+// it signs, where the caller muted reasoning and was shown none.
+export function unsealed(
+  value: Json | undefined,
+): { data: Dict; said: string } | undefined {
+  if (typeof value !== 'string' || !value.startsWith('{')) return undefined;
+  const { text: said = '', ...data } = dict(parsed(value));
+  const entries = Object.entries(data);
+  return typeof said === 'string' &&
+    entries.length > 0 &&
+    entries.every(([key, fields]) => key !== family && isDict(fields))
+    ? { data, said }
+    : undefined;
+}
+
+function sealed(item: Dict, more: ProviderData, hidden: string): Dict {
+  const { encrypted_content: before } = item;
+  const { data: held = {}, said = '' } = unsealed(before) ?? {};
+  for (const [key, fields] of Object.entries(more)) {
+    const was = dict(held[key]);
+    const now = dict(copied(fields));
+    // Details stream as fragments of one list, joined as a reply joins them.
+    const { reasoning_details: had } = was;
+    const { reasoning_details: added } = now;
+    const details = joined([...list(had), ...list(added)]);
+    held[key] = {
+      ...was,
+      ...now,
+      ...(details.length === 0 ? {} : { reasoning_details: details }),
+    };
+  }
+  const text = said + hidden;
+  return {
+    ...item,
+    encrypted_content: JSON.stringify(text === '' ? held : { ...held, text }),
+  };
+}
 
 // A summary and the reasoning itself are two kinds of part of one item, each
 // with its own events and its own count.
@@ -14,6 +63,8 @@ export function thought(
     block?: number;
     piece?: number;
     item?: Dict;
+    carried?: ProviderData;
+    hidden?: string;
   },
 ): Sent[] {
   const sent: Sent[] = [];
@@ -41,6 +92,9 @@ export function thought(
     writing.open = now;
     sent.push(writing.added(thoughtItem(now)));
   } else if (from.item !== undefined) now.item = from.item;
+  if (from.carried !== undefined) {
+    now.item = sealed(now.item, from.carried, from.hidden ?? '');
+  }
   if (said === '') return sent;
   const { part } = from;
   const at = { item_id: now.id, output_index: now.index };

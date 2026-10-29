@@ -4,10 +4,12 @@ import { join } from 'node:path';
 import { $ } from 'bun';
 import { subjects } from './bench/subjects.ts';
 
-export async function build(entry: string) {
+export async function build(entry: string, external: string[] = []) {
   const { outputs, metafile } = await Bun.build({
     entrypoints: [entry],
+    external,
     target: 'node',
+    conditions: ['@mottyjs/source'],
     minify: true,
     metafile: true,
   });

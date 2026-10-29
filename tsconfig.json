@@ -33,5 +33,10 @@
     "examples/*/evals",
     "examples/*/demo",
     "examples/*/browser"
+  ],
+  // Read with the Workers types alone, by tsconfig.workers.json.
+  "exclude": [
+    "packages/adapters/src/cloudflare.ts",
+    "packages/adapters/test/cloudflare.worker.ts"
   ]
 }

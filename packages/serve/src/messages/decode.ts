@@ -1,5 +1,6 @@
 import type { Json, Message } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
+import { cacheOf } from '../wire/cache-control.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import { given, isDict } from '../wire/json.ts';
 import { invalid } from '../wire/refusals.ts';
@@ -32,6 +33,28 @@ function messageOf(raw: Json): Message {
   }
 }
 
+// A marker on the last block already is the one the top-level field asks for,
+// as the API counts them.
+function ends(message: Message): boolean {
+  const last = message.parts?.at(-1);
+  return (
+    message.cache !== undefined ||
+    (last !== undefined && last.type !== 'provider' && last.cache !== undefined)
+  );
+}
+
+// The top-level marker caches up to the last block, which is what a marker on
+// the last message says to every upstream. Its whole field stays a hint, so
+// this API is sent it as it came and not the marker.
+function automatic(messages: Message[], control: Json | undefined): Message[] {
+  const { cache } = cacheOf(control);
+  const last = messages.at(-1);
+  if (cache === undefined || last === undefined || ends(last)) {
+    return messages;
+  }
+  return [...messages.slice(0, -1), { ...last, cache }];
+}
+
 function systemOf(system: Json | undefined): Message[] {
   if (system === undefined || system === null) return [];
   return [{ role: 'system', ...contentOf(system, 'system') }];
@@ -45,6 +68,7 @@ export function decode(body: Json, headers: Headers): Decoded {
   }
   if (!isDict(body)) invalid('The request body must be a JSON object');
   const { model, messages, system, stream, tools, ...settings } = body;
+  const { cache_control: control } = settings;
   if (typeof model !== 'string') invalid('The body needs a model');
   if (!Array.isArray(messages) || messages.length === 0) {
     invalid('messages must be a list with at least one message');
@@ -59,12 +83,16 @@ export function decode(body: Json, headers: Headers): Decoded {
   return {
     request: {
       model,
-      messages: [...systemOf(system), ...messages.map(messageOf)],
+      messages: automatic(
+        [...systemOf(system), ...messages.map(messageOf)],
+        control,
+      ),
       tools: (tools ?? []).map(toolOf),
       options,
       ...(output === undefined ? {} : { output }),
     },
     stream: stream === true,
+    formless,
     streamed: (events, id) =>
       streamed(formed(events, formless), id, model, shown),
     collected: (events, finish, id) =>

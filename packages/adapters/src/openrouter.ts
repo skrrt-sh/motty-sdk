@@ -33,6 +33,13 @@ function fields(value: Json | undefined): { [name: string]: Json } {
     : {};
 }
 
+const spent = [
+  'openrouter_credits',
+  'openrouter_key_limit',
+  'openrouter_guardrail_budget',
+  'openrouter_workspace_budget',
+];
+
 // A router tells its own failures and every provider's under a few
 // statuses, and says which one it was beside the error. In a stream the
 // status is a number in the error.
@@ -42,12 +49,19 @@ const failures: FailureReader = (status, _headers, error) => {
   const { error_type: kind = outer } = fields(metadata);
   const sent = status ?? (typeof code === 'number' ? code : undefined);
   const said = typeof message === 'string' ? message : '';
-  if (sent === 402 && reason === 'in_flight_budget_exhausted') {
-    return { code: 'rate_limited', retryable: true };
-  }
   if (
     sent === 402 &&
-    (source === 'openrouter_credits' || source === 'openrouter_key_limit')
+    (reason === 'in_flight_budget_exhausted' ||
+      source === 'openrouter_in_flight_budget')
+  ) {
+    return { code: 'rate_limited', retryable: true };
+  }
+  // A budget is spent as 402, or as 403 for one set on a key, a guardrail
+  // or a workspace, which no wait of a request meets.
+  if (
+    (sent === 402 || sent === 403) &&
+    typeof source === 'string' &&
+    spent.includes(source)
   ) {
     return { code: 'quota_exceeded' };
   }

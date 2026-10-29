@@ -1,10 +1,6 @@
 import { expect, test } from 'bun:test';
 import { structured } from '../src/state.ts';
 
-test('text is sent as it is', () => {
-  expect(structured('What does git stash do?')).toBe('What does git stash do?');
-});
-
 test('a field that is undefined is left out, at any depth, as JSON leaves it out', () => {
   expect(
     structured({

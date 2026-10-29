@@ -5,12 +5,13 @@ import { answering, type replies, upstream } from './upstream.ts';
 
 type Subject = keyof Awaited<ReturnType<typeof programs.motty>>['subjects'];
 
-function scenario(reply: keyof typeof replies, subject: Subject) {
-  return { reply, subject };
+// The narrowest lead is timed over more rounds: its median moves the most.
+function scenario(reply: keyof typeof replies, subject: Subject, rounds = 1) {
+  return { reply, subject, rounds };
 }
 
 export const scenarios = {
-  'text, 20 chunks': scenario('short', 'text'),
+  'text, 20 chunks': scenario('short', 'text', 2),
   'stream, 20 chunks': scenario('short', 'stream'),
   'stream, 200 chunks': scenario('long', 'stream'),
   'stream of an object read by an output schema, 20 chunks': scenario(
@@ -53,12 +54,14 @@ export async function timePerCall(chunksPerSample: number, rounds: number) {
   globalThis.fetch = upstream;
   try {
     const timed: Record<string, Record<string, number[][]>> = {};
-    for (const [name, { reply, subject }] of Object.entries(scenarios)) {
+    for (const [name, { reply, subject, rounds: times }] of Object.entries(
+      scenarios,
+    )) {
       const { text, chunks } = answering(reply);
       const expected = tokens(text);
       const calls = Math.ceil(chunksPerSample / chunks);
       const taken = loaded.map((): number[][] => []);
-      for (let round = 0; round <= rounds; round++) {
+      for (let round = 0; round <= rounds * times; round++) {
         for (const turn of loaded.keys()) {
           const index = (round + turn) % loaded.length;
           const run = loaded[index]?.subjects[subject];
@@ -133,10 +136,16 @@ export function coldStart(rounds: number) {
   return { taken, ahead: shares(taken) };
 }
 
+// Mastra's telemetry client imports this optional peer when it is there;
+// left out, it is no part of what Mastra ships.
+const unshipped = ['@opentelemetry/api'];
+
 export async function bundleSize() {
   const bytes: Record<string, number[]> = {};
   for (const name of Object.keys(programs)) {
-    bytes[name] = [(await build(`gates/bench/rivals/${name}.ts`)).bytes];
+    bytes[name] = [
+      (await build(`gates/bench/rivals/${name}.ts`, unshipped)).bytes,
+    ];
   }
   return { bytes, ahead: shares(bytes) };
 }
@@ -155,7 +164,7 @@ async function report() {
   const size = await bundleSize();
 
   console.log(
-    `bun ${Bun.version}; ${rounds} rounds of ${chunksPerSample} chunks after one discarded, the SDKs taking turns in one process; microseconds per call over every call, and each rival's cost as a multiple of motty's, the median over the rounds`,
+    `bun ${Bun.version}; ${rounds} rounds of ${chunksPerSample} chunks after one discarded (twice the rounds for text), the SDKs taking turns in one process; microseconds per call over every call, and each rival's cost as a multiple of motty's, the median over the rounds`,
   );
   console.log(
     (await $`bun pm ls`.text())

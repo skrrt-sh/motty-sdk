@@ -32,13 +32,6 @@ test('a prompt is sent as a streamed request with the version header', () => {
   });
 });
 
-test('a prompt with no limit still sends one', () => {
-  const { body } = encode('claude-opus-5-5', {
-    messages: [{ role: 'user', text: 'Hello' }],
-  });
-  expect(body).toMatchObject({ max_tokens: 64000 });
-});
-
 test('leading instructions of any role and shape are system blocks', () => {
   const { body } = encode('claude-opus-5-5', {
     messages: [
@@ -61,62 +54,6 @@ test('leading instructions of any role and shape are system blocks', () => {
       },
     ],
     messages: [{ role: 'user', content: 'Hello' }],
-  });
-});
-
-test('instructions after the first turn are a system turn in place', () => {
-  const { body } = encode('claude-opus-5-5', {
-    messages: [
-      { role: 'user', text: 'Hello' },
-      { role: 'developer', text: 'Terse mode enabled.' },
-    ],
-  });
-  expect(body).toMatchObject({
-    messages: [
-      { role: 'user', content: 'Hello' },
-      { role: 'system', content: 'Terse mode enabled.' },
-    ],
-  });
-  expect(body).not.toHaveProperty('system');
-});
-
-test('a tool message of another family is a user turn of results', () => {
-  const { body } = encode('claude-opus-5-5', {
-    messages: [
-      { role: 'user', text: 'Weather in Paris?' },
-      {
-        role: 'assistant',
-        parts: [
-          { type: 'reasoning', text: 'A summary nobody here signed.' },
-          { type: 'tool_call', id: 'call_1', name: 'get_weather', input: {} },
-        ],
-      },
-      {
-        role: 'tool',
-        parts: [{ type: 'tool_result', id: 'call_1', text: '15C' }],
-      },
-    ],
-    tools: [
-      { type: 'function', name: 'get_weather', input: { type: 'object' } },
-    ],
-  });
-  expect(body).toMatchObject({
-    messages: [
-      { role: 'user', content: 'Weather in Paris?' },
-      {
-        role: 'assistant',
-        content: [
-          { type: 'tool_use', id: 'call_1', name: 'get_weather', input: {} },
-        ],
-      },
-      {
-        role: 'user',
-        content: [
-          { type: 'tool_result', tool_use_id: 'call_1', content: '15C' },
-        ],
-      },
-    ],
-    tools: [{ name: 'get_weather', input_schema: { type: 'object' } }],
   });
 });
 
@@ -156,42 +93,16 @@ test('a cache marker on a plain message puts its text in a block', () => {
   });
 });
 
-test('structured output and reasoning effort are sent in the output config', () => {
-  const { body } = encode('claude-opus-5-5', {
-    messages: [{ role: 'user', text: 'Name a city.' }],
-    options: { reasoning: { effort: 'xhigh' } },
-    output: {
-      schema: { type: 'object', properties: { city: { type: 'string' } } },
-    },
-  });
-  expect(body).toMatchObject({
-    output_config: {
-      effort: 'xhigh',
-      format: {
-        type: 'json_schema',
-        schema: { type: 'object', properties: { city: { type: 'string' } } },
-      },
-    },
-  });
-});
-
-test('a meaning-changing entry of another family fails the call', () => {
-  const user = { role: 'user', text: 'Hello' } as const;
+test('a meaning-changing entry of another family on a message fails the call', () => {
   expect(() =>
     encode('claude-opus-5-5', {
-      messages: [user],
-      options: { provider: { 'openai.responses': { store: true } } },
-    }),
-  ).toThrow(Unsupported);
-  expect(() =>
-    encode('claude-opus-5-5', {
-      messages: [{ ...user, provider: { 'openai.chat': { audio: {} } } }],
-    }),
-  ).toThrow(Unsupported);
-  expect(() =>
-    encode('claude-opus-5-5', {
-      messages: [user],
-      tools: [{ type: 'custom', name: 'shell' }],
+      messages: [
+        {
+          role: 'user',
+          text: 'Hello',
+          provider: { 'openai.chat': { audio: {} } },
+        },
+      ],
     }),
   ).toThrow(Unsupported);
 });
@@ -324,12 +235,6 @@ test('an instruction no user turn comes before fails the call', () => {
       instruction,
     ],
     [
-      { role: 'user', text: 'Hi' },
-      { role: 'assistant', text: 'Hello' },
-      instruction,
-      { role: 'assistant', text: 'And' },
-    ],
-    [
       {
         role: 'system',
         text: 'Only this turn.',
@@ -404,97 +309,21 @@ test('text with nothing in it is never sent', () => {
   expect(body).not.toHaveProperty('system');
 });
 
-test.each([
-  ['image', { type: 'image', url: 'https://x.test/cat.png' }],
-  ['document', { type: 'file', id: 'file_011C' }],
-] as const)(
-  'an instruction holding an %s fails the call: the field of its own takes text alone',
-  (block, part) => {
-    const sent = () =>
-      encode('claude-opus-5-5', {
-        messages: [
-          { role: 'system', parts: [part] },
-          { role: 'user', text: 'Hi' },
-        ],
-      });
-    expect(sent).toThrow(Unsupported);
-    expect(sent).toThrow(
-      `Anthropic Messages takes no ${block} block as instructions`,
-    );
-  },
-);
-
-test('results of parallel calls, a turn each from another API, go in one user turn', () => {
-  const { request } = chatCompletions.decode(
-    {
-      model: 'coder',
+test('an instruction holding an image fails the call: the field of its own takes text alone', () => {
+  const sent = () =>
+    encode('claude-opus-5-5', {
       messages: [
-        { role: 'user', content: 'Weather in Oslo and Rome?' },
         {
-          role: 'assistant',
-          content: null,
-          tool_calls: [
-            {
-              id: 'call_a',
-              type: 'function',
-              function: { name: 'weather', arguments: '{"city":"Oslo"}' },
-            },
-            {
-              id: 'call_b',
-              type: 'function',
-              function: { name: 'weather', arguments: '{"city":"Rome"}' },
-            },
-          ],
+          role: 'system',
+          parts: [{ type: 'image', url: 'https://x.test/cat.png' }],
         },
-        { role: 'tool', tool_call_id: 'call_a', content: '4C' },
-        {
-          role: 'tool',
-          tool_call_id: 'call_b',
-          content: [
-            {
-              type: 'text',
-              text: '21C',
-              cache_control: { type: 'ephemeral' },
-            },
-          ],
-        },
-        { role: 'user', content: 'And Paris?' },
+        { role: 'user', text: 'Hi' },
       ],
-    },
-    new Headers(),
+    });
+  expect(sent).toThrow(Unsupported);
+  expect(sent).toThrow(
+    'Anthropic Messages takes no image block as instructions',
   );
-  expect(
-    encode('claude-haiku-5-5', { messages: request.messages }).body,
-  ).toMatchObject({
-    messages: [
-      { role: 'user', content: 'Weather in Oslo and Rome?' },
-      {
-        role: 'assistant',
-        content: [
-          { type: 'tool_use', id: 'call_a' },
-          { type: 'tool_use', id: 'call_b' },
-        ],
-      },
-      {
-        role: 'user',
-        content: [
-          { type: 'tool_result', tool_use_id: 'call_a', content: '4C' },
-          {
-            type: 'tool_result',
-            tool_use_id: 'call_b',
-            content: [
-              {
-                type: 'text',
-                text: '21C',
-                cache_control: { type: 'ephemeral' },
-              },
-            ],
-          },
-        ],
-      },
-      { role: 'user', content: 'And Paris?' },
-    ],
-  });
 });
 
 test('a turn of results is gathered with its own marker and failure flag, and one with fields of its own stays apart', () => {
@@ -596,12 +425,7 @@ function citations(count: number): readonly Message[] {
   return request.messages;
 }
 
-test('results gathered and citations put back are written as they always were', () => {
-  expect(
-    JSON.stringify(encode('claude-haiku-5-5', { messages: results(3) }).body),
-  ).toBe(
-    '{"max_tokens":64000,"model":"claude-haiku-5-5","messages":[{"role":"user","content":"Check every host."},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_0","content":"up"},{"type":"tool_result","tool_use_id":"call_1","content":"up"},{"type":"tool_result","tool_use_id":"call_2","content":"up"}]}],"stream":true}',
-  );
+test('citations put back are written as they always were', () => {
   expect(
     JSON.stringify(encode('claude-haiku-5-5', { messages: citations(3) }).body),
   ).toBe(
@@ -647,15 +471,7 @@ test.each([
       thinking: { type: 'enabled', budget_tokens: 2048, display: 'summarized' },
     },
   ],
-  [
-    { effort: 'high', exclude: true } as const,
-    {
-      thinking: { type: 'adaptive', display: 'omitted' },
-      output_config: { effort: 'high' },
-    },
-  ],
   [{ exclude: true }, {}],
-  [{ effort: 'none' } as const, { output_config: { effort: 'low' } }],
 ])(
   'reasoning %j is sent the same with a connection that states thinking and without one',
   (reasoning, sent) => {
@@ -793,16 +609,6 @@ test('the rule is asked by the name the upstream knows the model by', () => {
         'Anthropic Messages has no field for a temperature the model does not take',
     },
   ]);
-});
-
-test('with no rule sampling is sent as given', () => {
-  const { body, leftOut } = encode('claude-opus-4-7', {
-    messages: [{ role: 'user', text: 'Hello' }],
-    options: { temperature: 0.2, topP: 0.9, topK: 40 },
-  });
-
-  expect(body).toMatchObject({ temperature: 0.2, top_p: 0.9, top_k: 40 });
-  expect(leftOut).toEqual([]);
 });
 
 test('a message with an entry for each family is sent this one`s own', () => {

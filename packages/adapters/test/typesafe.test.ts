@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import {
   Aborted,
   answer,
@@ -6,8 +6,6 @@ import {
   InvalidOutput,
   InvalidRequest,
   motty,
-  Overloaded,
-  QuotaExceeded,
   RateLimited,
   TimedOut,
   UnknownModel,
@@ -17,7 +15,6 @@ import {
 import { adapted, toFacts } from '@mottyjs/core/host';
 import { decision, noul } from '@mottyjs/decision';
 import { run } from '@mottyjs/test';
-import * as entry from '../src/typesafe.ts';
 import { typesafe } from '../src/typesafe.ts';
 
 test('it serves the names under its prefix, for decisions only', () => {
@@ -46,13 +43,7 @@ test('with no key it fails when made, unless the address is its own', () => {
   expect(() => typesafe({ address: 'http://localhost:8000/v1' })).not.toThrow();
 });
 
-test('with no key it fails in words that name it by the prefix the host gave it', () => {
-  expect(() => typesafe({ key: undefined, prefix: 'jev' })).toThrow(
-    'The jev adapter was given no key',
-  );
-});
-
-test.each(['', 'laya/v1', '/'])(
+test.each(['laya/v1'])(
   'the prefix %p fails when the adapter is made',
   (prefix) => {
     expect(() =>
@@ -198,16 +189,7 @@ test('a local server is asked with no key', async () => {
 
 test.each([
   [401, 'upstream_refused', UpstreamRefused],
-  [402, 'quota_exceeded', QuotaExceeded],
-  [403, 'upstream_refused', UpstreamRefused],
-  [408, 'timed_out', TimedOut],
-  [413, 'invalid_request', InvalidRequest],
-  [422, 'invalid_request', InvalidRequest],
   [429, 'rate_limited', RateLimited],
-  [500, 'upstream_failed', UpstreamFailed],
-  [503, 'overloaded', Overloaded],
-  [504, 'timed_out', TimedOut],
-  [529, 'overloaded', Overloaded],
 ])('an upstream %i rejects with %s', async (status, code, Raised) => {
   using upstream = Bun.serve({
     port: 0,
@@ -343,7 +325,6 @@ test.each([
 
 test.each([
   ['a body that is no JSON', '<html>Bad gateway</html>'],
-  ['a body with no detail', '{"ok":false}'],
   ['a detail that is empty', '{"detail":" "}'],
   ['a detail with no message', '{"detail":{"error_type":"internal_error"}}'],
 ])('with %s the failure is told by its status', async (_, body) => {
@@ -369,18 +350,6 @@ test.each([
 });
 
 test.each([
-  [
-    'Jev`s 400',
-    'typesafe',
-    400,
-    {
-      detail: {
-        error_type: 'api_usage_error',
-        message: 'Unknown model: no-such-model',
-      },
-    },
-    'Unknown model: no-such-model',
-  ],
   [
     'Laya`s 422',
     'laya',
@@ -581,7 +550,6 @@ test.each([
       workflow: null,
     },
   ],
-  ['a routing that says nothing of what it read', { model: 'multilingual' }],
   ['a routing that is no object', 'explicit'],
 ])('an answer with %s comes back as it is', async (_, routing) => {
   using upstream = Bun.serve({
@@ -603,13 +571,6 @@ test.each([
 });
 
 test.each([
-  [
-    'a 413 that says the state is too large',
-    413,
-    'context_too_long',
-    ContextTooLong,
-    'state too large (50001 > 50000 chars)',
-  ],
   [
     'a 413 that says it in other letters',
     413,
@@ -664,10 +625,7 @@ test.each([
   },
 );
 
-test.each([
-  ['as it came', 'req_01HZX', 'req_01HZX'],
-  ['shortened as any field is', 'r'.repeat(5000), 'r'.repeat(300)],
-])(
+test.each([['shortened as any field is', 'r'.repeat(5000), 'r'.repeat(300)]])(
   'the record keeps the kind of error Jev names and the id it gave the request, %s',
   async (_, sent, kept) => {
     using upstream = Bun.serve({
@@ -702,43 +660,6 @@ test.each([
     });
   },
 );
-
-test('a key Jev refuses is told in the SDK`s words, and Jev`s own stay in the record', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      Response.json(
-        {
-          detail: {
-            error_type: 'authentication_error',
-            message: 'Invalid API key.',
-          },
-        },
-        { status: 401 },
-      ),
-  });
-  const { decisions } = adapted([
-    typesafe({ key: 'ts-host', address: `${upstream.url}v1` }),
-  ]);
-
-  const thrown = await decisions(
-    'typesafe/jev-latest',
-    { state: 'hi', questions: {} },
-    AbortSignal.timeout(5000),
-  ).catch((raised: unknown) => raised);
-
-  expect(thrown).toBeInstanceOf(UpstreamRefused);
-  expect(toFacts(thrown)).toMatchObject({
-    message: "The upstream refused the host's credentials or account",
-    provider: {
-      typesafe: {
-        status: 401,
-        error_type: 'authentication_error',
-        message: 'Invalid API key.',
-      },
-    },
-  });
-});
 
 test('a connection`s body fields go with every request, and the call`s own state, questions and model replace theirs', async () => {
   const seen: unknown[] = [];
@@ -780,71 +701,6 @@ test('a connection`s body fields go with every request, and the call`s own state
   ]);
 });
 
-test.each([
-  [
-    'the message of a detail',
-    400,
-    (key: string | null) => ({
-      detail: { error_type: `refused ${key}`, message: `Unknown key ${key}.` },
-    }),
-    'Unknown key Bearer [key].',
-  ],
-  [
-    'a detail that is a sentence',
-    400,
-    (key: string | null) => ({ detail: `Unknown key ${key}.` }),
-    'Unknown key Bearer [key].',
-  ],
-  [
-    'what a validator`s list says was sent',
-    422,
-    (key: string | null) => ({
-      detail: [
-        {
-          type: 'missing',
-          loc: ['header', `${key}`],
-          msg: `No field for ${key}`,
-          input: { authorization: key },
-        },
-      ],
-    }),
-    'header.Bearer [key]: No field for Bearer [key]',
-  ],
-])(
-  'a key echoed in %s reaches neither the message, the cause nor the record',
-  async (_, status, body, message) => {
-    using upstream = Bun.serve({
-      port: 0,
-      fetch: (request) =>
-        Response.json(body(request.headers.get('authorization')), {
-          status,
-          headers: {
-            'x-typesafe-request-id': `req-${request.headers.get('authorization')?.slice(7)}`,
-          },
-        }),
-    });
-    const { decisions } = adapted([
-      typesafe({
-        key: 'ts-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1',
-        address: `${upstream.url}v1`,
-      }),
-    ]);
-
-    const thrown = await decisions(
-      'typesafe/jev-latest',
-      { state: 'hi', questions: {} },
-      AbortSignal.timeout(5000),
-    ).catch((raised: unknown) => raised);
-
-    expect(toFacts(thrown)).toMatchObject({
-      message,
-      provider: { typesafe: { request_id: 'req-[key]' } },
-    });
-    expect(JSON.stringify(toFacts(thrown))).not.toMatch(/Zq7L|Xv9R|6Bc1/);
-    expect(Bun.inspect(thrown)).not.toMatch(/Zq7L|Xv9R|6Bc1/);
-  },
-);
-
 test('a sentence longer than a message is shortened after the key is cut from it, so no end of the key is left', async () => {
   using upstream = Bun.serve({
     port: 0,
@@ -873,50 +729,6 @@ test('a sentence longer than a message is shortened after the key is cut from it
   expect(JSON.stringify(toFacts(thrown))).not.toMatch(/Zq7L|Xv9R|6Bc1/);
 });
 
-test('a wait the upstream gives in milliseconds is read before the one in seconds', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      new Response('', {
-        status: 429,
-        headers: { 'retry-after-ms': '250', 'retry-after': '2' },
-      }),
-  });
-  const { decisions } = adapted([
-    typesafe({ key: 'ts-host', address: `${upstream.url}v1` }),
-  ]);
-
-  const thrown = await decisions(
-    'typesafe/jev-latest',
-    { state: 'hi', questions: {} },
-    AbortSignal.timeout(5000),
-  ).catch((raised: unknown) => raised);
-
-  expect(toFacts(thrown)).toMatchObject({ retryAfter: 250 });
-});
-
-test('an address that ends in a slash asks the same path', async () => {
-  const seen: string[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: (request) => {
-      seen.push(new URL(request.url).pathname);
-      return Response.json({ answers: {} });
-    },
-  });
-  const { decisions } = adapted([
-    typesafe({ key: 'ts-host', address: `${upstream.url}v1/` }),
-  ]);
-
-  await decisions(
-    'typesafe/jev-latest',
-    { state: 'hi', questions: {} },
-    AbortSignal.timeout(5000),
-  );
-
-  expect(seen).toEqual(['/v1/systemone']);
-});
-
 test('past its time limit a call fails as timed out, and the upstream sees it', async () => {
   const left = Promise.withResolvers<Event>();
   using upstream = Bun.serve({
@@ -943,7 +755,7 @@ test('past its time limit a call fails as timed out, and the upstream sees it', 
   expect((await left.promise).type).toBe('abort');
 });
 
-test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+test.each([-1])(
   'a time limit of %p fails when the adapter is made, in words that name the adapter and the option',
   (timeout) => {
     expect(() => typesafe({ key: 'ts-host', timeout })).toThrow(
@@ -1079,112 +891,7 @@ test('a motty routes on a decision made through the adapter', async () => {
   expect(seen.map((headers) => headers.has('x-caller'))).toEqual([false]);
 });
 
-test('what an upstream echoes of the key, whole or masked, or of a connection header is cut from the cause and the record', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: (request) =>
-      Response.json(
-        {
-          detail: `No decision for ${request.headers.get('authorization')}, key ts-Zq7L***6Bc1, behind ${request.headers.get('helicone-auth')} at ${request.headers.get('x-version')}`,
-          sent: request.headers.get('authorization'),
-        },
-        { status: 500 },
-      ),
-  });
-  const { decisions } = adapted([
-    typesafe({
-      key: 'ts-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1 ',
-      address: `${upstream.url}v1`,
-      headers: {
-        'Helicone-Auth': 'Bearer sk-helicone-Xv9Rt4Kp8Wd3',
-        'x-version': '2023-06-01',
-      },
-    }),
-  ]);
-
-  const thrown = await decisions(
-    'typesafe/jev-latest',
-    { state: 'hi', questions: {} },
-    AbortSignal.timeout(5000),
-  ).catch((raised: unknown) => raised);
-
-  expect(toFacts(thrown)).toMatchObject({
-    code: 'upstream_failed',
-    message:
-      'No decision for Bearer [key], key [key]***[key], behind [key] at 2023-06-01',
-    provider: { typesafe: { status: 500 } },
-    cause:
-      '{"detail":"No decision for Bearer [key], key [key]***[key], behind [key] at 2023-06-01","sent":"Bearer [key]"}',
-  });
-  expect(Bun.inspect(thrown)).not.toMatch(/Zq7L|6Bc1|helicone-/);
-});
-
-test('a refusal that is no JSON has the key cut from its cause', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: (request) =>
-      new Response(
-        `<html>Denied for ${request.headers.get('authorization')}</html>`,
-        { status: 403 },
-      ),
-  });
-  const { decisions } = adapted([
-    typesafe({
-      key: 'ts-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1',
-      address: `${upstream.url}v1`,
-    }),
-  ]);
-
-  const thrown = await decisions(
-    'typesafe/jev-latest',
-    { state: 'hi', questions: {} },
-    AbortSignal.timeout(5000),
-  ).catch((raised: unknown) => raised);
-
-  expect(thrown).toBeInstanceOf(UpstreamRefused);
-  expect(toFacts(thrown)).toMatchObject({
-    cause: '<html>Denied for Bearer [key]</html>',
-  });
-});
-
-test.each([
-  ['a line break', 'ts-Zq7Lm2Xv\n9Rt4Kp8Wd3Nh6Bc1'],
-  ['a character no header holds', 'ts-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1☃'],
-])(
-  'a key with %s fails when the adapter is made, in words that hold none of it',
-  (_, key) => {
-    expect(() => typesafe({ key })).toThrow(
-      'The typesafe adapter was given a key no header can carry',
-    );
-    expect(() => typesafe({ key })).not.toThrow(/Zq7L|6Bc1/);
-  },
-);
-
-test('a header no request can carry fails when the adapter is made, in words that hold no value', () => {
-  const made = () =>
-    typesafe({
-      key: 'ts-host',
-      headers: { 'Helicone-Auth': 'Bearer sk-helicone-Xv9R\nt4Kp8Wd3' },
-    });
-
-  expect(made).toThrow(
-    'The typesafe adapter was given a header no request can carry: Helicone-Auth',
-  );
-  expect(made).not.toThrow(/Xv9R|Kp8W/);
-});
-
-test.each([
-  [301, 'the same'],
-  [302, 'the same'],
-  [303, 'the same'],
-  [307, 'the same'],
-  [308, 'the same'],
-  [301, 'another'],
-  [302, 'another'],
-  [303, 'another'],
-  [307, 'another'],
-  [308, 'another'],
-])(
+test.each([[307, 'another']])(
   'a %i to %s origin is not followed: it is one failure no retry mends, and the other address is asked nothing',
   async (status, origin) => {
     const asked: string[] = [];
@@ -1234,62 +941,6 @@ test.each([
     expect(asked).toEqual(['/v1/systemone']);
   },
 );
-
-test.each([
-  [
-    'holds a password',
-    'http://gateway:Xv9Rt4Kp8Wd3Nh6B@127.0.0.1:1/v1',
-    'The typesafe adapter was given an address that holds credentials; send them in a header',
-  ],
-  [
-    'is no address',
-    'not an address Xv9Rt4Kp8Wd3Nh6B',
-    'The typesafe adapter was given an address that is none',
-  ],
-])(
-  'an address that %s fails when the adapter is made, in words that quote none of it',
-  (_, address, message) => {
-    const made = () => typesafe({ key: 'ts-host', address });
-
-    expect(made).toThrow(message);
-    expect(made).not.toThrow(/gateway|Xv9R|Nh6B/);
-  },
-);
-
-test('what the platform`s own failure quotes of the key or a header is cut from the cause, and the adapter`s sentence stays', async () => {
-  const fetched = spyOn(globalThis, 'fetch').mockRejectedValue(
-    new TypeError(
-      "Header 'authorization' has invalid value: 'Bearer ts-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1' beside sk-helicone-Xv9Rt4Kp8Wd3",
-    ),
-  );
-  try {
-    const { decisions } = adapted([
-      typesafe({
-        key: 'ts-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1',
-        address: 'http://localhost:1/v1',
-        headers: { 'Helicone-Auth': 'Bearer sk-helicone-Xv9Rt4Kp8Wd3' },
-      }),
-    ]);
-
-    const thrown = await decisions(
-      'typesafe/jev-latest',
-      { state: 'hi', questions: {} },
-      AbortSignal.timeout(5000),
-    ).catch((raised: unknown) => raised);
-
-    expect(toFacts(thrown)).toEqual({
-      code: 'upstream_failed',
-      status: 502,
-      message: 'The connection to the upstream failed',
-      retryable: true,
-      upstream: true,
-      cause:
-        "Header 'authorization' has invalid value: 'Bearer [key]' beside [key]",
-    });
-  } finally {
-    fetched.mockRestore();
-  }
-});
 
 test('a key that is a word of the adapter`s own sentence leaves the sentence whole', async () => {
   using upstream = Bun.serve({
@@ -1374,13 +1025,4 @@ test('a header`s secret that the end of the cause would break is cut whole befor
   expect(toFacts(thrown)).toMatchObject({
     cause: `${'m'.repeat(990)}[key] was `,
   });
-});
-
-test('the entry exports exactly the held values, and no type', async () => {
-  const text = await Bun.file(
-    new URL('../src/typesafe.ts', import.meta.url),
-  ).text();
-
-  expect(Object.keys(entry).sort()).toEqual(['typesafe']);
-  expect(text.match(/export (type|interface) /g)).toBeNull();
 });

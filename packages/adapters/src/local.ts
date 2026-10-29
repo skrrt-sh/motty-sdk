@@ -27,6 +27,7 @@ export function local(
     headers,
     body,
     takes,
+    forwardHeaders,
     ...dialect
   } = options;
   return chat({
@@ -37,5 +38,6 @@ export function local(
     ...(headers === undefined ? {} : { headers }),
     ...(body === undefined ? {} : { body }),
     ...(takes === undefined ? {} : { takes }),
+    ...(forwardHeaders === undefined ? {} : { forwardHeaders }),
   });
 }

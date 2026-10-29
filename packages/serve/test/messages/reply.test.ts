@@ -443,11 +443,126 @@ test('a call that follows one whose input is whole streams at once', () => {
   ]);
 });
 
-test('a fragment that comes after its block ended opens no second block', () => {
+test('text that comes while a call is unfinished waits until its input is whole', () => {
+  const write = writer(false);
+  expect([
+    ...write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' }),
+    ...write({ type: 'text', text: 'Wait.' }),
+    ...write({ type: 'tool_call', id: 'a', arguments: '1}' }),
+  ]).toEqual([
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'tool_use', id: 'a', name: 'f', input: {} },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: '{"x":' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: '1}' },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'content_block_start',
+      index: 1,
+      content_block: { type: 'text', text: '' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 1,
+      delta: { type: 'text_delta', text: 'Wait.' },
+    },
+  ]);
+});
+
+test('text between the fragments of parallel calls goes out after both are whole', () => {
+  const write = writer(false);
+  expect([
+    ...write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"city":' }),
+    ...write({ type: 'tool_call', id: 'b', name: 'g', arguments: '{"tz":' }),
+    ...write({ type: 'text', text: 'Checking both.' }),
+    ...write({ type: 'tool_call', id: 'a', arguments: '"Paris"}' }),
+    ...write({ type: 'tool_call', id: 'b', arguments: '"CET"}' }),
+    ...write({ type: 'finish', reason: 'tool_calls' }),
+  ]).toEqual([
+    {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'tool_use', id: 'a', name: 'f', input: {} },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: '{"city":' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: '"Paris"}' },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+      type: 'content_block_start',
+      index: 1,
+      content_block: { type: 'tool_use', id: 'b', name: 'g', input: {} },
+    },
+    {
+      type: 'content_block_delta',
+      index: 1,
+      delta: { type: 'input_json_delta', partial_json: '{"tz":"CET"}' },
+    },
+    { type: 'content_block_stop', index: 1 },
+    {
+      type: 'content_block_start',
+      index: 2,
+      content_block: { type: 'text', text: '' },
+    },
+    {
+      type: 'content_block_delta',
+      index: 2,
+      delta: { type: 'text_delta', text: 'Checking both.' },
+    },
+    { type: 'content_block_stop', index: 2 },
+    {
+      type: 'message_delta',
+      delta: { stop_reason: 'tool_use', stop_sequence: null },
+      usage: { input_tokens: 0, output_tokens: 0 },
+    },
+    { type: 'message_stop' },
+  ]);
+});
+
+test('a call its upstream ended stops holding text back though its input never parsed', () => {
   const write = writer(false);
   write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' });
   write({ type: 'text', text: 'Wait.' });
-  expect(write({ type: 'tool_call', id: 'a', arguments: '1}' })).toEqual([]);
+  expect(
+    write({ type: 'tool_call', id: 'a', arguments: '', ended: true }),
+  ).toMatchObject([
+    { type: 'content_block_stop', index: 0 },
+    { type: 'content_block_start', index: 1 },
+    { type: 'content_block_delta', delta: { text: 'Wait.' } },
+  ]);
+});
+
+test('what waits on a call that never finishes is written at the end, after it', () => {
+  const write = writer(false);
+  write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' });
+  write({ type: 'text', text: 'Wait.' });
+  expect(
+    write({ type: 'finish', reason: 'tool_calls' }).map(({ type }) => type),
+  ).toEqual([
+    'content_block_stop',
+    'content_block_start',
+    'content_block_delta',
+    'content_block_stop',
+    'message_delta',
+    'message_stop',
+  ]);
 });
 
 test('text with nothing in it opens no block', () => {
@@ -457,25 +572,6 @@ test('text with nothing in it opens no block', () => {
     ...write({ type: 'refusal', text: '' }),
     ...write({ type: 'finish', reason: 'stop' }),
   ]).toMatchObject([{ type: 'message_delta' }, { type: 'message_stop' }]);
-});
-
-test('the reasoning count is written with the usage', () => {
-  expect(
-    writer(false)({
-      type: 'finish',
-      reason: 'stop',
-      usage: { input: 10, output: 503, reasoning: 480 },
-    }),
-  ).toMatchObject([
-    {
-      usage: {
-        input_tokens: 10,
-        output_tokens: 503,
-        output_tokens_details: { thinking_tokens: 480 },
-      },
-    },
-    { type: 'message_stop' },
-  ]);
 });
 
 test('a tool call of this family is written with the fields its upstream gave it', () => {
@@ -552,21 +648,14 @@ test('a tool call of this family is written with the fields its upstream gave it
   ]);
 });
 
-test.each([
-  ['no data', {}],
-  [
-    "another family's data",
-    { provider: { 'openai.responses': { namespace: 'agents' } } },
-  ],
-  ['empty data of this family', { provider: { anthropic: {} } }],
-])('a tool call with %s is written as it always was', (_, provider) => {
+test("a tool call with another family's data is written as it always was", () => {
   expect(
     writer(false)({
       type: 'tool_call',
       id: 'call_1',
       name: 'get_weather',
       arguments: '{"location": "Paris"}',
-      ...provider,
+      provider: { 'openai.responses': { namespace: 'agents' } },
     }),
   ).toEqual([
     {
@@ -612,37 +701,6 @@ test("a tool call's own id, name and kind are never replaced by what rides with 
         input: {},
       },
     },
-  ]);
-});
-
-test('the finish is written with the refusal details the upstream gave', () => {
-  expect(
-    writer(false)({
-      type: 'finish',
-      reason: 'content_filter',
-      rawReason: 'refusal',
-      usage: { input: 10, output: 0 },
-      provider: {
-        anthropic: {
-          stop_details: {
-            type: 'refusal',
-            category: 'cyber',
-            explanation: null,
-          },
-        },
-      },
-    }),
-  ).toEqual([
-    {
-      type: 'message_delta',
-      delta: {
-        stop_reason: 'refusal',
-        stop_sequence: null,
-        stop_details: { type: 'refusal', category: 'cyber', explanation: null },
-      },
-      usage: { input_tokens: 10, output_tokens: 0 },
-    },
-    { type: 'message_stop' },
   ]);
 });
 

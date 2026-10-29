@@ -2,16 +2,8 @@ import { expect, test } from 'bun:test';
 import { cp, mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
-async function freePort(): Promise<number> {
-  const probe = Bun.serve({ port: 0, fetch: () => new Response() });
-  const { port } = probe;
-  await probe.stop(true);
-  if (port === undefined) throw new Error('The probe was given no port');
-  return port;
-}
-
 // Empty while nothing listens, as between two runs of the serve file.
-async function said(port: number): Promise<string> {
+async function said(port: string | undefined): Promise<string> {
   const reply = await fetch(`http://localhost:${port}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -34,7 +26,6 @@ async function until(met: () => Promise<boolean>): Promise<void> {
 }
 
 test('an edit to the motty of a serve file Bun watches changes the next answer, and so does the fix of an edit that does not load', async () => {
-  const port = await freePort();
   const copy = await mkdtemp(`${tmpdir()}/motty-watch-`);
   await cp(`${import.meta.dir}/watch`, copy, { recursive: true });
   await mkdir(`${copy}/node_modules/@mottyjs`, { recursive: true });
@@ -45,33 +36,44 @@ test('an edit to the motty of a serve file Bun watches changes the next answer, 
   );
   const written = await Bun.file(`${copy}/motty.ts`).text();
   const host = Bun.spawn([process.execPath, '--watch', `${copy}/serve.ts`], {
-    env: { ...Bun.env, PORT: String(port) },
-    stdout: 'ignore',
+    env: { ...Bun.env, PORT: '0' },
+    stdout: 'pipe',
     stderr: Bun.file(`${copy}/errors`),
   });
+  // Each run takes a port of its own and Bun prints it: a port found free
+  // beforehand may be taken by another test before the process binds.
+  let printed = '';
+  const port = () => [...printed.matchAll(/localhost:(\d+)/g)].at(-1)?.[1];
+  const reading = (async () => {
+    const decoder = new TextDecoder();
+    for await (const chunk of host.stdout) {
+      printed += decoder.decode(chunk, { stream: true });
+    }
+  })();
   try {
-    await until(async () => (await said(port)).includes('Use a mutex.'));
+    await until(async () => (await said(port())).includes('Use a mutex.'));
 
     await Bun.write(
       `${copy}/motty.ts`,
       written.replace('Use a mutex.', 'Use a channel.'),
     );
-    await until(async () => (await said(port)).includes('Use a channel.'));
+    await until(async () => (await said(port())).includes('Use a channel.'));
 
     await Bun.write(`${copy}/motty.ts`, 'export default {');
     await until(async () =>
       (await Bun.file(`${copy}/errors`).text()).includes('error'),
     );
-    expect(await said(port)).toBe('');
+    expect(await said(port())).toBe('');
 
     await Bun.write(
       `${copy}/motty.ts`,
       written.replace('Use a mutex.', 'Use a queue.'),
     );
-    await until(async () => (await said(port)).includes('Use a queue.'));
+    await until(async () => (await said(port())).includes('Use a queue.'));
   } finally {
     host.kill('SIGKILL');
     await host.exited;
+    await reading;
     await rm(copy, { recursive: true });
   }
 }, 60_000);

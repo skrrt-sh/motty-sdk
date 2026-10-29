@@ -227,7 +227,7 @@ describe.skipIf(key === undefined || key === '')(
                     type: 'document',
                     source: {
                       type: 'url',
-                      url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+                      url: 'https://raw.githubusercontent.com/py-pdf/sample-files/main/001-trivial/minimal-document.pdf',
                     },
                   },
                 ],
@@ -241,7 +241,9 @@ describe.skipIf(key === undefined || key === '')(
 
       expect(reply.status).toBe(200);
       expect(answer).toMatchObject({
-        content: [{ type: 'text', text: expect.stringMatching(/dummy pdf/i) }],
+        content: [
+          { type: 'text', text: expect.stringMatching(/lorem ipsum/i) },
+        ],
       });
     });
 

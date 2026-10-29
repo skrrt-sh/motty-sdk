@@ -3,9 +3,10 @@
 The adapters of the Motty SDK: plain objects a host passes in its host options, one import path
 each. Model providers: `openai`, `anthropic`, `openrouter`, `deepseek`, `moonshot`, `zai`,
 `dashscope`, `minimax`, `groq`, `mistral`, `together`, `fireworks`, `ollama`, `local` and
-`typesafe`. Storage: `redis`. Auth: `jwt` and `bearer`, or an object of the host's own. A
-credential stays inside the adapter the host made and never enters a motty's code. This package is
-never in a motty's bundle.
+`typesafe`. Storage: `redis`, which is Bun's own client and so runs on Bun alone, and `cloudflare`,
+a Durable Object, which runs on Cloudflare Workers alone. Auth: `jwt` and
+`bearer`, or an object of the host's own. A credential stays inside the adapter the host made and
+never enters a motty's code. This package is never in a motty's bundle.
 
 ```sh
 bun add @mottyjs/adapters
@@ -35,6 +36,45 @@ export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL })
   auth: jwt({ jwks: JWKS_URL }),
 }));
 ```
+
+On Workers, storage is a Durable Object class of the host's own Worker. The worker entry exports
+`MottyStorage`, and `cloudflare` is given its binding, read from the `env` that `cloudflare:workers`
+exports, since a binding is not a string and so is not in the environment `mount` reads:
+
+```ts
+import { env } from "cloudflare:workers";
+import { mount } from "@mottyjs/serve";
+import { cloudflare } from "@mottyjs/adapters/cloudflare";
+import { openai } from "@mottyjs/adapters/openai";
+import desk from "./motty";
+
+export { MottyStorage } from "@mottyjs/adapters/cloudflare";
+
+export default mount(desk, ({ OPENAI_KEY }) => ({
+  models: [openai({ key: OPENAI_KEY })],
+  storage: cloudflare({ binding: env.STORAGE }),
+}));
+```
+
+The binding and its migration in `wrangler.jsonc`:
+
+```jsonc
+{
+  "compatibility_date": "2026-02-24",
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+  "durable_objects": {
+    "bindings": [{ "name": "STORAGE", "class_name": "MottyStorage" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MottyStorage"] }]
+}
+```
+
+Each key is an object of its own, so keys never wait on each other, and an object whose keys
+have all expired is deleted whole. A compatibility date of 2026-02-24 or later lets that delete
+take the object's alarm with it; an older date leaves the alarm to fire once on an empty object.
+A host that wants related keys together passes `name`, a function from a key to the name of its
+object, and one that must keep data in a region passes a binding restricted to it, such as
+`env.STORAGE.jurisdiction("eu")`. A binding is no credential, so nothing secret reaches the motty.
 
 A connection takes `headers` for every request it makes and `body` fields in the provider's own
 names. A call may state headers of its own in its options, for a harness whose headers an upstream

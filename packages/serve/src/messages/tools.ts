@@ -1,5 +1,5 @@
 import type { Json, Options, Tool, ToolChoice } from '@mottyjs/core/host';
-import { cacheOf, cacheTo } from '../wire/cache-control.ts';
+import { cacheExtra, cacheOf, cacheTo } from '../wire/cache-control.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, given, isDict } from '../wire/json.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
@@ -36,15 +36,41 @@ export function toolOf(raw: Json): Tool {
     ...cacheOf(control),
     ...marked(rest),
     // How the input streams changes no meaning, so another family drops it.
-    ...noted(given({ eager_input_streaming: eager })),
+    ...noted(
+      given({
+        eager_input_streaming: eager,
+        cache_control: cacheExtra(control),
+      }),
+    ),
+  };
+}
+
+// This API takes a tool's input only as an object, so a free-form tool is
+// one with its text in a single field, told the grammar the text follows.
+// Its calls are read back to the text, and a call sent back is wrapped again.
+function freeTo(left: Leaving, tool: Tool & { type: 'custom' }): Dict {
+  left.without('tool.custom', tool);
+  const { grammar } = tool;
+  const told = [
+    tool.description,
+    grammar &&
+      `The input follows this ${grammar.syntax} grammar:\n${grammar.definition}`,
+  ].filter((said) => said !== undefined && said !== '');
+  return {
+    name: tool.name,
+    ...(told.length === 0 ? {} : { description: told.join('\n\n') }),
+    input_schema: {
+      type: 'object',
+      properties: { input: { type: 'string' } },
+      required: ['input'],
+    },
+    ...hinted(tool.hints),
+    ...own(tool.provider, 'a tool'),
   };
 }
 
 export function toolTo(left: Leaving, tool: Tool): Dict | undefined {
-  if (tool.type === 'custom') {
-    left.without('tool.custom', tool);
-    return undefined;
-  }
+  if (tool.type === 'custom') return freeTo(left, tool);
   const extra = own(tool.provider, 'a tool');
   if (tool.type === 'provider') {
     if (Object.keys(extra).length === 0) {
@@ -52,13 +78,14 @@ export function toolTo(left: Leaving, tool: Tool): Dict | undefined {
     }
     return { ...extra, ...cacheTo(tool.cache) };
   }
+  const { cache_control: kept, ...hints } = hinted(tool.hints);
   return {
     name: tool.name,
     ...given({ description: tool.description, strict: tool.strict }),
     input_schema: copied(tool.input),
-    ...hinted(tool.hints),
+    ...hints,
     ...extra,
-    ...cacheTo(tool.cache),
+    ...cacheTo(tool.cache, kept),
   };
 }
 

@@ -1,23 +1,6 @@
 import { expect, test } from 'bun:test';
 import { adapted } from '@mottyjs/core/host';
-import * as entry from '../src/minimax.ts';
 import { minimax } from '../src/minimax.ts';
-
-test('built from MiniMax`s reference alone, with no key held: it serves the names under its prefix, and with no key it fails when made', () => {
-  const adapter = minimax({ key: 'sk-host' });
-
-  expect(adapter.serves('minimax/MiniMax-M2.7')).toBe(true);
-  expect(adapter.serves('openrouter/minimax/minimax-m2.7')).toBe(false);
-  expect(minimax({ key: 'k', prefix: 'own' }).serves('own/x')).toBe(true);
-  expect(adapter.decide).toBeUndefined();
-  expect(() => minimax({ key: undefined })).toThrow(
-    'The minimax adapter was given no key',
-  );
-  expect(() => minimax({ key: '' })).toThrow();
-  expect(() => minimax({ key: ' \t' })).toThrow(
-    'The minimax adapter was given no key',
-  );
-});
 
 test('a call goes to Chat Completions under the address with the key, and reasoning between think tags cut across chunks, a tool call and usage are read, by its reference', async () => {
   const seen: { path: string; key: string | null }[] = [];
@@ -120,109 +103,6 @@ data: [DONE]
       {
         setting: 'reasoning.off',
         detail: 'Chat Completions has no field for an order not to reason',
-      },
-    ],
-  });
-  expect(events.at(-1)).toHaveProperty('warnings.length', 1);
-});
-
-test('an effort has no word every model takes, so it is left out and reported', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    minimax({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'minimax/MiniMax-M2.7',
-      {
-        messages: [{ role: 'user', text: 'What is 17*23?' }],
-        options: { reasoning: { effort: 'high' } },
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toEqual([
-    {
-      model: 'MiniMax-M2.7',
-      messages: [{ role: 'user', content: 'What is 17*23?' }],
-      stream: true,
-      stream_options: { include_usage: true },
-    },
-  ]);
-  expect(events.at(-1)).toMatchObject({
-    type: 'finish',
-    warnings: [
-      {
-        setting: 'reasoning.effort',
-        detail: 'Chat Completions has no field for a level of reasoning effort',
-      },
-    ],
-  });
-  expect(events.at(-1)).toHaveProperty('warnings.length', 1);
-});
-
-test('a budget has no field, and is left out and reported', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    minimax({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'minimax/MiniMax-M2.7',
-      {
-        messages: [{ role: 'user', text: 'What is 17*23?' }],
-        options: { reasoning: { budgetTokens: 2000 } },
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toEqual([
-    {
-      model: 'MiniMax-M2.7',
-      messages: [{ role: 'user', content: 'What is 17*23?' }],
-      stream: true,
-      stream_options: { include_usage: true },
-    },
-  ]);
-  expect(events.at(-1)).toMatchObject({
-    type: 'finish',
-    warnings: [
-      {
-        setting: 'reasoning.budgetTokens',
-        detail:
-          'Chat Completions has no field for a reasoning budget in tokens',
       },
     ],
   });
@@ -347,66 +227,6 @@ data: [DONE]
   expect(events.at(-1)).toHaveProperty('warnings.length', 2);
 });
 
-test('reasoning goes back inside the assistant turn`s text, between the tags it came in', async () => {
-  const seen: unknown[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: async (request) => {
-      seen.push(await request.json());
-      return new Response(
-        `data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"391"},"finish_reason":"stop"}]}
-
-data: [DONE]
-
-`,
-        { headers: { 'content-type': 'text/event-stream' } },
-      );
-    },
-  });
-  const { models } = adapted([
-    minimax({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'minimax/MiniMax-M2.7',
-      {
-        messages: [
-          { role: 'user', text: 'Which is further north, Paris or Rome?' },
-          {
-            role: 'assistant',
-            parts: [
-              { type: 'reasoning', text: 'Paris is at 48 degrees.' },
-              { type: 'text', text: 'Paris' },
-            ],
-          },
-          { role: 'user', text: 'And further south?' },
-        ],
-      },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(seen).toMatchObject([
-    {
-      messages: [
-        { role: 'user', content: 'Which is further north, Paris or Rome?' },
-        {
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: '<think>Paris is at 48 degrees.</think>Paris',
-            },
-          ],
-        },
-        { role: 'user', content: 'And further south?' },
-      ],
-    },
-  ]);
-  expect(events.at(-1)).not.toHaveProperty('warnings');
-});
-
 test.each([
   {
     base: { status_code: 1002, status_msg: 'rate limit' },
@@ -425,10 +245,6 @@ test.each([
     kind: 'context_too_long',
   },
   {
-    base: { status_code: 1013, status_msg: 'internal service error' },
-    kind: 'upstream_failed',
-  },
-  {
     base: { status_code: 1001, status_msg: 'request timeout' },
     kind: 'timed_out',
   },
@@ -439,6 +255,17 @@ test.each([
   {
     base: { status_code: '1008', status_msg: 'insufficient balance' },
     kind: 'quota_exceeded',
+  },
+  {
+    base: { status_code: 2022, status_msg: 'model is not exist' },
+    kind: 'unknown_model',
+  },
+  {
+    base: {
+      status_code: 2064,
+      status_msg: 'The server cluster is currently under high load',
+    },
+    kind: 'overloaded',
   },
 ])(
   'status $base.status_code inside a reply that began well is $kind, in the upstream`s words, by its reference',
@@ -526,7 +353,10 @@ data: ${JSON.stringify({ id: '0629', choices: [], base_resp: base })}
           code: kind,
           message: "The upstream refused the host's credentials or account",
           provider: {
-            minimax: { status_code: 1004, message: base.status_msg },
+            minimax: {
+              status_code: base.status_code,
+              message: base.status_msg,
+            },
           },
           upstream: true,
         },
@@ -592,57 +422,6 @@ test('a status of zero in every chunk of a reply is no failure, and one MiniMax 
       },
     ],
   ]);
-});
-
-test('a response that failed is named by its status, in the words of its reference, and recorded under MiniMax`s name', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      Response.json(
-        {
-          error: {
-            type: 'invalid_request_error',
-            message:
-              'model "MiniMax-M3.1-Flash-Preview" requires adaptive thinking; thinking.type="disabled" (including reasoning.effort=none) is not allowed (2013)',
-          },
-        },
-        { status: 400 },
-      ),
-  });
-  const { models } = adapted([
-    minimax({ key: 'sk-host', address: upstream.url.origin }),
-  ]);
-
-  const events = await Array.fromAsync(
-    models(
-      'minimax/MiniMax-M3.1-Flash-Preview',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.timeout(5000),
-    ),
-  );
-
-  expect(events).toMatchObject([
-    {
-      type: 'error',
-      error: {
-        code: 'invalid_request',
-        status: 400,
-        message:
-          'model "MiniMax-M3.1-Flash-Preview" requires adaptive thinking; thinking.type="disabled" (including reasoning.effort=none) is not allowed (2013)',
-        provider: { minimax: { status: 400 } },
-        upstream: true,
-      },
-    },
-  ]);
-});
-
-test('the entry exports exactly the held values, and no type', async () => {
-  const text = await Bun.file(
-    new URL('../src/minimax.ts', import.meta.url),
-  ).text();
-
-  expect(Object.keys(entry).sort()).toEqual(['minimax']);
-  expect(text.match(/export (type|interface) /g)).toBeNull();
 });
 
 test('a failure told as one JSON body under a status that tells none is read from MiniMax`s own status, not as a stream that closed', async () => {

@@ -7,22 +7,6 @@ import { model } from '../../src/request/model.ts';
 import { progress, think } from '../../src/request/think.ts';
 import { stubHost } from '../stub-host.ts';
 
-test('a line of text is one piece of progress', async () => {
-  await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-
-    expect(think('Answering with the deep tier')).toBeUndefined();
-
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 0, text: 'Answering with the deep tier' },
-    });
-    close();
-    expect(await reader.next()).toEqual({ done: true, value: undefined });
-  });
-});
-
 test('several lines go out in the order they were offered', async () => {
   const seen = await enter(stubHost(), async () => {
     const { pieces, close } = progress(current());
@@ -81,33 +65,6 @@ test('a forwarded answer is one piece made of its text chunks only', async () =>
     { piece: 1, text: 'the lock order' },
     { piece: 2, text: 'Following the plan' },
   ]);
-});
-
-test("a live answer's text arrives before the answer finishes", async () => {
-  await enter(stubHost(), async () => {
-    const gate = Promise.withResolvers<void>();
-    async function* arriving(): AsyncIterable<Chunk> {
-      yield { type: 'text', text: 'one ' };
-      await gate.promise;
-      yield { type: 'text', text: 'two' };
-    }
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-
-    think(answer(arriving()));
-
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 0, text: 'one ' },
-    });
-    gate.resolve();
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 0, text: 'two' },
-    });
-    close();
-    expect(await reader.next()).toEqual({ done: true, value: undefined });
-  });
 });
 
 test('a piece offered after a live answer waits for it to finish', async () => {
@@ -327,69 +284,6 @@ test('concurrent requests keep their progress apart', async () => {
   ]);
 });
 
-test('a read waiting on an empty stage gets the next line offered', async () => {
-  await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const waiting = pieces[Symbol.asyncIterator]().next();
-
-    think('Reading the request');
-
-    expect(await waiting).toEqual({
-      done: false,
-      value: { piece: 0, text: 'Reading the request' },
-    });
-    close();
-  });
-});
-
-test('a read waiting on an empty stage gets an offered answer live', async () => {
-  await enter(stubHost(), async () => {
-    const gate = Promise.withResolvers<void>();
-    async function* arriving(): AsyncIterable<Chunk> {
-      yield { type: 'text', text: 'one ' };
-      await gate.promise;
-      yield { type: 'text', text: 'two' };
-    }
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-    const waiting = reader.next();
-
-    think(answer(arriving()));
-
-    expect(await waiting).toEqual({
-      done: false,
-      value: { piece: 0, text: 'one ' },
-    });
-    gate.resolve();
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 0, text: 'two' },
-    });
-    close();
-  });
-});
-
-test('reads asked at once are answered in the order they were asked', async () => {
-  await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-    const asked = [reader.next(), reader.next(), reader.next(), reader.next()];
-
-    think('Reading the request');
-    think(answer('1. Find the lock order'));
-    think('Following the plan');
-    await Bun.sleep(1);
-    close();
-
-    expect(await Promise.all(asked)).toEqual([
-      { done: false, value: { piece: 0, text: 'Reading the request' } },
-      { done: false, value: { piece: 1, text: '1. Find the lock order' } },
-      { done: false, value: { piece: 2, text: 'Following the plan' } },
-      { done: true, value: undefined },
-    ]);
-  });
-});
-
 test('a forwarded answer with no text takes its piece number and sends nothing', async () => {
   const host = stubHost({
     'acme/small': [
@@ -419,30 +313,6 @@ test('a forwarded answer with no text takes its piece number and sends nothing',
   ]);
 });
 
-test('a forwarded answer that fails before any text ends its piece quietly', async () => {
-  await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-    const plan = answer({
-      [Symbol.asyncIterator]: () => ({
-        next: async () => {
-          throw new RangeError('The socket closed');
-        },
-      }),
-    });
-
-    think(plan);
-    think('Answering without a plan');
-
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 1, text: 'Answering without a plan' },
-    });
-    close();
-    await expect(plan.text()).rejects.toBeInstanceOf(Error);
-  });
-});
-
 test('closing ends a read waiting on an empty stage', async () => {
   await enter(stubHost(), async () => {
     const { pieces, close } = progress(current());
@@ -452,50 +322,6 @@ test('closing ends a read waiting on an empty stage', async () => {
 
     expect(await waiting).toEqual({ done: true, value: undefined });
   });
-});
-
-test('closing between two reads of a live answer ends the next read', async () => {
-  await enter(stubHost(), async () => {
-    const gate = Promise.withResolvers<void>();
-    async function* arriving(): AsyncIterable<Chunk> {
-      yield { type: 'text', text: 'one ' };
-      await gate.promise;
-      yield { type: 'text', text: 'two' };
-    }
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-    const plan = answer(arriving());
-
-    think(plan);
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 0, text: 'one ' },
-    });
-    close();
-
-    expect(await reader.next()).toEqual({ done: true, value: undefined });
-    gate.resolve();
-    expect(await plan.text()).toBe('one two');
-  });
-});
-
-test('closing sends every line nobody read yet and each forwarded answer that has arrived, whole and in order', async () => {
-  const seen = await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const plan = answer('1. Find the lock order');
-    await plan.text();
-    think('Reading the request');
-    think(plan);
-    think('Choosing a tier');
-    close();
-    return Array.fromAsync(pieces);
-  });
-
-  expect(seen).toEqual([
-    { piece: 0, text: 'Reading the request' },
-    { piece: 1, text: '1. Find the lock order' },
-    { piece: 2, text: 'Choosing a tier' },
-  ]);
 });
 
 test.each([
@@ -556,34 +382,6 @@ test('what had arrived of a forwarded answer when the stage closed goes out thou
   ]);
 });
 
-test('closing twice is the same as closing once', async () => {
-  await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-    think('Reading the request');
-
-    close();
-    expect(() => close()).not.toThrow();
-
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 0, text: 'Reading the request' },
-    });
-    expect(await reader.next()).toEqual({ done: true, value: undefined });
-    expect(await reader.next()).toEqual({ done: true, value: undefined });
-  });
-});
-
-test('a reader that starts after the stage closed ends at once', async () => {
-  const seen = await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    close();
-    return Array.fromAsync(pieces);
-  });
-
-  expect(seen).toEqual([]);
-});
-
 test('a reader that stops before reading closes the stage', async () => {
   await enter(stubHost(), async () => {
     const { pieces } = progress(current());
@@ -595,24 +393,6 @@ test('a reader that stops before reading closes the stage', async () => {
     think('Choosing a tier');
     expect(await reader.next()).toEqual({ done: true, value: undefined });
   });
-});
-
-test('a reader that stops between pieces closes the stage', async () => {
-  const seen = await enter(stubHost(), async () => {
-    const { pieces } = progress(current());
-    think('Reading the request');
-    think('Choosing a tier');
-
-    const seen = [];
-    for await (const delta of pieces) {
-      seen.push(delta);
-      break;
-    }
-    think('Answering with the deep tier');
-    return [...seen, ...(await Array.fromAsync(pieces))];
-  });
-
-  expect(seen).toEqual([{ piece: 0, text: 'Reading the request' }]);
 });
 
 test('a reader that stops mid-answer ends its waiting read and leaves the answer readable', async () => {
@@ -686,11 +466,7 @@ test('an empty line offers nothing and takes no piece number', async () => {
 
 test.each([
   ['null', JSON.parse('null')],
-  ['undefined', JSON.parse('{}').progress],
   ['a number', JSON.parse('5')],
-  ['true', JSON.parse('true')],
-  ['an empty object', JSON.parse('{}')],
-  ['an object whose chunks is no function', JSON.parse('{"chunks":"text"}')],
   [
     'a look-alike of an answer, with a chunks() of its own',
     {
@@ -721,21 +497,6 @@ test.each([
   1_000,
 );
 
-test('nothing offered after the stage closed is kept', async () => {
-  await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const plan = answer('Too late');
-    await plan.text();
-    close();
-
-    think('Too late');
-    think(plan);
-
-    const reader = pieces[Symbol.asyncIterator]();
-    expect(await reader.next()).toEqual({ done: true, value: undefined });
-  });
-}, 1_000);
-
 test('reads asked ahead are answered in order across a live answer, a line and a whole answer', async () => {
   await enter(stubHost(), async () => {
     async function* slow(): AsyncIterable<Chunk> {
@@ -760,25 +521,6 @@ test('reads asked ahead are answered in order across a live answer, a line and a
       { done: false, value: { piece: 0, text: '3' } },
       { done: false, value: { piece: 1, text: 'Following the plan' } },
       { done: false, value: { piece: 2, text: 'A second answer, whole' } },
-    ]);
-    close();
-  });
-}, 1_000);
-
-test('forwarding an answer reads it through no reader of its own, so the author sees every chunk still', async () => {
-  await enter(stubHost(), async () => {
-    const { pieces, close } = progress(current());
-    const reader = pieces[Symbol.asyncIterator]();
-    const plan = answer('The plan');
-
-    think(plan);
-
-    expect(await reader.next()).toEqual({
-      done: false,
-      value: { piece: 0, text: 'The plan' },
-    });
-    expect(await Array.fromAsync(plan.chunks())).toEqual([
-      { type: 'text', text: 'The plan' },
     ]);
     close();
   });

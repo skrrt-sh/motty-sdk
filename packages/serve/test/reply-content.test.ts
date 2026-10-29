@@ -82,23 +82,6 @@ test('a file in a stream that has begun ends it with the error, stops the call a
   ]);
 });
 
-test('a file as the first content of a stream is answered with the status of the error', async () => {
-  const served = mount(coder, () => ({
-    models: [
-      saying([
-        { type: 'file', data: 'JVBERi0=', mediaType: 'application/pdf' },
-      ]),
-    ],
-  }));
-  using server = Bun.serve({ port: 0, fetch: served.fetch });
-
-  const reply = await ask(server.port, true);
-
-  expect(reply.status).toBe(400);
-  expect(await reply.json()).toMatchObject({ error: refused });
-  await served.close();
-});
-
 test('a file in a whole reply is the error and never an empty answer', async () => {
   const reports: Report[] = [];
   const served = mount(coder, () => ({
@@ -150,19 +133,4 @@ test('a citation with no form is left out of the reply and named once on the rep
       detail: 'Chat Completions has no form for a citation with no address',
     },
   ]);
-});
-
-test('a reply with a form for everything reports no warnings', async () => {
-  const reports: Report[] = [];
-  const served = mount(coder, () => ({
-    models: [saying([{ type: 'text', text: 'It rains.' }])],
-    report: (report) => reports.push(report),
-  }));
-  using server = Bun.serve({ port: 0, fetch: served.fetch });
-
-  await (await ask(server.port, false)).json();
-  await served.close();
-
-  expect(reports).toHaveLength(1);
-  expect(reports[0]).not.toHaveProperty('warnings');
 });

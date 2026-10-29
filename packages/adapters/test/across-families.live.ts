@@ -24,9 +24,9 @@ describe.skipIf(
           prompt,
         );
         await claude.text();
-        const responses = await model('openai/gpt-4.1-nano').complete(prompt);
+        const responses = await model('openai/gpt-6-luna').complete(prompt);
         await responses.text();
-        return model('openai-chat/gpt-4.1-nano').complete(prompt);
+        return model('openai-chat/gpt-6-luna').complete(prompt);
       }),
       {
         text: 'Say ok.',
@@ -54,8 +54,8 @@ describe.skipIf(
     expect(await answer.finish()).toBe('stop');
     expect(calls.map(({ model: called, code }) => [called, code])).toEqual([
       ['anthropic/claude-haiku-5-5', undefined],
-      ['openai/gpt-4.1-nano', undefined],
-      ['openai-chat/gpt-4.1-nano', undefined],
+      ['openai/gpt-6-luna', undefined],
+      ['openai-chat/gpt-6-luna', undefined],
     ]);
     for (const call of calls) expect(call).not.toHaveProperty('warnings');
   });
@@ -63,9 +63,9 @@ describe.skipIf(
   test('an option both OpenAI APIs have, said once for OpenAI, is taken by each', async () => {
     const { answer, calls } = await run(
       motty({ name: 'twice' }).handle(async ({ prompt }) => {
-        const responses = await model('openai/gpt-4.1-nano').complete(prompt);
+        const responses = await model('openai/gpt-6-luna').complete(prompt);
         await responses.text();
-        return model('openai-chat/gpt-4.1-nano').complete(prompt);
+        return model('openai-chat/gpt-6-luna').complete(prompt);
       }),
       {
         text: 'Say ok.',
@@ -90,8 +90,8 @@ describe.skipIf(
 
     expect(await answer.finish()).toBe('stop');
     expect(calls.map(({ model: called, code }) => [called, code])).toEqual([
-      ['openai/gpt-4.1-nano', undefined],
-      ['openai-chat/gpt-4.1-nano', undefined],
+      ['openai/gpt-6-luna', undefined],
+      ['openai-chat/gpt-6-luna', undefined],
     ]);
     for (const call of calls) expect(call).not.toHaveProperty('warnings');
   });
@@ -99,7 +99,7 @@ describe.skipIf(
   test('an option the Responses API alone has, said for OpenAI, fails a call to Chat Completions by name before it is sent', async () => {
     const ran = run(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4.1-nano').complete(prompt),
+        model('openai/gpt-5-nano').complete(prompt),
       ),
       {
         text: 'Say ok.',
@@ -125,8 +125,8 @@ describe.skipIf(
     const { answer, calls } = await run(
       motty({ name: 'relay' }).handle(({ prompt }) =>
         fallback(
-          model('openai-chat/gpt-4.1-nano'),
-          model('openai/gpt-4.1-nano'),
+          model('openai-chat/gpt-6-luna'),
+          model('openai/gpt-6-luna'),
         ).complete(prompt),
       ),
       {
@@ -150,15 +150,15 @@ describe.skipIf(
 
     expect(await answer.finish()).toBe('stop');
     expect(calls.map(({ model: called, code }) => [called, code])).toEqual([
-      ['openai-chat/gpt-4.1-nano', 'unsupported'],
-      ['openai/gpt-4.1-nano', undefined],
+      ['openai-chat/gpt-6-luna', 'unsupported'],
+      ['openai/gpt-6-luna', undefined],
     ]);
   });
 
   test('with an entry for Anthropic alone, a call to the Responses API fails as unsupported before it is sent', async () => {
     const ran = run(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4.1-nano').complete(prompt),
+        model('openai/gpt-5-nano').complete(prompt),
       ),
       {
         text: 'Say ok.',
@@ -183,7 +183,7 @@ describe.skipIf(
   test('with an entry for Anthropic alone, a call to Chat Completions fails as unsupported before it is sent', async () => {
     const ran = run(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4.1-nano').complete(prompt),
+        model('openai/gpt-5-nano').complete(prompt),
       ),
       {
         text: 'Say ok.',
@@ -209,7 +209,7 @@ describe.skipIf(
     const { answer, calls } = await run(
       motty({ name: 'relay' }).handle(async ({ prompt }) => {
         const reply = await fallback(
-          model('openai/gpt-4.1-nano'),
+          model('openai/gpt-5-nano'),
           model('anthropic/claude-haiku-5-5'),
         ).complete(prompt);
         named.push(await reply.model());
@@ -230,7 +230,7 @@ describe.skipIf(
     expect(await answer.finish()).toBe('stop');
     expect(named).toEqual(['anthropic/claude-haiku-5-5']);
     expect(calls.map(({ model: called, code }) => [called, code])).toEqual([
-      ['openai/gpt-4.1-nano', 'unsupported'],
+      ['openai/gpt-5-nano', 'unsupported'],
       ['anthropic/claude-haiku-5-5', undefined],
     ]);
   });
@@ -262,10 +262,10 @@ describe.skipIf(
     ['anthropic/claude-no-such-model', {}, 'unknown_model'],
     ['anthropic-keyless/claude-haiku-5-5', {}, 'upstream_refused'],
     ['openai/gpt-no-such-model', {}, 'unknown_model'],
-    ['openai-keyless/gpt-4.1-nano', {}, 'upstream_refused'],
+    ['openai-keyless/gpt-5-nano', {}, 'upstream_refused'],
     ['openai-chat/gpt-no-such-model', {}, 'unknown_model'],
     [
-      'openai-chat/gpt-4.1-nano',
+      'openai-chat/gpt-4o-mini',
       { 'openai.chat': { reasoning_effort: 'low' } },
       'unsupported',
     ],

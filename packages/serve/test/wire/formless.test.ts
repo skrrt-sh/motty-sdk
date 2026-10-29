@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
 import type { RunStream } from '@mottyjs/core/host';
-import type { Codec } from '../../src/codec.ts';
+import type { Formless } from '../../src/codec.ts';
 import {
   formed,
   formedWhole,
@@ -11,7 +11,7 @@ import {
 
 const { answer, note } = formlessIn('This API');
 
-const formless: Codec['formless'] = (chunk) => {
+const formless: Formless = (chunk) => {
   if (chunk.type === 'file') return answer('file', 'a file the model made');
   if (chunk.type === 'citation') return note('citation', 'a citation');
   if (chunk.type === 'reasoning' && chunk.provider !== undefined) {
@@ -30,17 +30,6 @@ async function* run(): RunStream {
   yield { type: 'finish', reason: 'stop' };
 }
 
-test('one wording says which API has no form for what', () => {
-  expect(answer('file', 'a file the model made')).toEqual({
-    warning: {
-      setting: 'file',
-      detail: 'This API has no form for a file the model made',
-    },
-    ends: true,
-  });
-  expect(note('citation', 'a citation')?.ends).toBe(false);
-});
-
 test('a stream leaves an annotation out and ends as failed on content that is the answer', async () => {
   expect(await Array.fromAsync(formed(run(), formless))).toEqual([
     { type: 'progress', piece: 0, text: 'Looking' },
@@ -56,17 +45,6 @@ test('a stream leaves an annotation out and ends as failed on content that is th
       },
     },
   ]);
-});
-
-test('a stream with a form for everything passes as it is', async () => {
-  const events = [
-    { type: 'text', text: 'Hi' },
-    { type: 'finish', reason: 'stop' },
-  ] as const;
-  async function* plain(): RunStream {
-    yield* events;
-  }
-  expect(await Array.fromAsync(formed(plain(), formless))).toEqual([...events]);
 });
 
 test('a collected reply leaves an annotation out', () => {

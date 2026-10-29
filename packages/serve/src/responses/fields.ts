@@ -18,6 +18,14 @@ export function isCustom(item: Dict): boolean {
   return field(item, 'type') === 'custom_tool_call';
 }
 
+// A tool of a type of its own that the caller runs, as Codex runs its tool
+// search, is the caller's tool like a function: its call and its output are
+// items named for its type.
+export function clientRun(fields: Dict): string | undefined {
+  const { type, execution } = fields;
+  return execution === 'client' && typeof type === 'string' ? type : undefined;
+}
+
 // Each field is defined, not assigned, so a key named as the prototype is a
 // key like any other. The item grows where it is, since copying it at every
 // chunk cost a call the square of its chunks.

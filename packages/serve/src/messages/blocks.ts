@@ -69,6 +69,9 @@ function blockOf(
     if (typeof signature === 'string') {
       return { ...rest, type: 'thinking', thinking: part.text, signature };
     }
+    // Redacted thinking is signed whole, and carried back as it came.
+    const { type } = rest;
+    if (type === 'redacted_thinking') return rest;
     left.without('reasoning', part);
     return undefined;
   }
@@ -76,8 +79,11 @@ function blockOf(
     part.type === 'tool_call' && part.hosted !== true
       ? mine(part.provider)
       : own(part.provider, `${a(part.type)} part`);
-  const extra = { ...hinted(part.hints), ...meant };
-  const cache = cacheTo(part.cache);
+  const { cache_control: kept, ...extra } = {
+    ...hinted(part.hints),
+    ...meant,
+  };
+  const cache = cacheTo(part.cache, kept);
   // What the upstream of another API ran has no block here; this API's own
   // comes with the fields it wrote.
   if (part.type === 'tool_call' || part.type === 'tool_result') {
@@ -123,12 +129,12 @@ function blockOf(
           'Anthropic Messages cannot carry tool input that is not JSON',
         );
       }
-      const input = part.input === undefined ? {} : copied(part.input);
+      // Free text is a custom tool's, which this API is sent as an object.
+      const said = part.input === undefined ? {} : copied(part.input);
+      const input = typeof said === 'string' ? { input: said } : said;
       if (!isDict(input)) {
         unsupported(
-          `Anthropic Messages cannot carry a tool call whose input is ${
-            typeof input === 'string' ? 'free text' : 'not an object'
-          }`,
+          'Anthropic Messages cannot carry a tool call whose input is not an object',
         );
       }
       return {
@@ -188,7 +194,7 @@ export function blocksOf(
     if (block !== undefined) blocks.push(block);
   }
   const last = blocks.at(-1);
-  return last === undefined || cache === undefined
-    ? blocks
-    : [...blocks.slice(0, -1), { ...last, ...cacheTo(cache) }];
+  if (last === undefined || cache === undefined) return blocks;
+  const { cache_control: kept } = last;
+  return [...blocks.slice(0, -1), { ...last, ...cacheTo(cache, kept) }];
 }

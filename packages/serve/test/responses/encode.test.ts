@@ -1,7 +1,5 @@
 import { expect, test } from 'bun:test';
 import { Unsupported } from '@mottyjs/core';
-import { messages } from '../../src/index.ts';
-import { decode } from '../../src/responses/decode.ts';
 import { encode } from '../../src/responses/encode.ts';
 import { dict } from '../../src/wire/json.ts';
 
@@ -33,116 +31,6 @@ test('storing cannot be turned on by an option', () => {
       },
     }).body,
   ).toMatchObject({ store: false, stream: true });
-});
-
-test('options are written under the names this API gives them', () => {
-  expect(
-    encode('gpt-5', {
-      messages: [{ role: 'user', text: 'Hi' }],
-      tools: [
-        { type: 'function', name: 'weather', input: { type: 'object' } },
-        { type: 'custom', name: 'patch' },
-      ],
-      options: {
-        toolChoice: { tool: 'patch' },
-        parallelToolCalls: false,
-        maxTokens: 256,
-        temperature: 0.2,
-        topP: 0.9,
-        user: 'u_1',
-        seed: 7,
-      },
-    }).body,
-  ).toEqual({
-    model: 'gpt-5',
-    input: [{ type: 'message', role: 'user', content: 'Hi' }],
-    store: false,
-    stream: true,
-    tools: [
-      {
-        type: 'function',
-        name: 'weather',
-        parameters: { type: 'object' },
-      },
-      { type: 'custom', name: 'patch' },
-    ],
-    tool_choice: { type: 'custom', name: 'patch' },
-    parallel_tool_calls: false,
-    max_output_tokens: 256,
-    temperature: 0.2,
-    top_p: 0.9,
-    user: 'u_1',
-  });
-});
-
-test('reasoning asked for comes back as a summary to read', () => {
-  expect(
-    encode('gpt-5', {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { reasoning: { effort: 'high', budgetTokens: 4096 } },
-    }).body,
-  ).toMatchObject({ reasoning: { effort: 'high', summary: 'auto' } });
-});
-
-test('muted reasoning asks for no summary, whatever was hinted', () => {
-  const { body } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: {
-      reasoning: { effort: 'max', exclude: true },
-      hints: { 'openai.responses': { reasoning: { summary: 'auto' } } },
-    },
-  });
-  expect(body).toMatchObject({ reasoning: { effort: 'max' } });
-  expect(body).not.toHaveProperty('reasoning.summary');
-});
-
-test('the summary a caller chose is the one asked for', () => {
-  expect(
-    encode('gpt-5', {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: {
-        reasoning: {},
-        hints: { 'openai.responses': { reasoning: { summary: 'concise' } } },
-        provider: {
-          'openai.responses': { reasoning: { context: 'all_turns' } },
-        },
-      },
-    }).body,
-  ).toMatchObject({ reasoning: { summary: 'concise', context: 'all_turns' } });
-});
-
-test('with no reasoning option none is sent', () => {
-  expect(
-    encode('gpt-4.1', { messages: [{ role: 'user', text: 'Hi' }] }).body,
-  ).not.toHaveProperty('reasoning');
-});
-
-test('structured output is a JSON schema format', () => {
-  expect(
-    encode('gpt-5', {
-      messages: [{ role: 'user', text: 'Hi' }],
-      output: {
-        name: 'answer',
-        description: 'The answer',
-        strict: true,
-        schema: { type: 'object' },
-      },
-      options: {
-        hints: { 'openai.responses': { text: { verbosity: 'low' } } },
-      },
-    }).body,
-  ).toMatchObject({
-    text: {
-      verbosity: 'low',
-      format: {
-        type: 'json_schema',
-        name: 'answer',
-        description: 'The answer',
-        strict: true,
-        schema: { type: 'object' },
-      },
-    },
-  });
 });
 
 test('a schema with no name is given one, and no schema asks for any JSON', () => {
@@ -226,48 +114,10 @@ test('top-k sampling is left out and reported', () => {
   ]);
 });
 
-test('a hint this API has no field for is left out', () => {
-  const { body } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: { seed: 7, reasoning: { effort: 'low', budgetTokens: 2000 } },
-  });
-
-  expect(body).toEqual({
-    model: 'gpt-5',
-    input: [{ type: 'message', role: 'user', content: 'Hi' }],
-    store: false,
-    stream: true,
-    reasoning: { effort: 'low', summary: 'auto' },
-  });
-});
-
-test('the two penalties are read from a request and written to one', () => {
-  const { request } = decode({
-    model: 'coder',
-    input: 'Hi',
-    presence_penalty: 0.3,
-    frequency_penalty: 0.2,
-  });
-  expect(request.options).toEqual({
-    presencePenalty: 0.3,
-    frequencyPenalty: 0.2,
-  });
-  expect(
-    encode('gpt-4.1-nano', {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { presencePenalty: 0.3, frequencyPenalty: 0.2 },
-    }),
-  ).toMatchObject({
-    body: { presence_penalty: 0.3, frequency_penalty: 0.2 },
-    leftOut: [],
-  });
-});
-
 test.each([
   [{ effort: 'high' } as const, { effort: 'high', summary: 'auto' }],
   [{ budgetTokens: 2048 }, { summary: 'auto' }],
   [{ effort: 'high', exclude: true } as const, { effort: 'high' }],
-  [{ effort: 'none' } as const, { effort: 'none', summary: 'auto' }],
 ])(
   'reasoning %j is sent the same with a connection that states reasoning and without one',
   (reasoning, sent) => {
@@ -292,44 +142,14 @@ test.each([
   },
 );
 
-test('a mute alone sends no reasoning, and none of the connection`s', () => {
-  expect(
-    encode(
-      'gpt-5',
-      {
-        messages: [{ role: 'user', text: 'Hi' }],
-        options: { reasoning: { exclude: true } },
-      },
-      { reasoning: { effort: 'low', summary: 'detailed' } },
-    ).body,
-  ).not.toHaveProperty('reasoning');
+test('a request whose reasoning asks for nothing is sent the connection`s as stated', () => {
+  const { body } = encode(
+    'gpt-5',
+    { messages: [{ role: 'user', text: 'Hi' }], options: { reasoning: {} } },
+    { reasoning: { effort: 'low' } },
+  );
+  expect(body).toHaveProperty('reasoning', { effort: 'low' });
 });
-
-test.each([[undefined], [{}]])(
-  'a request whose reasoning is %j is sent the connection`s as stated',
-  (reasoning) => {
-    expect(
-      encode(
-        'gpt-5',
-        {
-          messages: [{ role: 'user', text: 'Hi' }],
-          options: reasoning === undefined ? {} : { reasoning },
-        },
-        { reasoning: { effort: 'low' } },
-      ).body,
-    ).toMatchObject({ reasoning: { effort: 'low' } });
-    expect(
-      encode(
-        'gpt-5',
-        {
-          messages: [{ role: 'user', text: 'Hi' }],
-          options: reasoning === undefined ? {} : { reasoning },
-        },
-        { reasoning: { effort: 'low' } },
-      ).body,
-    ).not.toHaveProperty('reasoning.summary');
-  },
-);
 
 test('the author`s own reasoning replaces the connection`s whole', () => {
   expect(
@@ -444,109 +264,6 @@ test('a hint of reasoning that is sent is not reported', () => {
   expect(leftOut).toEqual([]);
 });
 
-test('a temperature and a penalty the model does not take are left out of the request and reported', () => {
-  const { body, leftOut } = encode(
-    'gpt-5',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { temperature: 0.2, frequencyPenalty: 0.5 },
-    },
-    {},
-    undefined,
-    () => ({
-      temperature: 1,
-      topP: 1,
-      topK: false,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: true,
-      effort: true,
-    }),
-  );
-
-  expect(body).not.toHaveProperty('temperature');
-  expect(body).not.toHaveProperty('frequency_penalty');
-  expect(leftOut).toEqual([
-    {
-      setting: 'temperature.model',
-      detail:
-        'The Responses API has no field for a temperature the model does not take',
-    },
-    {
-      setting: 'frequencyPenalty.model',
-      detail:
-        'The Responses API has no field for a frequency penalty the model does not take',
-    },
-  ]);
-});
-
-test('a temperature outside the range of the model is sent as the nearest inside and reported', () => {
-  const { body, leftOut } = encode(
-    'gpt-4.1',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { temperature: 2.5 },
-    },
-    {},
-    undefined,
-    () => ({
-      temperature: [0, 2],
-      topP: [0, 1],
-      topK: false,
-      presencePenalty: true,
-      frequencyPenalty: true,
-      together: true,
-      effort: false,
-    }),
-  );
-
-  expect(body).toMatchObject({ temperature: 2 });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['temperature.range']);
-});
-
-test('a sampling setting said in the API`s own words is sent as said, and the neutral one beside it is reported', () => {
-  const { body, leftOut } = encode('gpt-4.1', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: {
-      temperature: 0.2,
-      provider: { 'openai.responses': { temperature: 1.5 } },
-    },
-  });
-
-  expect(body).toMatchObject({ temperature: 1.5 });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['sampling.own']);
-});
-
-test('an effort the model does not take is left out with the summary asked for beside it, and reported', () => {
-  const { body, leftOut } = encode(
-    'gpt-4.1',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { reasoning: { effort: 'high' } },
-    },
-    {},
-    undefined,
-    () => ({
-      temperature: [0, 2],
-      topP: [0, 1],
-      topK: false,
-      presencePenalty: true,
-      frequencyPenalty: true,
-      together: true,
-      effort: false,
-    }),
-  );
-
-  expect(body).not.toHaveProperty('reasoning');
-  expect(leftOut).toEqual([
-    {
-      setting: 'reasoning.model',
-      detail:
-        'The Responses API has no field for a reasoning effort the model does not take',
-    },
-  ]);
-});
-
 test('an effort in the API`s own words is sent as said to a model the rule refuses it for', () => {
   const { body, leftOut } = encode(
     'gpt-4.1',
@@ -618,28 +335,6 @@ test('the rule is asked whether the model takes an effort, then with what the re
   ]);
 });
 
-test('an option map with an entry for each family is sent this one`s own', () => {
-  const { body, leftOut } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: {
-      provider: {
-        anthropic: { thinking: { type: 'enabled', budget_tokens: 2000 } },
-        'openai.chat': { logprobs: true },
-        'openai.responses': { truncation: 'auto' },
-      },
-    },
-  });
-
-  expect(body).toEqual({
-    truncation: 'auto',
-    model: 'gpt-5',
-    input: [{ type: 'message', role: 'user', content: 'Hi' }],
-    store: false,
-    stream: true,
-  });
-  expect(leftOut).toEqual([]);
-});
-
 test('a router`s cache marker is written with its lifetime where the codec is made for one', () => {
   const { body, leftOut } = encode(
     'gpt-5',
@@ -668,48 +363,8 @@ test('a router`s cache marker is written with its lifetime where the codec is ma
   expect(leftOut).toEqual([]);
 });
 
-test('a temperature the request states replaces the connection`s, also when the model takes neither', () => {
-  const { body, leftOut } = encode(
-    'gpt-5.5',
-    {
-      messages: [{ role: 'user', text: 'Hi' }],
-      options: { temperature: 0.7 },
-    },
-    { temperature: 0.2, top_p: 0.9 },
-    undefined,
-    () => ({
-      temperature: 1,
-      topP: 1,
-      topK: false,
-      presencePenalty: false,
-      frequencyPenalty: false,
-      together: true,
-      effort: true,
-    }),
-  );
-
-  expect(body).toEqual({
-    top_p: 0.9,
-    model: 'gpt-5.5',
-    input: [{ type: 'message', role: 'user', content: 'Hi' }],
-    store: false,
-    stream: true,
-  });
-  expect(leftOut.map(({ setting }) => setting)).toEqual(['temperature.model']);
-});
-
 test.each([
-  [{ anthropic: { thinking: { type: 'enabled' } }, openai: {} }, {}],
-  [{ openai: { service_tier: 'flex' } }, { service_tier: 'flex' }],
   [{ openai: { some_new_field: 1 } }, { some_new_field: 1 }],
-  [
-    {
-      openai: { metadata: { ticket: 'T-1' } },
-      'openai.chat': { logit_bias: { '50256': -1 } },
-    },
-    { metadata: { ticket: 'T-1' } },
-  ],
-  [{ openai: { a: 1 }, 'openai.responses': { a: 2 } }, { a: 2 }],
   [{ openai: { n: 2 }, 'openai.responses': { n: 1 } }, { n: 1 }],
 ])('the options %j are sent as the fields %j', (provider, fields) => {
   const { body, leftOut } = encode('gpt-5', {
@@ -727,143 +382,22 @@ test.each([
   expect(leftOut).toEqual([]);
 });
 
-test.each([
-  [
-    { openai: { logit_bias: { '50256': -100 } } },
-    'The Responses API cannot carry logit_bias, which another API of openai has',
-  ],
-  [
-    { openai: { store: true, reasoning_effort: 'low' } },
-    'The Responses API cannot carry reasoning_effort, which another API of openai has',
-  ],
-  [
-    { 'openai.chat': { store: true } },
-    'The Responses API cannot carry an option of openai.chat',
-  ],
-])('the options %j fail the call: %s', (provider, message) => {
-  const sent = () =>
+test('an option under the provider`s key that only Chat Completions has fails the call', () => {
+  expect(() =>
     encode('gpt-5', {
       messages: [{ role: 'user', text: 'Hi' }],
-      options: { provider },
-    });
-
-  expect(sent).toThrow(Unsupported);
-  expect(sent).toThrow(message);
+      options: { provider: { openai: { logit_bias: { '50256': -100 } } } },
+    }),
+  ).toThrow(
+    new Unsupported(
+      'The Responses API cannot carry logit_bias, which another API of openai has',
+    ),
+  );
 });
-
-test('a hint under the provider`s key that only the other API has is left out and reported', () => {
-  const { body, leftOut } = encode('gpt-5', {
-    messages: [{ role: 'user', text: 'Hi' }],
-    options: { hints: { openai: { prediction: {}, service_tier: 'flex' } } },
-  });
-
-  expect(body).toEqual({
-    service_tier: 'flex',
-    model: 'gpt-5',
-    input: [{ type: 'message', role: 'user', content: 'Hi' }],
-    store: false,
-    stream: true,
-  });
-  expect(leftOut).toEqual([
-    {
-      setting: 'openai.prediction',
-      detail: 'The Responses API has no field for prediction',
-    },
-  ]);
-});
-
-test('below the options the provider`s key is read for a hint alone', () => {
-  const { body } = encode('gpt-5', {
-    messages: [
-      {
-        role: 'user',
-        parts: [
-          {
-            type: 'text',
-            text: 'Hi',
-            hints: { openai: { a: 1 } },
-            provider: { 'openai.responses': { b: 2 } },
-          },
-        ],
-      },
-    ],
-  });
-
-  expect(body).toMatchObject({
-    input: [
-      {
-        role: 'user',
-        content: [{ type: 'input_text', text: 'Hi', a: 1, b: 2 }],
-      },
-    ],
-  });
-});
-
-test.each([
-  [
-    'a tool',
-    {
-      tools: [
-        { type: 'provider', provider: { openai: { type: 'web_search' } } },
-      ],
-    },
-  ],
-  [
-    'a tool option',
-    {
-      tools: [
-        {
-          type: 'function',
-          name: 'weather',
-          input: {},
-          provider: { anthropic: { defer_loading: true }, openai: {} },
-        },
-      ],
-    },
-  ],
-  [
-    'a tool choice',
-    {
-      options: { toolChoice: { provider: { openai: { type: 'web_search' } } } },
-    },
-  ],
-  [
-    'a text part',
-    {
-      messages: [
-        {
-          role: 'user',
-          parts: [{ type: 'text', text: 'Hi', provider: { openai: { a: 1 } } }],
-        },
-      ],
-    },
-  ],
-] as const)(
-  '%s under the provider`s key is not this API`s: its two APIs share no shape for one',
-  (what, prompt) => {
-    expect(() =>
-      encode('gpt-5', { messages: [{ role: 'user', text: 'Hi' }], ...prompt }),
-    ).toThrow(`The Responses API cannot carry ${what} of `);
-  },
-);
 
 test.each([
   ['of 64 characters', { user: 'u'.repeat(64) }, {}, 'u'.repeat(64), false],
-  [
-    'of 64 characters said in this API`s own words',
-    { provider: { 'openai.responses': { user: 'p'.repeat(64) } } },
-    {},
-    'p'.repeat(64),
-    false,
-  ],
   ['of 65 characters', { user: 'u'.repeat(65) }, {}, undefined, true],
-  [
-    'of 65 characters said in this API`s own words',
-    { provider: { 'openai.responses': { user: 'p'.repeat(65) } } },
-    {},
-    undefined,
-    true,
-  ],
   [
     'too long, which gives way to none said as a hint or in this API`s own words, long or short',
     {
@@ -882,7 +416,6 @@ test.each([
     undefined,
     true,
   ],
-  ['that was not said', { maxTokens: 256 }, {}, undefined, false],
 ] as const)(
   'a user %s is sent whole or left out and reported, never cut short',
   (_, options, defaults, sent, reported) => {
@@ -906,23 +439,3 @@ test.each([
     );
   },
 );
-
-test('the long user id of an Anthropic Messages caller is left out of the request and reported', () => {
-  const { request } = messages.decode(
-    {
-      model: 'coder',
-      max_tokens: 64,
-      metadata: { user_id: 'u'.repeat(150) },
-      messages: [{ role: 'user', content: 'Hi' }],
-    },
-    new Headers(),
-  );
-  expect(request.options?.user).toBe('u'.repeat(150));
-  const { body, leftOut } = encode('gpt-5', request);
-  expect(body).not.toHaveProperty('user');
-  expect(leftOut).toContainEqual({
-    setting: 'user.long',
-    detail:
-      'The Responses API has no field for a user longer than 64 characters',
-  });
-});

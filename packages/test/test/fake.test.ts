@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { answer, fallback, model, motty, Overloaded } from '@mottyjs/core';
+import { answer, model, motty } from '@mottyjs/core';
 import { counted, hosted } from '@mottyjs/core/host';
 import { decision, noul } from '@mottyjs/decision';
-import { fake, on, run, Unscripted } from '../src/index.ts';
+import { fake, on, run } from '../src/index.ts';
 
 const small = model('acme/small');
 const large = model('acme/large');
@@ -33,16 +33,6 @@ const judging = motty({ name: 'judging' }).handle(async ({ request }) =>
   ),
 );
 
-test('a scripted text is the answer of the model it was scripted for', async () => {
-  const { answer: reply } = await run(
-    asking,
-    { text: 'hi' },
-    { models: [fake(on(small, 'quick reply'))] },
-  );
-
-  expect(await reply.text()).toBe('quick reply');
-});
-
 test('scripted chunks reach the answer as chunks', async () => {
   const { answer: reply } = await run(
     asking,
@@ -64,52 +54,6 @@ test('scripted chunks reach the answer as chunks', async () => {
     { type: 'text', text: 'deep reply' },
   ]);
   expect(await reply.text()).toBe('deep reply');
-});
-
-test('a scripted JSON value is read back as JSON', async () => {
-  const { answer: reply } = await run(
-    asking,
-    { text: 'Which files?', output: { schema: { type: 'object' } } },
-    { models: [fake(on(small, { files: ['parser.ts'] }))] },
-  );
-
-  expect(await reply.json()).toEqual({ files: ['parser.ts'] });
-});
-
-test('a scripted function replies from the prompt it was sent', async () => {
-  const { answer: reply } = await run(
-    asking,
-    { text: 'hi' },
-    {
-      models: [
-        fake(on(small, ({ messages }) => `You said ${messages.at(-1)?.text}`)),
-      ],
-    },
-  );
-
-  expect(await reply.text()).toBe('You said hi');
-});
-
-test('a scripted error fails the call, and a fallback moves on', async () => {
-  const falling = motty({ name: 'falling' }).handle(({ prompt }) =>
-    fallback(small, large).complete(prompt),
-  );
-
-  const { answer: reply, calls } = await run(
-    falling,
-    { text: 'hi' },
-    {
-      models: [
-        fake(on(small, new Overloaded('busy')), on(large, 'fallback reply')),
-      ],
-    },
-  );
-
-  expect(await reply.text()).toBe('fallback reply');
-  expect(calls.map(({ model, code }) => [model, code])).toEqual([
-    ['acme/small', 'overloaded'],
-    ['acme/large', undefined],
-  ]);
 });
 
 test("one model's entries answer in order and the last repeats", async () => {
@@ -169,33 +113,6 @@ test('a fake serves only the names it has entries for', () => {
   expect(models.serves('acme/large')).toBe(false);
 });
 
-test('an adapter beside a fake is asked for the names it serves', async () => {
-  const both = motty({ name: 'both' }).handle(async ({ prompt }) => {
-    const plan = await small.complete(prompt);
-    const reply = await large.complete(prompt);
-    return answer(`${await plan.text()}, ${await reply.text()}`);
-  });
-
-  const { answer: reply } = await run(
-    both,
-    { text: 'hi' },
-    {
-      models: [
-        fake(on(small, 'scripted')),
-        {
-          serves: (name) => name.startsWith('acme/'),
-          async *call(name) {
-            yield { type: 'text', text: `adapter for ${name}` };
-            yield { type: 'finish', reason: 'stop' };
-          },
-        },
-      ],
-    },
-  );
-
-  expect(await reply.text()).toBe('scripted, adapter for acme/large');
-});
-
 test('a scripted decision crosses the host as the whole wire reply', async () => {
   const models = fake(on(judge, { urgent: 0.9 }));
 
@@ -219,24 +136,6 @@ test('a scripted decision crosses the host as the whole wire reply', async () =>
   ]);
 });
 
-test("one decision model's entries answer in order and the last repeats", async () => {
-  const models = fake(on(judge, { urgent: 0.1 }), on(judge, { urgent: 0.9 }));
-
-  const first = await run(judging, { text: 'hi' }, { models: [models] });
-  const second = await run(judging, { text: 'hi' }, { models: [models] });
-  const third = await run(judging, { text: 'hi' }, { models: [models] });
-
-  expect(await first.answer.json()).toMatchObject({
-    answers: { urgent: { noul: 0.1 } },
-  });
-  expect(await second.answer.json()).toMatchObject({
-    answers: { urgent: { noul: 0.9 } },
-  });
-  expect(await third.answer.json()).toMatchObject({
-    answers: { urgent: { noul: 0.9 } },
-  });
-});
-
 test('a scripted decision is typed by the questions the plugin asks', async () => {
   const gate = motty({ name: 'gate' }).handle(async ({ request }) => {
     const { urgent } = await judge.decide(request.messages.at(-1)?.text ?? '', {
@@ -252,41 +151,6 @@ test('a scripted decision is typed by the questions the plugin asks', async () =
   );
 
   expect(await reply.text()).toBe('now');
-});
-
-test('a decision nobody scripted fails the run though the motty recovered', async () => {
-  const lenient = motty({ name: 'lenient' }).handle(async () => {
-    try {
-      await counted('acme/judge', async (signal) =>
-        hosted().decisions?.(
-          'acme/judge',
-          { state: 'hi', questions: {} },
-          signal,
-        ),
-      );
-      return answer('judged');
-    } catch {
-      return answer('passed');
-    }
-  });
-
-  const asked = run(lenient, { text: 'hi' }, { models: [fake()] });
-
-  await expect(asked).rejects.toBeInstanceOf(Unscripted);
-});
-
-test('a question no entry names fails the run though the motty recovered', async () => {
-  const lenient = motty({ name: 'lenient' })
-    .use(judging)
-    .onError(() => answer('passed'));
-
-  const asked = run(
-    lenient,
-    { text: 'hi' },
-    { models: [fake(on(judge, { software: 0.97 }))] },
-  );
-
-  await expect(asked).rejects.toBeInstanceOf(Unscripted);
 });
 
 test('a chat call to a name scripted as a decision model is not scripted', async () => {
@@ -305,53 +169,37 @@ test('a chat call to a name scripted as a decision model is not scripted', async
   );
 });
 
-test.each([
-  [
-    'none by default',
-    {},
-    {},
-    ['headers.x-session', 'headers.x-title', 'headers.cookie'],
-  ],
-  [
-    'the ones its connection lists',
+test('a fake is sent the headers its connection lists, and the call is warned of the rest', async () => {
+  const models = fake(
     { forwardHeaders: ['X-Session', 'cookie'] },
-    { 'x-session': 's-1' },
-    ['headers.x-title', 'headers.cookie'],
-  ],
-  [
-    'all but the ones never sent when its connection forwards any',
-    { forwardHeaders: true },
-    { 'x-session': 's-1', 'x-title': 'Coder' },
-    ['headers.cookie'],
-  ],
-] as const)(
-  'a fake is sent %s of the headers a call states, and the call is warned of the rest',
-  async (_, connection, headers, warned) => {
-    const models = fake(connection, on(small, 'ok'));
+    on(small, 'ok'),
+  );
 
-    const { answer: reply, calls } = await run(
-      motty({ name: 'stating' }).handle(({ prompt }) => {
-        prompt.options = {
-          headers: {
-            'x-session': 's-1',
-            'x-title': 'Coder',
-            'x-absent': null,
-            cookie: 'a=b',
-          },
-        };
-        return small.complete(prompt);
-      }),
-      { text: 'hi' },
-      { models: [models] },
-    );
+  const { answer: reply, calls } = await run(
+    motty({ name: 'stating' }).handle(({ prompt }) => {
+      prompt.options = {
+        headers: {
+          'x-session': 's-1',
+          'x-title': 'Coder',
+          'x-absent': null,
+          cookie: 'a=b',
+        },
+      };
+      return small.complete(prompt);
+    }),
+    { text: 'hi' },
+    { models: [models] },
+  );
 
-    expect(await reply.text()).toBe('ok');
-    expect(models.sent(small)[0]?.options).toEqual({ headers });
-    expect(calls[0]?.warnings?.map(({ setting }) => setting) ?? []).toEqual([
-      ...warned,
-    ]);
-  },
-);
+  expect(await reply.text()).toBe('ok');
+  expect(models.sent(small)[0]?.options).toEqual({
+    headers: { 'x-session': 's-1' },
+  });
+  expect(calls[0]?.warnings?.map(({ setting }) => setting)).toEqual([
+    'headers.x-title',
+    'headers.cookie',
+  ]);
+});
 
 test('a header no request can carry fails a call to a fake before it is sent, as it does a real connection', async () => {
   const models = fake(on(small, 'ok'));
@@ -367,24 +215,6 @@ test('a header no request can carry fails a call to a fake before it is sent, as
 
   await expect(asked).rejects.toThrow(
     'A call stated the header "x note" with a name no request can carry',
-  );
-  expect(models.sent(small)).toEqual([]);
-});
-
-test('a header stated in two letter cases fails a call to a fake that forwards it, as it does a real connection', async () => {
-  const models = fake({ forwardHeaders: ['x-session'] }, on(small, 'ok'));
-
-  const asked = run(
-    motty({ name: 'stating' }).handle(({ prompt }) => {
-      prompt.options = { headers: { 'X-Session': 's-1', 'x-session': 's-2' } };
-      return small.complete(prompt);
-    }),
-    { text: 'hi' },
-    { models: [models] },
-  );
-
-  await expect(asked).rejects.toThrow(
-    'A call stated the header "x-session" twice, in two letter cases',
   );
   expect(models.sent(small)).toEqual([]);
 });

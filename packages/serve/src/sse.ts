@@ -23,10 +23,10 @@ export async function* parsed(
   for await (const bytes of body) {
     // The three line breaks are made one. A return that ends the text may
     // be the first half of a line break, so it waits for what follows.
-    const text = (carried + decoder.decode(bytes, { stream: true })).replace(
-      /\r\n|\r(?!$)/g,
-      '\n',
-    );
+    const decoded = carried + decoder.decode(bytes, { stream: true });
+    const text = decoded.includes('\r')
+      ? decoded.replace(/\r\n|\r(?!$)/g, '\n')
+      : decoded;
     carried = text.endsWith('\r') ? '\r' : '';
     // Only what came is searched: a line held over many chunks was read
     // again with each one.
@@ -37,7 +37,8 @@ export async function* parsed(
       end !== -1;
       end = fresh.indexOf('\n', from)
     ) {
-      const line = held + fresh.slice(from, end);
+      const line =
+        held === '' ? fresh.slice(from, end) : held + fresh.slice(from, end);
       held = '';
       from = end + 1;
       if (line === '') {

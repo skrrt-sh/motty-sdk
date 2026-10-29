@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": [
+    "packages/adapters/src/cloudflare.ts",
+    "packages/adapters/test/cloudflare.worker.ts"
+  ],
+  "exclude": []
+}

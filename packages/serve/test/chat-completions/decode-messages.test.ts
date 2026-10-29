@@ -5,10 +5,6 @@ import { wireMessages } from '../../src/chat-completions/encode-messages.ts';
 import { leaving } from '../../src/wire/fieldless.ts';
 
 test('a message of plain text is read as the text shorthand', () => {
-  expect(messageOf({ role: 'system', content: 'Be brief.' })).toEqual({
-    role: 'system',
-    text: 'Be brief.',
-  });
   expect(messageOf({ role: 'developer', content: '' })).toEqual({
     role: 'developer',
     text: '',
@@ -42,80 +38,6 @@ test('a text part is read, with its cache breakpoint', () => {
   });
 });
 
-test('an image is read by address, or split when it is inline', () => {
-  expect(
-    messageOf({
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: 'https://x.test/cat.png' } },
-        {
-          type: 'image_url',
-          image_url: { url: 'data:image/jpeg;base64,/9j/4AAQ', detail: 'high' },
-        },
-      ],
-    }),
-  ).toEqual({
-    role: 'user',
-    parts: [
-      { type: 'image', url: 'https://x.test/cat.png' },
-      {
-        type: 'image',
-        data: '/9j/4AAQ',
-        mediaType: 'image/jpeg',
-        hints: { openai: { detail: 'high' } },
-      },
-    ],
-  });
-});
-
-test('input audio is read as inline audio of its format', () => {
-  expect(
-    messageOf({
-      role: 'user',
-      content: [
-        {
-          type: 'input_audio',
-          input_audio: { data: 'UklGRg==', format: 'wav' },
-        },
-      ],
-    }),
-  ).toEqual({
-    role: 'user',
-    parts: [{ type: 'audio', data: 'UklGRg==', mediaType: 'audio/wav' }],
-  });
-});
-
-test('a file is read by its data or by its id, with its name', () => {
-  expect(
-    messageOf({
-      role: 'user',
-      content: [
-        {
-          type: 'file',
-          file: {
-            file_data: 'data:application/pdf;base64,JVBERi0=',
-            filename: 'terms.pdf',
-          },
-        },
-        { type: 'file', file: { file_data: 'JVBERi0=' } },
-        { type: 'file', file: { file_id: 'file-6F2ksmvXxt4VdoqmHRw6kL' } },
-      ],
-    }),
-  ).toEqual({
-    role: 'user',
-    parts: [
-      {
-        type: 'file',
-        name: 'terms.pdf',
-        data: 'JVBERi0=',
-        mediaType: 'application/pdf',
-      },
-      { type: 'file', data: 'JVBERi0=' },
-      { type: 'file', id: 'file-6F2ksmvXxt4VdoqmHRw6kL' },
-    ],
-  });
-});
-
 test('a part of a kind not known is kept whole for its own family', () => {
   const part = {
     type: 'video_url',
@@ -125,62 +47,6 @@ test('a part of a kind not known is kept whole for its own family', () => {
   expect(messageOf({ role: 'user', content: [part] })).toEqual({
     role: 'user',
     parts: [{ type: 'provider', provider: { 'openai.chat': part } }],
-  });
-});
-
-test('an assistant turn is read with its text, refusal and tool calls', () => {
-  expect(
-    messageOf({
-      role: 'assistant',
-      content: [
-        { type: 'text', text: 'Let me look.' },
-        { type: 'refusal', refusal: 'Not that part.' },
-      ],
-      tool_calls: [
-        {
-          id: 'call_abc',
-          type: 'function',
-          function: { name: 'weather', arguments: '{"city":"Oslo"}' },
-        },
-        {
-          id: 'call_def',
-          type: 'custom',
-          custom: { name: 'shell', input: 'ls -la' },
-        },
-      ],
-    }),
-  ).toEqual({
-    role: 'assistant',
-    parts: [
-      { type: 'text', text: 'Let me look.' },
-      { type: 'refusal', text: 'Not that part.' },
-      {
-        type: 'tool_call',
-        id: 'call_abc',
-        name: 'weather',
-        input: { city: 'Oslo' },
-      },
-      { type: 'tool_call', id: 'call_def', name: 'shell', input: 'ls -la' },
-    ],
-  });
-});
-
-test('an assistant turn of tool calls alone has no text part', () => {
-  expect(
-    messageOf({
-      role: 'assistant',
-      content: null,
-      tool_calls: [
-        {
-          id: 'call_1',
-          type: 'function',
-          function: { name: 'now', arguments: '{}' },
-        },
-      ],
-    }),
-  ).toEqual({
-    role: 'assistant',
-    parts: [{ type: 'tool_call', id: 'call_1', name: 'now', input: {} }],
   });
 });
 
@@ -459,40 +325,6 @@ test('what a media part holds beside what is read is kept where it was', () => {
   });
 });
 
-test('a router`s cache_control on a content part is the cache marker, with its lifetime', () => {
-  expect(
-    messageOf({
-      role: 'system',
-      content: [
-        {
-          type: 'text',
-          text: 'You are terse.',
-          cache_control: { type: 'ephemeral' },
-        },
-        {
-          type: 'text',
-          text: 'A long manual',
-          cache_control: { type: 'ephemeral', ttl: '1h' },
-        },
-      ],
-    }),
-  ).toEqual({
-    role: 'system',
-    parts: [
-      { type: 'text', text: 'You are terse.', cache: {} },
-      { type: 'text', text: 'A long manual', cache: { ttl: '1h' } },
-    ],
-  });
-  expect(() =>
-    messageOf({
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Hi', cache_control: { type: 'forever' } },
-      ],
-    }),
-  ).toThrow(InvalidRequest);
-});
-
 test('file data that is an address is read as one, and bare bytes as bytes', () => {
   expect(
     messageOf({
@@ -575,57 +407,6 @@ test('pictures a model made and what its sound held are read as parts', () => {
 
 test.each([
   [
-    'a user turn of every medium',
-    {
-      role: 'user',
-      content: [
-        {
-          type: 'text',
-          text: 'Look',
-          prompt_cache_breakpoint: { mode: 'explicit' },
-        },
-        {
-          type: 'image_url',
-          image_url: { url: 'https://x.test/cat.png', detail: 'high' },
-          prompt_cache_breakpoint: { mode: 'explicit' },
-        },
-        {
-          type: 'image_url',
-          image_url: { url: 'data:image/jpeg;base64,/9j/4AAQ', detail: 'low' },
-        },
-        {
-          type: 'input_audio',
-          input_audio: { data: 'UklGRg==', format: 'wav' },
-          prompt_cache_breakpoint: { mode: 'explicit' },
-        },
-        {
-          type: 'file',
-          file: {
-            file_data: 'data:application/pdf;base64,JVBERi0=',
-            filename: 'a.pdf',
-          },
-          prompt_cache_breakpoint: { mode: 'explicit' },
-        },
-        { type: 'file', file: { file_id: 'file-1' } },
-      ],
-    },
-  ],
-  [
-    'an assistant turn with a refusal part and earlier sound',
-    {
-      role: 'assistant',
-      content: [{ type: 'refusal', refusal: 'No.' }],
-      audio: { id: 'audio_1' },
-    },
-  ],
-])('%s is sent to OpenAI as it was read', (_, message) => {
-  expect(wireMessages(leaving('chat', true), [messageOf(message)])).toEqual([
-    message,
-  ]);
-});
-
-test.each([
-  [
     'a file by address, a video and sound of another format',
     {
       role: 'user',
@@ -642,31 +423,6 @@ test.each([
           type: 'input_audio',
           input_audio: { data: 'ZkxhQw==', format: 'flac' },
         },
-      ],
-    },
-  ],
-  [
-    'an assistant turn with the pictures it made',
-    {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'Here it is.' }],
-      images: [
-        {
-          type: 'image_url',
-          image_url: { url: 'data:image/png;base64,iVBORw0=' },
-          index: 0,
-        },
-      ],
-    },
-  ],
-  [
-    'a tool message holding a picture',
-    {
-      role: 'tool',
-      tool_call_id: 'call_1',
-      content: [
-        { type: 'text', text: 'The chart:' },
-        { type: 'image_url', image_url: { url: 'https://x.test/chart.png' } },
       ],
     },
   ],

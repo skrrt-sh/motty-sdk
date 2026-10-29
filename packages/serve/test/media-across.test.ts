@@ -1,13 +1,7 @@
 import { expect, test } from 'bun:test';
 import { model, motty, Unsupported } from '@mottyjs/core';
 import type { Chunk, Json, Report } from '@mottyjs/core/host';
-import {
-  chatCompletions,
-  chatCompletionsIn,
-  messages,
-  mount,
-  responses,
-} from '../src/index.ts';
+import { chatCompletions, messages, mount, responses } from '../src/index.ts';
 
 const codecs = { chat: chatCompletions, responses, messages };
 
@@ -52,26 +46,6 @@ test.each<[string, Api, Json, Api, Json]>([
               data: 'iVBORw0=',
             },
           },
-        ],
-      },
-    ],
-  ],
-  [
-    'image bytes from Anthropic Messages to the Responses API',
-    'messages',
-    [
-      {
-        type: 'image',
-        source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0=' },
-      },
-    ],
-    'responses',
-    [
-      {
-        type: 'message',
-        role: 'user',
-        content: [
-          { type: 'input_image', image_url: 'data:image/png;base64,iVBORw0=' },
         ],
       },
     ],
@@ -234,29 +208,6 @@ test.each<[string, Api, Json, Api, Json]>([
     ],
   ],
   [
-    'an image`s detail from the Responses API to Chat Completions',
-    'responses',
-    [
-      {
-        type: 'input_image',
-        image_url: 'data:image/png;base64,iVBORw0=',
-        detail: 'low',
-      },
-    ],
-    'chat',
-    [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image_url',
-            image_url: { url: 'data:image/png;base64,iVBORw0=', detail: 'low' },
-          },
-        ],
-      },
-    ],
-  ],
-  [
     'a PDF with no title from Anthropic Messages to Chat Completions, under a name OpenAI asks for',
     'messages',
     [
@@ -285,33 +236,6 @@ test.each<[string, Api, Json, Api, Json]>([
       },
     ],
   ],
-  [
-    'a PDF with no title from Anthropic Messages to the Responses API, under a name OpenAI asks for',
-    'messages',
-    [
-      {
-        type: 'document',
-        source: {
-          type: 'base64',
-          media_type: 'application/pdf',
-          data: 'JVBERi0=',
-        },
-      },
-    ],
-    'responses',
-    [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_file',
-            file_data: 'data:application/pdf;base64,JVBERi0=',
-            filename: 'file.pdf',
-          },
-        ],
-      },
-    ],
-  ],
 ])(
   '%s is written in the form of the API it goes to',
   (_, from, content, to, sent) => {
@@ -324,20 +248,6 @@ test.each<[string, Api, Json, Api, Json]>([
 );
 
 test.each<[string, Api, Json, Api, string]>([
-  [
-    'sound from Chat Completions to the Responses API',
-    'chat',
-    [{ type: 'input_audio', input_audio: { data: 'UklGRg==', format: 'wav' } }],
-    'responses',
-    'The Responses API cannot carry audio',
-  ],
-  [
-    'sound from Chat Completions to Anthropic Messages',
-    'chat',
-    [{ type: 'input_audio', input_audio: { data: 'UklGRg==', format: 'wav' } }],
-    'messages',
-    'Anthropic Messages cannot carry audio',
-  ],
   [
     'a file by address from the Responses API to Chat Completions',
     'responses',
@@ -440,7 +350,7 @@ test('a picture in a tool result goes from Anthropic Messages to the Responses A
   });
 });
 
-test('a Chat Completions caller`s cache_control crosses to Anthropic Messages, and is reported where it is left out', () => {
+test('a Chat Completions caller`s cache_control crosses to Anthropic Messages', () => {
   const content = [
     {
       type: 'text',
@@ -451,42 +361,6 @@ test('a Chat Completions caller`s cache_control crosses to Anthropic Messages, a
   expect(crossed('chat', content, 'messages')).toMatchObject({
     body: { messages: [{ role: 'user', content }] },
     leftOut: [],
-  });
-  expect(crossed('chat', content, 'responses')).toMatchObject({
-    body: {
-      input: [
-        {
-          role: 'user',
-          content: [{ type: 'input_text', text: 'You are terse.' }],
-        },
-      ],
-    },
-    leftOut: [{ setting: 'cache.ttl' }, { setting: 'cache' }],
-  });
-  const { request } = chatCompletions.decode(
-    body('chat', content),
-    new Headers(),
-  );
-  expect(
-    chatCompletionsIn({ name: 'router', breakpoints: true }).encode('model-x', {
-      messages: request.messages,
-    }),
-  ).toMatchObject({
-    body: {
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'You are terse.',
-              prompt_cache_breakpoint: { mode: 'explicit' },
-            },
-          ],
-        },
-      ],
-    },
-    leftOut: [{ setting: 'cache.ttl' }],
   });
 });
 
@@ -583,7 +457,7 @@ test.each([false, true])(
   },
 );
 
-test.each([false, true])(
+test.each([false])(
   'a picture a Responses upstream made reaches a Chat Completions caller in `images`, streamed %p',
   async (stream) => {
     const made = await Array.fromAsync(

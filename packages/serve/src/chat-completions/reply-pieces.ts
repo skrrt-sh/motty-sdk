@@ -42,6 +42,8 @@ export function pictured(
 // One per reply: tool calls are numbered in the order their ids appear.
 export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
   const calls = new Map<string, { index: number; type: Kind }>();
+  // Function calls no input has gone out for yet, by id.
+  const empty = new Map<string, number>();
   let progress: number | undefined;
   let thinking = false;
   let length = 0;
@@ -86,7 +88,20 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
     };
   }
 
-  return (event: Chunk | Progress): Piece | undefined => {
+  // Arguments are JSON, and no client parses none: a function call that
+  // ended with nothing took an empty object. A custom tool's input is text.
+  function closed(index: number): Piece {
+    return { kind: 'call', index, type: 'function', input: '{}' };
+  }
+
+  // The empty object of every function call still empty when the reply ends.
+  function ended(): Piece[] {
+    const out = Array.from(empty.values(), closed);
+    empty.clear();
+    return out;
+  }
+
+  function piece(event: Chunk | Progress): Piece | undefined {
     switch (event.type) {
       case 'progress':
         return thought(event.text, event.piece);
@@ -111,27 +126,35 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
               : 'function',
         };
         calls.set(event.id, call);
+        if (known === undefined && call.type === 'function') {
+          empty.set(event.id, call.index);
+        }
+        const input =
+          event.arguments === '' && event.ended === true && empty.has(event.id)
+            ? '{}'
+            : event.arguments;
+        if (input !== '') empty.delete(event.id);
         // A late fragment of provider data alone may hold none this wire
         // writes, and a client need not be sent a fragment that says nothing.
         if (
           known !== undefined &&
-          event.arguments === '' &&
+          input === '' &&
           unreadOf(own, call.type, callFields) === undefined
         ) {
           return undefined;
         }
-        const piece: Piece = {
+        const added: Piece = {
           kind: 'call',
           ...call,
           ...(known === undefined
             ? { opened: { id: event.id, name: event.name ?? '' } }
             : {}),
-          input: event.arguments,
+          input,
         };
         // Set, not spread: few fragments carry anything, and a spread for
         // those that do not cost a sixth of what collecting a reply does.
-        if (event.provider !== undefined) piece.carried = own;
-        return piece;
+        if (event.provider !== undefined) added.carried = own;
+        return added;
       }
       case 'citation': {
         if (event.url === undefined) return undefined;
@@ -164,5 +187,7 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
       default:
         return event satisfies never;
     }
-  };
+  }
+
+  return { piece, ended };
 }

@@ -2,12 +2,14 @@ import type {
   Chunk,
   Finish,
   Json,
+  Prompt,
   StreamEvent,
   Terminal,
 } from '@mottyjs/core/host';
 import type { ServerSentEvent } from '../sse.ts';
 import { cutShort, unreadable } from '../wire/broken-stream.ts';
 import { type Dict, dict, isDict, number, parsed } from '../wire/json.ts';
+import { customNames } from '../wire/openai-tools.ts';
 import type { Clean } from '../wire/upstream-failure.ts';
 import { type Held, whole } from './deltas.ts';
 import { failed } from './errors.ts';
@@ -133,13 +135,25 @@ function ended(start: Dict, stop: Dict, counts: Dict, beside: Dict): Finish {
   };
 }
 
+// A custom tool was sent as one with its text in a single field, so what a
+// call says is that text. One that did not say it in that form is passed on
+// as it came, for the caller to see what went wrong.
+function unwrapped(json: string): string {
+  const { input } = dict(parsed(json));
+  return typeof input === 'string' ? input : json;
+}
+
 // Ends in exactly one terminal event whatever the upstream sends. A stream
 // cut after the stop reason arrived has still said everything, so it
 // finishes; one cut before it, or with data that cannot be read, failed.
 export async function* events(
   messages: AsyncIterable<ServerSentEvent>,
   clean?: Clean,
+  tools?: Prompt['tools'],
 ): AsyncGenerator<StreamEvent, void, undefined> {
+  const custom = customNames(tools);
+  // The input of a call to a custom tool is read whole, to be told unwrapped.
+  const free = new Map<number | undefined, { id: string; json: string }>();
   const calls = new Map<number | undefined, string>();
   // The calls that have said no input yet. One that ends so takes nothing,
   // which the two OpenAI APIs write as an empty object and never as no text.
@@ -194,6 +208,11 @@ export async function* events(
             if (chunk.type === 'tool_call') {
               calls.set(at, chunk.id);
               if (chunk.hosted !== true) own.set(at, chunk.id);
+              if (chunk.hosted !== true && custom.has(chunk.name ?? '')) {
+                free.set(at, { id: chunk.id, json: chunk.arguments });
+                yield { ...chunk, arguments: '' };
+                continue;
+              }
               if (chunk.arguments === '') bare.set(at, chunk.id);
             }
             yield chunk;
@@ -209,6 +228,11 @@ export async function* events(
           }
           const chunk = continued(dict(delta), placed, calls.get(at));
           if (chunk === undefined) break;
+          const text = free.get(at);
+          if (chunk.type === 'tool_call' && text !== undefined) {
+            text.json += chunk.arguments;
+            break;
+          }
           if (chunk.type === 'tool_call' && chunk.arguments !== '') {
             bare.delete(at);
           }
@@ -218,6 +242,17 @@ export async function* events(
         case 'content_block_stop': {
           if (held !== undefined && held.at === at) yield* unended();
           calls.delete(at);
+          const text = free.get(at);
+          free.delete(at);
+          if (text !== undefined && text.json !== '') {
+            const said = unwrapped(text.json);
+            yield {
+              type: 'tool_call',
+              id: text.id,
+              arguments: said,
+              ...placed,
+            };
+          }
           const call = own.get(at);
           if (call !== undefined) {
             own.delete(at);

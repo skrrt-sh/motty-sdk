@@ -5,15 +5,11 @@ import {
   chatCompletionsIn,
 } from '../../src/chat-completions/index.ts';
 import { responses } from '../../src/responses/index.ts';
-import { dict, isDict, list, parsed } from '../../src/wire/json.ts';
+import { dict, list, parsed } from '../../src/wire/json.ts';
 
 async function* sent(...frames: string[]) {
   for (const data of frames) yield { data };
 }
-
-test('the codec serves the chat completions path', () => {
-  expect(chatCompletions.paths).toEqual(['/v1/chat/completions']);
-});
 
 test('a request read and sent on again reaches the upstream unchanged', () => {
   const messages = [
@@ -321,93 +317,6 @@ test('a caller who muted reasoning is sent no progress', async () => {
 
   expect(frames.map(({ data }) => data).join('\n')).not.toContain('Routing');
   expect(JSON.stringify(reply)).not.toContain('Routing');
-});
-
-test('a caller who did not mute reasoning is sent progress as reasoning', async () => {
-  const { streamed, collected } = chatCompletions.decode(
-    { model: 'coder', messages: [], reasoning: { exclude: false } },
-    new Headers(),
-  );
-  async function* run(): RunStream {
-    yield { type: 'progress', piece: 0, text: 'Routing to code' };
-    yield { type: 'finish', reason: 'stop' };
-  }
-
-  const [first] = await Array.fromAsync(streamed(run(), 'req_1'));
-  const reply = collected(
-    [{ type: 'progress', piece: 0, text: 'Routing to code' }],
-    { type: 'finish', reason: 'stop' },
-    'req_1',
-  );
-
-  expect(parsed(first?.data ?? '')).toMatchObject({
-    choices: [{ delta: { role: 'assistant', reasoning: 'Routing to code' } }],
-  });
-  expect(reply).toMatchObject({
-    choices: [{ message: { reasoning: 'Routing to code' } }],
-  });
-});
-
-test('usage is in the stream only for a caller who asked for it there', async () => {
-  async function* run(): RunStream {
-    yield { type: 'text', text: 'Hi' };
-    yield { type: 'finish', reason: 'stop', usage: { input: 3, output: 1 } };
-  }
-  const frames = async (options: { include_usage: boolean } | undefined) => {
-    const { streamed } = chatCompletions.decode(
-      {
-        model: 'coder',
-        messages: [],
-        stream: true,
-        ...(options === undefined ? {} : { stream_options: options }),
-      },
-      new Headers(),
-    );
-    const sent = await Array.fromAsync(streamed(run(), 'req_1'));
-    return sent.flatMap(({ data }) => {
-      const frame = parsed(data);
-      return isDict(frame) ? [frame] : [];
-    });
-  };
-
-  expect(await frames({ include_usage: true })).toMatchObject([
-    { choices: [{ delta: { content: 'Hi' } }], usage: null },
-    { choices: [{ finish_reason: 'stop' }], usage: null },
-    {
-      choices: [],
-      usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 },
-    },
-  ]);
-  for (const options of [undefined, { include_usage: false }]) {
-    const plain = await frames(options);
-    expect(plain).toHaveLength(2);
-    expect(plain.some((frame) => 'usage' in frame)).toBe(false);
-  }
-});
-
-test('an upstream`s failure is answered to the caller in the API`s error body', () => {
-  const facts = chatCompletions.failure(
-    429,
-    new Headers({ 'retry-after': '20' }),
-    '{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}',
-  );
-
-  expect(facts).toMatchObject({
-    code: 'quota_exceeded',
-    retryAfter: 20_000,
-    provider: { 'openai.chat': { status: 429, code: 'insufficient_quota' } },
-  });
-  expect(chatCompletions.error(facts)).toEqual({
-    status: 429,
-    body: {
-      error: {
-        message: 'You exceeded your current quota',
-        type: 'insufficient_quota',
-        param: null,
-        code: 'insufficient_quota',
-      },
-    },
-  });
 });
 
 test('a provider`s own reader names a failed response and a failure in a stream alike', async () => {

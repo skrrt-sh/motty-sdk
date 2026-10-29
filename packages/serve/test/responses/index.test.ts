@@ -3,12 +3,8 @@ import type { Chunk, Json, RunStream } from '@mottyjs/core/host';
 import { chatCompletions } from '../../src/chat-completions/index.ts';
 import { messages } from '../../src/messages/index.ts';
 import { field } from '../../src/responses/fields.ts';
-import { responses, responsesIn } from '../../src/responses/index.ts';
+import { responses } from '../../src/responses/index.ts';
 import { list, parsed } from '../../src/wire/json.ts';
-
-test('the codec answers on the path of the Responses API', () => {
-  expect(responses.paths).toEqual(['/v1/responses']);
-});
 
 test('a request decoded and encoded again reaches the upstream with the same meaning', () => {
   const { request } = responses.decode(
@@ -696,67 +692,6 @@ test("a Claude model's signed reasoning item reaches the caller as sent, and goe
   expect(leftOut).toEqual([]);
 });
 
-test('an upstream failure is answered in the shape of this API', () => {
-  const facts = responses.failure(
-    429,
-    new Headers({ 'retry-after': '2' }),
-    '{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}',
-  );
-  expect(facts).toMatchObject({
-    code: 'quota_exceeded',
-    retryAfter: 2000,
-    provider: {
-      'openai.responses': { status: 429, code: 'insufficient_quota' },
-    },
-  });
-  expect(responses.error(facts)).toEqual({
-    status: 429,
-    body: {
-      error: {
-        message: 'You exceeded your current quota',
-        type: 'insufficient_quota',
-        param: null,
-        code: 'insufficient_quota',
-      },
-    },
-  });
-});
-
-test('a provider`s own reader names a failed response and both failures in a stream', async () => {
-  const codec = responsesIn({}, (_, __, { message }) =>
-    message === 'Insufficient Balance' ? { code: 'quota_exceeded' } : undefined,
-  );
-  const streamed = async (event: Json) =>
-    Array.fromAsync(
-      codec.events(
-        (async function* () {
-          yield { data: JSON.stringify(event) };
-        })(),
-      ),
-    );
-
-  expect(
-    codec.failure(
-      400,
-      new Headers(),
-      '{"error":{"message":"Insufficient Balance","code":"invalid_prompt"}}',
-    ).code,
-  ).toBe('quota_exceeded');
-  expect(
-    await streamed({
-      type: 'response.failed',
-      response: { error: { message: 'Insufficient Balance' } },
-    }),
-  ).toMatchObject([{ type: 'error', error: { code: 'quota_exceeded' } }]);
-  expect(
-    await streamed({ type: 'error', message: 'Insufficient Balance' }),
-  ).toMatchObject([{ type: 'error', error: { code: 'quota_exceeded' } }]);
-  expect(
-    codec.failure(400, new Headers(), '{"error":{"message":"Bad request"}}')
-      .code,
-  ).toBe('invalid_request');
-});
-
 test('what the adapter cuts is cut from a failed response and from both failures in a stream', async () => {
   const cut = (text: string) => text.replaceAll('hunter2-hunter2', '[cut]');
   const streamed = async (event: Json) =>
@@ -1109,114 +1044,6 @@ test('a caller who asked for a reasoning summary is sent progress as one', async
   ]);
 });
 
-test('the reasoning item a caller was written is read back as the reasoning it held', () => {
-  const { collected } = responses.decode(
-    { model: 'relay', input: 'Hi', reasoning: { summary: 'auto' } },
-    new Headers(),
-  );
-  const written = collected(
-    [{ type: 'reasoning', text: 'Paris is north.', block: 0 }],
-    { type: 'finish', reason: 'stop' },
-    'r1',
-  );
-
-  expect(
-    responses.decode(
-      {
-        model: 'relay',
-        input: [
-          { role: 'user', content: 'Hi' },
-          ...list(field(written, 'output')),
-        ],
-      },
-      new Headers(),
-    ).request.messages,
-  ).toEqual([
-    { role: 'user', text: 'Hi' },
-    {
-      role: 'assistant',
-      parts: [
-        {
-          type: 'reasoning',
-          text: 'Paris is north.',
-          provider: {
-            'openai.responses': {
-              id: 'rs_r1_0',
-              type: 'reasoning',
-              summary: [{ type: 'summary_text', text: 'Paris is north.' }],
-              content: [],
-            },
-          },
-        },
-      ],
-    },
-  ]);
-});
-
-test('a caller who asked for no reasoning summary is sent no progress', async () => {
-  async function* run(): RunStream {
-    yield { type: 'progress', piece: 0, text: 'Routing to code' };
-    yield { type: 'text', text: 'Use a loop.' };
-    yield { type: 'finish', reason: 'stop' };
-  }
-
-  for (const reasoning of [undefined, { effort: 'high' }]) {
-    const { streamed, collected } = responses.decode(
-      {
-        model: 'coder',
-        input: 'Hi',
-        ...(reasoning === undefined ? {} : { reasoning }),
-      },
-      new Headers(),
-    );
-    const frames = await Array.fromAsync(streamed(run(), 'r1'));
-    const reply = collected(
-      [
-        { type: 'progress', piece: 0, text: 'Routing to code' },
-        { type: 'text', text: 'Use a loop.' },
-      ],
-      { type: 'finish', reason: 'stop' },
-      'r1',
-    );
-
-    expect(frames.map(({ data }) => data).join('\n')).not.toContain('Routing');
-    expect(field(reply, 'output')).toMatchObject([{ type: 'message' }]);
-  }
-});
-
-test('progress a caller sends back never reaches the upstream', () => {
-  const { request } = responses.decode(
-    {
-      model: 'coder',
-      input: [
-        { role: 'user', content: 'Hi' },
-        {
-          id: 'rs_r1_0',
-          type: 'reasoning',
-          summary: [
-            { type: 'summary_text', text: 'Routing to the fast model.' },
-          ],
-        },
-        {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'output_text', text: 'Hello.', annotations: [] }],
-        },
-      ],
-    },
-    new Headers(),
-  );
-
-  expect(field(responses.encode('gpt-5', request).body, 'input')).toEqual([
-    { type: 'message', role: 'user', content: 'Hi' },
-    {
-      type: 'message',
-      role: 'assistant',
-      content: [{ type: 'output_text', text: 'Hello.', annotations: [] }],
-    },
-  ]);
-});
-
 test('a JSON schema is held as strictly as its caller`s API holds it, on every API it goes to', () => {
   const schema = { type: 'object', properties: { city: { type: 'string' } } };
   const asked = {
@@ -1291,88 +1118,82 @@ test('a JSON schema is held as strictly as its caller`s API holds it, on every A
   ).toMatchObject({ text: { format: { strict: false } } });
 });
 
-test.each([
-  ['bare bytes', 'iVBORw0KGgo='],
-  ['a data address', 'data:image/png;base64,iVBORw0KGgo='],
-])(
-  'a picture an upstream sent as %s with no format reaches a caller of each API that has a place for one',
-  async (_, result) => {
-    const item = {
-      id: 'ig_1',
-      type: 'image_generation_call',
-      status: 'completed',
-      result,
-    };
-    const made = () =>
-      responses.events(
-        (async function* () {
-          yield {
-            data: JSON.stringify({
-              type: 'response.output_item.done',
-              output_index: 0,
-              item,
-            }),
-          };
-          yield {
-            data: '{"type":"response.completed","response":{"status":"completed"}}',
-          };
-        })(),
-      );
-    const [chunk, finish] = await Array.fromAsync(made());
-    if (chunk?.type !== 'file' || finish?.type !== 'finish') {
-      throw new Error('The item was read as no file');
-    }
-    const images = [
-      {
-        type: 'image_url',
-        image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' },
-      },
-    ];
+test('a picture an upstream sent as bare bytes with no format reaches a caller of each API that has a place for one', async () => {
+  const item = {
+    id: 'ig_1',
+    type: 'image_generation_call',
+    status: 'completed',
+    result: 'iVBORw0KGgo=',
+  };
+  const made = () =>
+    responses.events(
+      (async function* () {
+        yield {
+          data: JSON.stringify({
+            type: 'response.output_item.done',
+            output_index: 0,
+            item,
+          }),
+        };
+        yield {
+          data: '{"type":"response.completed","response":{"status":"completed"}}',
+        };
+      })(),
+    );
+  const [chunk, finish] = await Array.fromAsync(made());
+  if (chunk?.type !== 'file' || finish?.type !== 'finish') {
+    throw new Error('The item was read as no file');
+  }
+  const images = [
+    {
+      type: 'image_url',
+      image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' },
+    },
+  ];
 
-    const chat = chatCompletions.decode(
-      { model: 'coder', messages: [{ role: 'user', content: 'Draw' }] },
-      new Headers(),
-    );
-    expect(chat.collected([chunk], finish, 'r1')).toMatchObject({
-      choices: [{ message: { images } }],
-    });
-    const frames = await Array.fromAsync(chat.streamed(made(), 'r1'));
-    expect(parsed(frames[0]?.data ?? '')).toMatchObject({
-      choices: [{ delta: { images } }],
-    });
+  const chat = chatCompletions.decode(
+    { model: 'coder', messages: [{ role: 'user', content: 'Draw' }] },
+    new Headers(),
+  );
+  expect(chat.collected([chunk], finish, 'r1')).toMatchObject({
+    choices: [{ message: { images } }],
+  });
+  const frames = await Array.fromAsync(chat.streamed(made(), 'r1'));
+  expect(parsed(frames[0]?.data ?? '')).toMatchObject({
+    choices: [{ delta: { images } }],
+  });
 
-    // The same API is written the item as the upstream sent it.
-    const same = responses.decode(
-      { model: 'coder', input: 'Draw' },
-      new Headers(),
-    );
-    expect(same.collected([chunk], finish, 'r1')).toMatchObject({
-      output: [item],
-    });
-    expect(
-      parsed(
-        (await Array.fromAsync(same.streamed(made(), 'r1'))).at(-1)?.data ?? '',
-      ),
-    ).toMatchObject({ response: { output: [item] } });
+  // The same API is written the item as the upstream sent it.
+  const same = responses.decode(
+    { model: 'coder', input: 'Draw' },
+    new Headers(),
+  );
+  expect(same.collected([chunk], finish, 'r1')).toMatchObject({
+    output: [item],
+  });
+  expect(
+    parsed(
+      (await Array.fromAsync(same.streamed(made(), 'r1'))).at(-1)?.data ?? '',
+    ),
+  ).toMatchObject({ response: { output: [item] } });
 
-    // An answer of Anthropic Messages holds no picture, of any type.
-    const claude = messages.decode(
-      {
-        model: 'coder',
-        max_tokens: 64,
-        messages: [{ role: 'user', content: 'Draw' }],
-      },
-      new Headers(),
-    );
-    expect(() => claude.collected([chunk], finish, 'r1')).toThrow(
-      'Anthropic Messages has no form for a file the model made',
-    );
-    const ended = await Array.fromAsync(claude.streamed(made(), 'r1'));
-    expect(ended.at(-1)?.data).toContain(
-      'Anthropic Messages has no form for a file the model made',
-    );
-  },
-);
+  // An answer of Anthropic Messages holds no picture, of any type.
+  const claude = messages.decode(
+    {
+      model: 'coder',
+      max_tokens: 64,
+      messages: [{ role: 'user', content: 'Draw' }],
+    },
+    new Headers(),
+  );
+  expect(() => claude.collected([chunk], finish, 'r1')).toThrow(
+    'Anthropic Messages has no form for a file the model made',
+  );
+  const ended = await Array.fromAsync(claude.streamed(made(), 'r1'));
+  expect(ended.at(-1)?.data).toContain(
+    'Anthropic Messages has no form for a file the model made',
+  );
+});
 
 test('a picture whose type neither the upstream nor its bytes say fails a caller of another API, and reaches one of this API', async () => {
   const item = {

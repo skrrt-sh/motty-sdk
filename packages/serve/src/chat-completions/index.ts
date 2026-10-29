@@ -5,7 +5,6 @@ import { decode } from './decode.ts';
 import { type Dialect, plain } from './dialect.ts';
 import { encode } from './encode.ts';
 import { events } from './events.ts';
-import { formless } from './formless.ts';
 
 // One codec per dialect: a caller is always read and answered the same
 // way, and only what goes to and comes from an upstream differs. A provider
@@ -19,7 +18,6 @@ export function chatCompletionsIn(dialect: Dialect): Codec {
     error,
     encode: (model, prompt, defaults, takes) =>
       encode(model, prompt, dialect, defaults, takes),
-    formless,
     events: (messages, clean) => events(messages, dialect, clean),
     failure: (status, headers, body, clean) =>
       failure(

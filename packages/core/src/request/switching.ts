@@ -3,7 +3,7 @@ import { stopReason } from '../data/errors.ts';
 import { isTerminal, type StreamEvent } from '../data/event.ts';
 import type { JsonOutput, Prompt } from '../data/message.ts';
 import { type Call, callable, callOf, type Model } from './model.ts';
-import { close, onAbort, ownSignal } from './wait.ts';
+import { close, onAbort, ownSignal, readOut } from './wait.ts';
 
 export type Upstream = AsyncIterator<StreamEvent>;
 
@@ -79,7 +79,7 @@ function handed(run: Run, upstream: Upstream): EventStream {
   let open: Upstream | undefined = upstream;
   return streamOf({
     next: async () => {
-      if (open === undefined) return { done: true, value: undefined };
+      if (open === undefined) return readOut;
       const read = await open.next();
       if (read.done || isTerminal(read.value)) {
         open = undefined;
@@ -92,7 +92,7 @@ function handed(run: Run, upstream: Upstream): EventStream {
         open = undefined;
         abandon(run);
       }
-      return { done: true, value: undefined };
+      return readOut;
     },
   });
 }

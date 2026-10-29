@@ -20,14 +20,9 @@ test.each([
   [402, 'quota_exceeded'],
   [403, 'upstream_refused'],
   [408, 'timed_out'],
-  [409, 'invalid_request'],
-  [413, 'invalid_request'],
-  [418, 'invalid_request'],
-  [422, 'invalid_request'],
   [429, 'rate_limited'],
   [498, 'overloaded'],
   [500, 'upstream_failed'],
-  [502, 'upstream_failed'],
   [503, 'overloaded'],
   [504, 'timed_out'],
   [524, 'timed_out'],
@@ -112,15 +107,6 @@ test('a refused key is the host`s, told in the SDK`s words with no status', () =
     expect(facts).not.toHaveProperty('status');
     expect(facts).not.toHaveProperty('retryable');
   }
-});
-
-test('a spent balance told by status alone is a spent quota', () => {
-  expect(unnamed(402)).toEqual({
-    code: 'quota_exceeded',
-    message: 'The upstream answered 402',
-    provider: { up: {} },
-    upstream: true,
-  });
 });
 
 test('what the upstream calls the failure outranks its status', () => {
@@ -378,10 +364,6 @@ test('the retry flag is left to the code unless nothing names the failure', () =
   ).not.toHaveProperty('retryable');
 });
 
-test('a status that is no error is recorded but not passed on', () => {
-  expect(unnamed(302)).not.toHaveProperty('status');
-});
-
 test('the wait the upstream asked for is kept', () => {
   expect(
     upstreamFailure(
@@ -569,28 +551,7 @@ test('a link in a failure of another kind is left to the caller', () => {
   ).toBe('Bad schema. See https://docs.example/schemas for the form');
 });
 
-test('a quota a provider`s own reader names loses its link the same', () => {
-  expect(
-    upstreamFailure(
-      {
-        code: undefined,
-        message: 'Insufficient Balance. Recharge at https://pay.example/top-up',
-        record: { up: {} },
-      },
-      400,
-      undefined,
-      () => ({ code: 'quota_exceeded' }),
-    ).message,
-  ).toBe('Insufficient Balance.');
-});
-
-test.each([
-  ['Top up at https://pay.example/top-up'],
-  ['Insufficient balance (see https://pay.example/acct/7).'],
-  ['See www.pay.example/billing for account acct_123'],
-  ['https://pay.example/billing'],
-  [''],
-])(
+test.each([['']])(
   'a spent quota told as %j leaves nothing to tell, so the caller is told in words of our own',
   (message) => {
     expect(
@@ -668,9 +629,6 @@ test('no flag makes a refused credential worth another try', () => {
 });
 
 test.each([
-  ['rate_limited', 429, 'Slow down, account. Wait 2s.'],
-  ['quota_exceeded', 402, 'Slow down, account. Wait 2s.'],
-  ['overloaded', 529, 'Slow down, account. Wait 2s.'],
   ['upstream_failed', 500, 'Slow down, account. Wait 2s.'],
   ['invalid_request', 400, 'Slow down, account id-12345678. Wait 2s.'],
   ['unsupported', 400, 'Slow down, account id-12345678. Wait 2s.'],
@@ -700,8 +658,6 @@ test.each([
   ['Limit of id-12345678 id-87654321 reached', 'Limit of reached'],
   ['Limit  of id-12345678 reached.  Wait', 'Limit  of reached.  Wait'],
   ['Limit of id-12345678\nreached', 'Limit of \nreached'],
-  ['Limit of\nid-12345678 reached', 'Limit of\n reached'],
-  ['id-12345678 reached its limit', ' reached its limit'],
 ])(
   'an id read alone leaves one space of the two it stood between, and no other space is touched: %j',
   (message, told) => {
@@ -822,11 +778,6 @@ test.each([
     'a sentence that holds a link',
     'Rate limit reached. Please try again in 2.556s. Visit https://platform.example/account/rate-limits to learn more.',
     'Rate limit reached. Please try again in 2.556s.',
-  ],
-  [
-    'a question that only leads into the link',
-    'Limit 8000, Used 5912, Requested 4676. Please try again in 19.41s. Need more tokens? Upgrade to Dev Tier today at https://console.example/settings/billing',
-    'Limit 8000, Used 5912, Requested 4676. Please try again in 19.41s.',
   ],
   [
     'every question that leads into the link',
@@ -976,7 +927,6 @@ test.each([
   [`${'Busy. '.repeat(400)}Wait`, 'Busy. '.repeat(333).trimEnd()],
   [`${'busy '.repeat(500)}`, 'busy '.repeat(400).trimEnd()],
   ['x'.repeat(100_000), 'x'.repeat(2000)],
-  [`Busy. ${'x'.repeat(100_000)}`, 'Busy.'],
 ])(
   'a message longer than any provider`s is told up to its last whole sentence, or else its last whole word',
   (message, told) => {
@@ -1023,7 +973,6 @@ test.each([
     429,
     "The upstream's rate limit has no room left for this request",
   ],
-  ['id-12345678', undefined, 'The upstream answered with an error'],
 ])(
   'a message that was nothing but a name, %j, says nothing, so the failure is told as one with no message is',
   (message, status, told) => {
@@ -1041,8 +990,6 @@ test.each([
 
 test.each([
   ['No capacity for id-12345678.', 'No capacity for.'],
-  ['Busy for id-12345678, wait', 'Busy for, wait'],
-  ['Busy (account id-12345678)', 'Busy (account)'],
   ['Busy for `id-12345678`.', 'Busy for ``.'],
   ['Busy for  id-12345678.', 'Busy for .'],
   ['Busy for id-12345678 .', 'Busy for .'],

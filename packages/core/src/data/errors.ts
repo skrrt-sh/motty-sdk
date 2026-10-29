@@ -75,11 +75,13 @@ export class MottyError extends Error {
     Object.defineProperty(MottyError.prototype, brand, { value: true });
   }
 
+  // Named, or a declaration file spells out the class it returns, and with
+  // it the statics the runtime's own types give Error, Node's among them.
   static define(
     code: string,
     status: number,
     { retryable = false }: { retryable?: boolean } = {},
-  ) {
+  ): typeof MottyError {
     return class extends MottyError {
       static override [Symbol.hasInstance](value: unknown): boolean {
         return raised(value, code);
@@ -130,7 +132,7 @@ export class Unauthenticated extends MottyError.define(
   401,
 ) {}
 export class InvalidOutput extends MottyError.define('invalid_output', 502) {}
-export class LimitReached extends MottyError.define('limit_reached', 500) {}
+export class LimitReached extends MottyError.define('limit_reached', 400) {}
 export class RouteLoop extends MottyError.define('route_loop', 500) {}
 export class UnknownRoute extends MottyError.define('unknown_route', 500) {}
 

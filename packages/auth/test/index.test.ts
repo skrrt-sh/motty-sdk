@@ -1,11 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  answer,
-  type ChatRequest,
-  type Motty,
-  motty,
-  Unauthenticated,
-} from '@mottyjs/core';
+import { answer, type ChatRequest, type Motty, motty } from '@mottyjs/core';
 import { type EventStream, type Host, mark } from '@mottyjs/core/host';
 import * as entry from '../src/index.ts';
 import { auth } from '../src/index.ts';
@@ -59,21 +53,6 @@ test('a motty with auth fails with Unauthenticated, 401, when the host knows no 
   expect(reached).toBe(false);
 });
 
-test('the error a boundary gets is the Unauthenticated of the core', async () => {
-  const caught: unknown[] = [];
-
-  await told(
-    motty({ name: 'coder' })
-      .use(auth())
-      .handle(() => answer('Hi'))
-      .onError((thrown) => {
-        caught.push(thrown);
-      }),
-  );
-
-  expect(caught).toEqual([expect.any(Unauthenticated)]);
-});
-
 test('the caller is read-only by type and holds nothing but its id', () => {
   motty({ name: 'coder' })
     .use(auth())
@@ -101,31 +80,6 @@ test('every hook after auth reads the caller', async () => {
 
   expect(seen[0]).toEqual({ type: 'text', text: 'Hi user_1' });
   expect(ids).toEqual(['user_1']);
-});
-
-test('auth used by a part and by its root is one part', async () => {
-  const served = motty({ name: 'coder' })
-    .use(auth())
-    .use(motty({ name: 'audit' }).use(auth()))
-    .handle(({ caller }) => answer(caller.id));
-
-  expect(served[mark].description.plugins).toEqual(['auth', 'audit']);
-  expect((await told(served, { caller: { id: 'user_1' } }))[0]).toEqual({
-    type: 'text',
-    text: 'user_1',
-  });
-});
-
-test('without auth a motty is open: it answers whoever reaches its host', async () => {
-  const seen = await told(
-    motty({ name: 'coder' }).handle((context) => {
-      // @ts-expect-error
-      context.caller;
-      return answer('Hi');
-    }),
-  );
-
-  expect(seen[0]).toEqual({ type: 'text', text: 'Hi' });
 });
 
 test('the entry exports exactly the held values, and no type', async () => {

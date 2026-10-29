@@ -16,7 +16,9 @@ export type JsonSchema = { [keyword: string]: ReadonlyJson };
 // dropped when it sits in `hints`.
 export type ProviderData = { [key: string]: ReadonlyJson };
 
-export type Cache = { ttl?: '5m' | '1h' };
+// `implied` is a marker a cache key asked for, not one the caller placed:
+// an upstream that takes none caches by itself and misses nothing.
+export type Cache = { ttl?: '5m' | '1h'; implied?: true };
 
 // `data` is base64.
 export type Media =
@@ -219,6 +221,24 @@ export type ChatRequest = Closed<{
   options: Options;
   output?: JsonOutput;
 }> & { readonly headers: Headers };
+
+// A coding agent puts its own notes in text parts ahead of the user's words, so a message
+// says its last text part. Only the fields read are typed: checking a request's read-only
+// message against `Message` cost the type-check far more than the function itself.
+export function said(
+  message:
+    | {
+        text?: string;
+        parts?: readonly { type: Part['type']; text?: string }[];
+      }
+    | undefined,
+): string {
+  return (
+    message?.text ??
+    message?.parts?.findLast((part) => part.type === 'text')?.text ??
+    ''
+  );
+}
 
 // A function holds keys as an object does: some validator libraries make
 // their schemas callable.

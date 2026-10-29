@@ -2,8 +2,9 @@
 
 The core of the Motty SDK: all a motty needs to work and a plugin needs to be written. It holds
 the `motty` builder, `model`, the combinators `fallback`, `race`, `retry` and `timeout`, `answer`,
-`reroute`, `think`, the error classes and the types. It has no dependencies, and only what is
-imported ends up in a motty's bundle.
+`reroute`, `think`, `said`, the error classes and the types. It has no dependencies, and only
+what is imported ends up in a motty's bundle. `said(message)` is what a message says, whether it
+came as `text` or as parts.
 
 ```sh
 bun add @mottyjs/core

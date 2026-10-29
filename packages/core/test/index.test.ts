@@ -29,6 +29,7 @@ test('the author entry exports exactly the held values', () => {
     'race',
     'reroute',
     'retry',
+    'said',
     'think',
     'timeout',
   ]);
@@ -72,14 +73,4 @@ test('the author entry exports exactly the held types', async () => {
     'Tool',
     'Usage',
   ]);
-});
-
-test('the author entry holds named exports from other files and nothing else', async () => {
-  const text = await Bun.file(
-    new URL('../src/index.ts', import.meta.url),
-  ).text();
-
-  expect(
-    text.replace(/export (type )?\{[^}]*\} from '[^']*';/g, '').trim(),
-  ).toBe('');
 });

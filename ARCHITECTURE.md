@@ -334,6 +334,10 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   against the provider's own logs by. A call that failed or was cut short has none. Rejected
   for now: an id on those too, which would touch all three wire formats and grow the author's
   bundle, and is left until matching shows it is needed.
+- **A call's entry takes a finish's usage, id and warnings by name, and nothing else of it.**
+  Cause: the finish was spread whole, so a field a host put beside the usage was counted as
+  usage in the totals and the record, and a stray `code` marked a completed call as failed.
+  Rejected: spreading the whole finish, which was smaller.
 - **A call that was stopped is counted with what its host says of it until the phase it began
   in ends.** A `race` loser or a call cut by a time limit ends in `calls` at once, as aborted,
   and the core goes on without it; the usage its host reports after that is added to its entry
@@ -445,6 +449,10 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   type, and is not sent on, except that an invalid request keeps the 4xx it came with. Cause: with the upstream's status passed through, one kind reached callers under
   different statuses by provider, and a prompt too long that a provider told as 403 was written
   to the caller as a permission error.
+- **`LimitReached` is 400 on every API.** The request as sent cannot be served under this host's
+  cap on model calls, and a resend would pay for the same calls again before it failed the same
+  way. A 400 is the one status every client leaves alone. Rejected: 500 and 429, which Codex and
+  the AI SDK resend whatever `x-should-retry` says.
 - **Whether a failure may be retried is the upstream's to say, and the caller is told.** A retry
   flag and a retry-after an upstream sends replace the kind's defaults: a spent quota and a rate
   limit no wait can meet are not retried. The reply carries the flag in the header the official
@@ -457,6 +465,10 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
   Where nothing is left, the caller is told in the SDK's words that the account has no quota,
   or the rate limit no room, for the request. Cause: told as a refused credential, the one
   sentence that said so was kept from the caller.
+- **A budget OpenRouter tells as 403 is `QuotaExceeded`, read by its `limit_source`:** a key's
+  own limit, a guardrail's budget or a workspace's. The in-flight budget is `RateLimited` by its
+  source as by its reason. Cause: read by its status, a spent budget was told as a refused
+  credential. Rejected: reading OpenRouter's 403 by its status alone.
 - **An upstream's 413 is `InvalidRequest`, for every chat API.** It is a limit on the request's
   bytes, enforced before the API reads the prompt. A prompt of too many tokens is
   `ContextTooLong`, and the upstream names it by its own error code. Cause: one codec read 413 as
@@ -1116,9 +1128,28 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   means, and had to prove it a second time through an adapter. Rejected: a header the host
   trusts, which a client forges unless every hop strips it and which the motty would read;
   a wider auth adapter, which still starts from a token the host may not have.
-- **One storage adapter, not a driver collection.** `redis` speaks the Redis protocol, tested on
-  Valkey, and is Bun's built-in client. Its server must keep a key's expiry on a plain write:
-  Redis 6 or any Valkey. Rejected: an adapter per provider, redoing its client.
+- **An empty caller id names nobody.** An adapter that answers one is read as answering no
+  caller, and the next credential header is tried. A host that states one is refused before the
+  adapter is asked, as an id it may not give is. Cause: a custom adapter or the host could hand
+  a motty a caller whose id was empty, and `auth()` let it through. Rejected: reading the host's
+  empty caller as no caller, which tells the caller to sign in for the host's mistake; a check
+  in `auth()` alone, which leaves every other reader of the caller open.
+- **One storage adapter per runtime, not a driver collection.** `redis` speaks the Redis
+  protocol, tested on Valkey, and is Bun's built-in client. Its server must keep a key's expiry
+  on a plain write: Redis 6 or any Valkey. Rejected: an adapter per provider, redoing its client.
+- **On Workers the store is a Durable Object, `cloudflare`, one object per key.** Workers has no
+  Bun client and keeps no socket from one request to the next, and a Durable Object is the only
+  Workers database that adds in one step. The object keeps its values in its SQLite store through
+  the key-value calls, which need no table to make again once the object is deleted. Each value
+  keeps its expiry and is checked on every read, so a time to live is exact to the millisecond.
+  One alarm, at the earliest expiry, deletes what has expired and then the object once it is
+  empty. One object per key is Cloudflare's advice for a unit that is coordinated alone, and a
+  host may group keys with `name`. Rejected: Workers KV, whose shortest time to live is a minute,
+  which has no atomic step, takes one write a second per key and may read a value a minute
+  stale; Redis over TCP, which opens a connection on every call since no socket outlives its
+  request; D1, one database that runs one query at a time and has no unit per key; Upstash's
+  Redis over HTTP, a provider of its own whose every call leaves Cloudflare, and the adapter
+  per provider rejected above.
 - **The server behind it is Valkey 9, hosted with its I/O threads on.** It is the one the adapter
   is tested on, and the fastest maintained one on a motty's mix of reads, writes and increments.
   The threads change its speed and not its answers, so a test run may leave them off.
@@ -1129,7 +1160,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   connections.
 - **`increment` is the same IEEE double addition in every store.** `redis` adds in its own
   script and writes the total in seventeen digits, in place of the server's float increment,
-  and a total that is not finite is refused by both stores with the same message. Cause: the
+  and a total that is not finite is refused by every store with the same message. `cloudflare`
+  adds in plain JavaScript, as the test store does. Cause: the
   server adds in a wider float and prints a rounded decimal, so 0.1 + 0.2 read 0.3 on a real
   store and 0.30000000000000004 on the test store.
 - **`limits` caps a request's duration, its model calls, its after-response work and its body.**
@@ -1170,6 +1202,18 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **`close` waits for the records still being delivered, within the `drain` it already had.**
   It is the same work `waitUntil` is handed, so there is one mechanism and not two. Cause: a
   server that shut down after its last reply lost the records still on their way.
+- **A chat request is in flight from when its headers pass, not from when it is let in.** So
+  `close` waits, within the same `drain`, for a body still arriving and for a request whose
+  caller is still being proven. A body still arriving when the drain is over is answered with
+  the shutdown refusal and its connection closed, with no record and nothing handed to
+  `waitUntil`. A request still being let in then is stopped as soon as it is let in, and its
+  record says so. The report of a request the auth adapter failed on is waited for like any
+  record, on a guarded model list too. Cause: a body arriving at shutdown was outside the
+  drain, so `close` returned, `serve` stopped the listener under it, and a request let in
+  afterwards ran on a host that thought it had drained; and the auth failure of a guarded model
+  list was reported through `waitUntil` but not waited for by `close`. Rejected: cutting every
+  arriving body as soon as `close` is called, which loses an upload at its last byte; refusing
+  once the body has arrived, which still runs after a `close` that has returned.
 - **The edge keeps the stream alive, notices a caller who left, and drains at shutdown.**
 - **A request stopped at shutdown ends with the error a new request is refused with then,**
   `Overloaded`, and the caller and the record are both told the server is shutting down. Cause:
@@ -1270,6 +1314,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   `anthropic-version`, as only that API's clients do, and the OpenAI shape for any other. Cause:
   a client whose base address lacked `/v1` was answered `Not found` as text, which its library
   could not read as an error.
+- **A path the Messages API does not serve is a `not_found_error`.** Cause: Anthropic's errors
+  reference gives a 404 that type, and its clients raise their not-found error from it.
+  Rejected: typing every 404 by its status alone, which would rename the 404 of an upstream that
+  a model call ended in.
 - **A missing field is worded the same on every API.** Cause: a body with no model was told
   "The body needs a model" on two APIs and "model must be a string" on the third, and neither
   is an upstream's own wording, so nothing was kept by the difference.
@@ -1320,6 +1368,15 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   caller-facing and upstream. One codec each, outside the core; a fourth is an SDK change.
 - **A message is an ordered list of parts:** text, image, file, audio, reasoning, tool call, tool
   result, citation, refusal, and opaque provider-specific parts. `text` is the shorthand.
+- **`said(message)` is what a message says: its `text`, else its last text part, else `''`.**
+  Reasoning, refusals, tool results and media are not words said. Cause: a message sent over the
+  Responses or Messages API, or as content blocks, arrives as parts, so an author who read
+  `text` got nothing, and two of the four examples' gates did nothing over two of the three
+  APIs; and coding agents put their own notes in text parts ahead of the user's words.
+  Rejected: joining every text part, as LangChain's `.text`, OpenAI's `output_text` and the AI
+  SDK's `.text` do, which fed an agent's notes to every gate; a parameter typed as the whole
+  message, which cost the type check about 870 instantiations at each call site on a read-only
+  message.
 - **Inside one family nothing is lost:** reasoning signatures, logprobs, metadata, and a cache
   marker where the upstream takes one.
 - **A reply's likelihoods are never dropped:** where no text came for them, they are told on an
@@ -1344,6 +1401,9 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   so no prompt with provider options could be given to a `fallback` across families. Rejected:
   one map, where an adapter had to know every family's vocabulary to tell them apart, and a
   flat map of unknown options, which reached whatever upstream the request was routed to.
+- **An empty entry for another family carries nothing and fails no call.** Only an entry that
+  says something is refused. Cause: an author who deleted a caller's fields from the entry for
+  its own family left `{}` behind, and an upstream of another family still refused the request.
 - **A provider with two APIs has one more key, which both read.** `openai` is read beside
   `openai.chat` and `openai.responses` in a request's options, and for a hint on a message or
   a part: the entry an upstream is sent is the shared one merged with its API's own, and
@@ -1365,6 +1425,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   field under an API's own key is the author addressing that API, sent unchecked; a caller's
   unknown fields are still decoded under the key of the API it spoke. Cause: every comparable
   SDK that shares one key drops such a field silently.
+- **What a Responses caller sends only to observe its request is a hint:** `metadata`,
+  `client_metadata` and the safety identifier among others, left out by another family. Cause:
+  Codex sends `client_metadata` on every request, and as provider data it made an Anthropic
+  upstream refuse the first one.
+- **The cache key is held under the shared `openai` key, whichever OpenAI API sent it.** An
+  upstream of either API is sent it, and another family leaves it out. Cause: a key held as a
+  hint of the API that sent it was lost between the two, so a caller of one API routed to the
+  other paid its prompt again.
 - **Across families the common set is translated:** messages, tools and tool choice, structured
   output, reasoning effort, stop, max tokens, sampling, finish reason, usage.
 - **Nothing that changes the meaning is dropped.** It fails that call with `Unsupported`, so
@@ -1482,6 +1550,27 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   400 to `prompt_cache_breakpoint`, so a hint failed the call, and they cache by themselves.
   Rejected: writing it always, which is that; never, which lost explicit caching through a router
   that honours it.
+- **A caller of either OpenAI API that keys its cache and marks none asks for a marker on the
+  last message.** The decoder puts the neutral marker there, so an upstream that caches only
+  where it is told, as Anthropic does, is told, and the author sees the marker and may move or
+  remove it. One marker is within Anthropic's limit of four. A request that sends an OpenAI API
+  the key is cached by it, so a marker left out of it is not reported. The marker says it was
+  implied by a key, so an upstream that takes no marker, caching by itself, is sent the request
+  as if there were none, with nothing reported. Cause: Codex sends
+  `prompt_cache_key` on every turn and no marker, so every turn to Claude paid its 13,000 tokens
+  of prompt again, and with one marker live, 98 of each 100 were read from the cache. Rejected:
+  the Anthropic encoder reading the key, a hint of another family, which the author could not see
+  or change; a marker on the system prompt alone, which leaves the conversation uncached.
+  A Chat Completions caller's key implies the marker the same way. Cause: opencode sends only the
+  key to an OpenAI-family upstream, and routed to Claude, directly or through OpenRouter, it was
+  sent no marker and cached nothing.
+- **What a `cache_control` says beside its kind and lifetime is a hint of the Messages
+  family.** A `scope` or a field named later reaches an Anthropic upstream under the marker it
+  came with, and another family leaves it out. A marker taken away takes it along, while an
+  author's own whole `cache_control`, with its kind, is sent as given where no neutral marker is. Cause: it was
+  dropped as it was read, so an Anthropic caller relayed to an Anthropic upstream lost it.
+  Rejected: provider data, which would make a request with such a marker fail on every other
+  family.
 - **A router's `cache_control` on a Chat Completions content part is the neutral cache marker,**
   lifetime included, as the API's own breakpoint is. Cause: it was kept as a hint of that API, so
   it reached no Anthropic upstream and nothing said so.
@@ -1492,6 +1581,12 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   breakpoint, gives it no lifetime and ignores a `cache_control` on a content part; its Chat
   Completions takes `cache_control` with one. Cause: measured there, a part's `cache_control`
   wrote and read 0 tokens and the breakpoint 9,129.
+- **A dialect also says where a marker's lifetime goes.** DashScope keeps a marker five minutes
+  and takes no lifetime, so it is sent `cache_control` alone and an hour is reported. Moonshot
+  takes no marker and caches by itself, and its Kimi K3 models take the lifetime for the whole
+  request in `prompt_cache_options`, so any marker asking an hour asks it there once. Cause:
+  DashScope was sent no marker, and reads it marks cost half of those it finds alone; Moonshot
+  refuses a breakpoint, and an hour asked by Claude Code was dropped.
 - **A JSON schema is held as strictly as its caller's API holds it.** Left unsaid, Chat
   Completions takes a schema loosely and Responses strictly, and Anthropic Messages always
   constrains: each decoder writes its API's default, and both OpenAI encoders always say `strict`.
@@ -1505,11 +1600,15 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   turns that hold only tool results are joined in order, each result with its own fields and
   marker; a turn with fields of its own stays apart. Cause: the two OpenAI APIs send a message or
   an item per result, and Anthropic asks for all results of one assistant turn together.
-- **A tool call an Anthropic upstream ends with no input text is told as `{}` arguments, and
-  empty arguments a caller of an OpenAI API echoes are read as an empty input.** Cause: such a
-  call reached those callers as an empty string, which no client parses and OpenAI itself never
-  sends, and the echoed turn was then refused, so every loop with a tool that takes no
-  arguments ended on its second turn.
+- **A function call that ends whole with no arguments is told as `{}`, on both OpenAI APIs, and
+  empty arguments a caller of an OpenAI API echoes are read as an empty input.** That is the
+  Chat Completions reply, and the Responses done event and item of a call that completed. A cut
+  call and a custom tool's free-text input stay as they came. Cause: such a call reached those
+  callers as an empty string, which no client parses and OpenAI itself never sends, and the
+  echoed turn was then refused, so every loop with a tool that takes no arguments ended on its
+  second turn; the rule held only for a call read from an Anthropic upstream, and LangChain's
+  parser of a whole reply marked such a call invalid on both APIs. Rejected: writing `{}` in the
+  core, whose chunks are not this wire's; touching a custom tool's input.
 - **A custom tool call is told by the upstream's mark or by the custom tools the caller
   declared,** so it is written as custom whichever API answered. Cause: one a Responses
   upstream answered was written to a Chat Completions caller as a function call whose
@@ -1518,9 +1617,16 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   custom is written as custom, and one echoed in a caller's history with text for input goes
   back as custom, with no tool list consulted. Cause: Codex declares its tools inside an input
   item for some models, so the request named no custom tool, and its shell call came back as a
-  function call and went up again with its input quoted as JSON. Towards Anthropic Messages,
-  which takes only an object, such a call is refused. Cause: it was written there as a string,
-  which that API rejects.
+  function call and went up again with its input quoted as JSON.
+- **A free-form custom tool goes to Anthropic Messages as a tool that takes its text in one
+  field,** `input`, its grammar told in its description, and the request reports it. A call to
+  it is read back to its text whole, at the end of its block, and a call echoed in history goes
+  back wrapped in the same object. So the reader of a reply is told the tools the request was
+  sent with. Cause: Codex declares `apply_patch` as a grammar tool for every model of its
+  catalog, so no request of it reached Claude. Rejected: refusing the tool, which ended every
+  such session on its first request; writing the call's JSON as its text, which Codex read as a
+  patch that did not begin with its first line; streaming the text as it comes, which would
+  stream the wrapper.
 - **What an upstream says of a tool call beyond what a codec reads reaches the caller, and what
   the caller echoes of it goes back.** On the way down it rides on the call's chunk as its
   family's own; in a caller's history it is a hint, so an upstream of the same family is sent
@@ -1531,6 +1637,23 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   put on a call was lost the same way on Chat Completions, and the next turn refused.
   Rejected: an echoed call's fields as what changes the meaning, with which a conversation
   begun on one family failed on its first turn with another.
+- **A tool in a Responses namespace is a tool of its own to every other family,** named
+  `namespace__name`. A name another tool has, or one Anthropic or Chat Completions would refuse,
+  is made apart by a hash, and is the same on every turn. A call under that name reaches the
+  Responses caller with its namespace and its own name, and a call echoed in history goes on
+  under the name its tool has. To a Responses upstream the namespace is sent as it came. Cause:
+  Codex declares each MCP server and its subagent tools as a namespace, which every other family
+  refused, and a call with no namespace Codex answers as unsupported. Rejected: a namespace on
+  the neutral tool, a field of the core for what one API has.
+- **A tool of a type of its own that the caller runs is a function to another family.** Codex's
+  `tool_search` runs on the client and has parameters, so it goes elsewhere as a function named
+  for its type, and the call comes back as a `tool_search_call` with its arguments as an object,
+  written whole. The tools a search found are declared from then on, from the output the caller
+  echoes, and told to the model by the names it calls them by. A Responses upstream is sent the
+  items as they came and none of the found tools, which it holds itself. Cause: for a model of
+  its catalog Codex declares its MCP and subagent tools only through the search, so with the
+  search left out no MCP tool and no subagent could be reached. Rejected: leaving the search
+  out as a tool only another API runs, which live reached no MCP tool.
 - **A `tool_call` chunk may say that its call has ended, and a Responses caller is written the
   call done then, otherwise when the reply ends.** A reader says so only where the upstream
   showed the call whole, so an item marked incomplete, or the last block of an Anthropic
@@ -1539,6 +1662,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   of the reply, after items the upstream sent later. No chunk said a call was whole, since
   pieces of calls made together may interleave and a motty may reorder them. Rejected: ending
   a call when an item of another kind opened, which could write a cut free-text call as whole.
+- **A reasoning item a caller sends back loses only the `incomplete` status a reply gave it.**
+  The reply marks reasoning cut short so the caller can tell, but OpenAI writes no status on a
+  reasoning item and refuses any status on one it is given. A router's own `completed` stays.
+  Cause: live, a Codex-shaped turn after a reply cut by its output limit failed with a 400 on
+  `input[1].status`.
 - **What a Chat Completions tool definition holds beyond what is read is a hint of that API,**
   where the Responses and Messages codecs keep a definition's unread fields as provider data.
   Cause: provider data of one family is refused by an upstream of another, so a chat caller's
@@ -1626,10 +1754,23 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **What a model goes on from its reasoning with is not the answer.** A signature, an encrypted
   reasoning item and redacted thinking reach a caller of the same family unchanged. To a caller
   whose API has no form for them they are left out and reported as a warning, whole and streamed
-  alike. So a tool loop from a caller of one family to a model of another loses the model's
-  reasoning between turns, and the report says so each time. Cause: one kind of data was treated
-  three ways, two dropped silently and one failing the reply. Rejected: failing the reply, which
-  threw away a complete answer over data the caller could not have used.
+  alike. Cause: one kind of data was treated three ways, two dropped silently and one failing the
+  reply. Rejected: failing the reply, which threw away a complete answer over data the caller
+  could not have used.
+- **A Responses caller that includes encrypted reasoning is given another family's in it.** What
+  the model goes on from is written in the item's `encrypted_content` as that family's own data,
+  keyed by the family, and read back from the item the caller echoes, so a Claude model's thinking
+  goes back to it signed. A caller who muted reasoning is shown none of its text, so the text a
+  signature binds is sealed beside it, since Anthropic refuses a signature without its text.
+  Such an item is never sent to a Responses upstream. Which chunks a reply
+  has no form for depends on what the caller asked, so it is said by the decoded request. Cause:
+  Codex asks for the content and echoes the item, and every turn of it to Claude dropped the
+  model's thinking. Rejected: an opaque encoding of our own, which a reader could not tell from
+  OpenAI's.
+- **Thinking signed before a search found more tools goes back as its text alone, and is
+  reported.** Anthropic binds a signature to the tool list it was made with, and the found tools
+  change that list. Cause: the first turn after a search failed live on that check. Rejected:
+  Anthropic's beta setting that drops such a block upstream, unasked and unreported.
 - **Reasoning is written to Responses as a summary,** whole and streamed alike, whichever API the
   model answered in. Thinking from Anthropic Messages is a summary that API made. A Responses
   upstream's own item is passed on as it came. Cause: written
@@ -1637,6 +1778,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   own API writes only summaries, and those are what clients read. Rejected: content for a
   model's own words from Chat Completions, the more exact name, which most clients never show
   to a caller who asked to see reasoning.
+- **A tool only another API runs is offered, not required.** Towards an API that cannot carry
+  it, it is left out and reported, since a model never shown a tool cannot call it. A tool choice
+  that names it requires it, and fails the call as before. Cause: Codex declares OpenAI's web
+  search on every request, and every request of it to Claude failed. Rejected: refusing the
+  request, which is that.
 - **A reply's content is classed as a request's is.** What fails a call when sent to an upstream
   of another API ends a reply to a caller of another API: a hosted tool call, a provider part.
 - **The codec writes the honest reply; the edge tells the request.** The edge stops the request
@@ -1677,7 +1823,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 
 | Package | Kind | Holds |
 | --- | --- | --- |
-| `@mottyjs/core` | Core | `motty`, `model`, `fallback`, `race`, `retry`, `timeout`, `answer`, `reroute`, `think`, error classes, types |
+| `@mottyjs/core` | Core | `motty`, `model`, `fallback`, `race`, `retry`, `timeout`, `answer`, `reroute`, `think`, `said`, error classes, types |
 | `@mottyjs/store` | Plugin | `store` |
 | `@mottyjs/decision` | Plugin | `decision`, and the questions `choice`, `score`, `noul` |
 | `@mottyjs/auth` | Plugin | `auth()` |
@@ -1697,32 +1843,49 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   time. Rejected: removing whitespace only, which keeps names and loses lines; a source map,
   five times the bundle and holding the author's sources.
   Also rejected: a build file in every package, a second place for what the CLI will own.
-- **Bun only for now.** `serve`, the adapters, the bundler and the test runner are Bun's. A
-  motty's own code uses web-standard APIs and the async context, so it runs on the Hub too. No
-  other runtime is promised.
-- **A published package holds its sources and, beside them, their declaration files. Bun runs the
-  sources; a consumer's compiler reads only the declarations.** Cause: a compiler checks every
-  source it is led to under the consumer's own flags, and skipping library checks skips
-  declaration files only. Measured on a project installed from the packed packages, with sources
-  alone: under Bun's recommended config, which leaves exact optional properties off, 7 errors,
-  all in the host side; under a config that also does not allow an import path ending in `.ts`,
-  358 more, one for every such import. With declarations the same project gave none under either
-  config, with library checks on and off, on TypeScript 5.9 and 7.0. Rejected: making the sources
-  pass under looser flags, which is every import rewritten, still one consumer flag from the next
-  error, and every consumer paying to check the SDK's sources. Also rejected: compiling to
-  JavaScript, a second artefact beside the code the tests ran, for a runtime that needs none.
-- **The declarations are built when a package is packed, from the one shared compiler config.**
-  They are never committed. Rejected: a build config in every package, as the layout rules
-  reject a compiler config in every package.
-- **Inside the workspace a package is always read as its sources,** through an export condition
-  that only the workspace's compiler config names. Cause: once a pack had left declarations
-  behind, the workspace's own type check read them in place of the sources and failed, and the
-  type-cost gate would have measured them. Rejected: deleting them after every pack, which one
-  failed pack defeats.
+- **The SDK runs on Bun and Cloudflare Workers, and nowhere else; `serve` and the Redis adapter
+  stay Bun's.** `mount` is web-standard and is a Worker's default export; `serve` starts Bun's
+  server, and the Redis adapter is Bun's own client. A motty's own code uses web-standard APIs and
+  the async context, so it runs on the Hub too. The packed packages are checked serving whole and
+  streamed replies on Bun and in workerd. Cause: Deno is sunsetting, and no host needs a motty on
+  Node, while every claim of a runtime costs a gate, a CI step and code kept for it alone.
+  Rejected: Node 22 and later, and Deno, which the SDK ran on until this decision; a Node adapter
+  package.
+- **A published package holds its sources, compiled JavaScript, and declaration files.** Bun runs
+  the sources through the `bun` condition; a Workers bundler runs the JavaScript; a consumer's
+  compiler reads only the declarations. Cause: a compiler checks every source it is led to under
+  the consumer's own flags, and skipping library checks skips declaration files only. Measured on
+  a project installed from the packed packages, with sources alone: under Bun's recommended
+  config, which leaves exact optional properties off, 7 errors, all in the host side; under a
+  config that also does not allow an import path ending in `.ts`, 358 more, one for every such
+  import. With declarations the same project gave none under either config, with library checks on
+  and off, on TypeScript 5.9 and 7.0. And a bundler that compiles no TypeScript in its
+  dependencies fails on the sources. Rejected: making the sources pass under looser flags, which
+  is every import rewritten, still one consumer flag from the next error, and every consumer
+  paying to check the SDK's sources. Rejected: shipping the JavaScript alone, since a bare
+  `bun test` in the workspace would then read it, as Bun's config cannot name a condition and its
+  packer ignores `publishConfig.exports`. Rejected: reading the SDK's version from a JSON import
+  of the manifest, since the whole file imported grew the core's bundle by 939 bytes.
+- **A published declaration names only web-standard types and the SDK's own.** A runtime's own
+  type is reached through a structural type or a conditional on the global object. Cause: a
+  consumer that checks its libraries and holds only the web-standard ones, as a Worker's project
+  may, failed on Node's `CallSite`, which Bun's types bring, through the statics of an anonymous
+  error class, and on Bun's server type and `process`. Rejected: asking consumers to turn library
+  checks off or to install Bun's types; casting.
+- **The JavaScript and the declarations are built when a package is packed, by one `tsc` run from
+  the one shared compiler config.** They are never committed. Rejected: a build config in every
+  package, as the layout rules reject a compiler config in every package.
+- **Inside the workspace a package is always read as its sources,** through two export
+  conditions: `bun` for Bun's runtime and tests, and the source condition that the workspace's
+  compiler config and every build for another target name, the gates' and the examples' build
+  scripts. Cause: once a pack had left declarations behind, the workspace's own type check read
+  them in place of the sources and failed, and the type-cost gate would have measured them.
+  Rejected: deleting them after every pack, which one failed pack defeats.
 - **The served motty is the default export of the file `main` names.** A named export is a part.
 - **Identity comes from `package.json`:** `@acme/coder` is `acme/coder`. A release changes one file.
 - **No manifest file.** Behind the mark is a description collected at load, never by parsing source.
-  It holds the SDK's version, the root's `name`, and the name of every part used. A host that
+  It holds the SDK's version, the root's `name`, and the name of every part used. The version is
+  a constant the bump script writes with every package's version. A host that
   states no `namespace` uses the root's name as the `store` namespace.
 - **The description does not list models yet.** `model(name)` runs when a file loads and is not
   tied to a motty, so a list would hold the names of every motty loaded in the process. It could
@@ -1752,8 +1915,8 @@ folder, one file each; a modules folder, one folder each; a test folder; an eval
    host supplies, the mark, the function behind it. Done when every Core rule has a test
    driven through that contract with a stub host, under strict types, and the measurements exist.
 2. **The test kit and the four first-party plugins.** Done when the example's offline tests pass.
-3. **Host side**: codecs, streaming and cancellation at the edge, `serve`, the adapters, on Bun.
-4. **Packaging**: the bundle; the example runs on Bun from it. The Hub follows.
+3. **Host side**: codecs, streaming and cancellation at the edge, `serve`, `mount`, the adapters.
+4. **Packaging**: the bundle; the example runs from it. The Hub follows.
 
 ## Deliberately out
 

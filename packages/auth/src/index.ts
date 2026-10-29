@@ -6,7 +6,7 @@ export function auth() {
     const { caller } = hosted();
     if (caller === undefined) {
       throw new Unauthenticated(
-        'This motty needs a caller, and the host knows none',
+        'The request has no key or token this host accepts, and this motty answers only callers it can identify',
       );
     }
     return { caller };

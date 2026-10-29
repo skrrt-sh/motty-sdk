@@ -25,6 +25,12 @@ const noReason = new DOMException(stopped, 'AbortError');
 // A timer given a longer delay than this fires after one millisecond.
 const timerMax = 2 ** 31 - 1;
 
+// Shared and frozen: an iterator read out says nothing of its own.
+export const readOut: IteratorReturnResult<undefined> = Object.freeze({
+  done: true,
+  value: undefined,
+});
+
 export function clock(ring: () => void, ms?: number): Timer | undefined {
   return ms === undefined
     ? undefined
@@ -182,6 +188,9 @@ export function reader(
 } {
   const unwatch =
     signal === undefined ? undefined : onAbort(signal, onGiveUp, 'afterTurn');
+  // Ended once: a read that settles after the source was given up would end
+  // it, and close it, again.
+  let ended = false;
   return {
     read: (took, threw) => {
       if (signal?.aborted) return onGiveUp();
@@ -192,6 +201,8 @@ export function reader(
       }
     },
     end: (readOut) => {
+      if (ended) return;
+      ended = true;
       unwatch?.();
       if (!readOut) close(source);
     },

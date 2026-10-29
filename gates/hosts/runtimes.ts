@@ -18,6 +18,7 @@ export const runtimes = {
     const { outputs } = await Bun.build({
       entrypoints: [`${import.meta.dir}/worker.ts`],
       target: 'node',
+      conditions: ['@mottyjs/source'],
     });
     const [worker] = outputs;
     if (worker === undefined) throw new Error('The worker was not built');

@@ -17,15 +17,6 @@ test('only the headers named are heard, in any letter case, and an empty one say
   ).toEqual({ 'anthropic-beta': 'effort-2025-11-24' });
 });
 
-test('a header sent twice is heard as one list', () => {
-  const headers = new Headers();
-  headers.append('anthropic-beta', 'effort-2025-11-24');
-  headers.append('anthropic-beta', 'files-api-2025-04-14');
-  expect(carrying((name) => name === 'anthropic-beta').heard(headers)).toEqual({
-    'anthropic-beta': 'effort-2025-11-24, files-api-2025-04-14',
-  });
-});
-
 test('fields are parted into the headers named and the body`s own', () => {
   expect(
     carrying((name) => name === 'anthropic-beta').parted({

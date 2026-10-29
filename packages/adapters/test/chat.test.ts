@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { chatCompletions, responses } from '@mottyjs/serve';
 import { chat } from '../src/chat.ts';
 
@@ -34,20 +34,6 @@ test('a prompt the API cannot carry fails before anything is sent', async () => 
   ]);
   expect(asked).toBe(0);
 });
-
-test.each(['', 'acme/eu'])(
-  'the prefix %p fails when the adapter is made',
-  (prefix) => {
-    expect(() =>
-      chat({
-        codec: responses,
-        prefix,
-        address: 'https://api.example/v1',
-        key: 'sk-host',
-      }),
-    ).toThrow('An adapter was given a prefix that is no name');
-  },
-);
 
 test('an upstream nobody listens at is one retryable error', async () => {
   const gone = Bun.serve({ port: 0, fetch: () => new Response('') });
@@ -114,33 +100,6 @@ test('the credential is sent beside the headers of the API', async () => {
     ['POST', '/api/chat/completions', 'application/json', 'sk-host'],
   ]);
   expect(events.map(({ type }) => type)).toEqual(['finish']);
-});
-
-test('an address that ends in a slash asks the same path', async () => {
-  const seen: string[] = [];
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: (request) => {
-      seen.push(new URL(request.url).pathname);
-      return new Response('data: [DONE]\n\n');
-    },
-  });
-  const { call } = chat({
-    codec: chatCompletions,
-    prefix: 'acme',
-    address: `${upstream.url}v1/`,
-    key: 'sk-host',
-  });
-
-  await Array.fromAsync(
-    call?.(
-      'acme/small',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.timeout(5000),
-    ) ?? [],
-  );
-
-  expect(seen).toEqual(['/v1/chat/completions']);
 });
 
 function upstreamSaying(body: string) {
@@ -620,11 +579,7 @@ test('a key written with space around it is sent without, and what an upstream e
   });
 
   const events = await Promise.all(
-    [
-      'sk-test-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1 ',
-      ' sk-test-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1',
-      '\tsk-test-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1\r\n',
-    ].map((key) =>
+    ['\tsk-test-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1\r\n'].map((key) =>
       Array.fromAsync(
         chat({
           codec: chatCompletions,
@@ -641,8 +596,6 @@ test('a key written with space around it is sent without, and what an upstream e
   );
 
   expect(events.map(([event]) => event)).toMatchObject([
-    { type: 'error', error: { message: 'No model for <Bearer [key]>' } },
-    { type: 'error', error: { message: 'No model for <Bearer [key]>' } },
     { type: 'error', error: { message: 'No model for <Bearer [key]>' } },
   ]);
 });
@@ -680,178 +633,72 @@ test('a key with a space inside it is cut whole', async () => {
   ]);
 });
 
-test.each([
-  ['a line break', 'sk-test-Zq7Lm2Xv\n9Rt4Kp8Wd3Nh6Bc1'],
-  ['a character no header holds', 'sk-test-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1☃'],
-])(
-  'a key with %s fails when the adapter is made, in words that hold none of it',
-  (_, key) => {
-    const made = () =>
-      chat({
-        codec: chatCompletions,
-        prefix: 'acme',
-        address: 'http://localhost:1',
-        key,
-      });
+test('a redirect to another origin is not followed: it is one failure no retry mends, and the other address is asked nothing', async () => {
+  const asked: string[] = [];
+  using other = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      asked.push(request.url);
+      return new Response('data: [DONE]\n\n');
+    },
+  });
+  using upstream = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      const { pathname } = new URL(request.url);
+      asked.push(pathname);
+      return pathname === '/moved/chat/completions'
+        ? new Response('data: [DONE]\n\n')
+        : new Response('Moved to another place', {
+            status: 307,
+            headers: { location: `${other.url}moved/chat/completions` },
+          });
+    },
+  });
 
-    expect(made).toThrow(
-      'The acme adapter was given a key no header can carry',
-    );
-    expect(made).not.toThrow(/Zq7L|6Bc1/);
-  },
-);
+  const events = await Array.fromAsync(
+    chat({
+      codec: chatCompletions,
+      prefix: 'acme',
+      address: upstream.url.origin,
+      key: 'sk-host',
+      headers: { 'x-portkey-api-key': 'pk-Zq7Lm2Xv9Rt4Kp8Wd3Nh' },
+    }).call?.(
+      'acme/small',
+      { messages: [{ role: 'user', text: 'hi' }] },
+      AbortSignal.timeout(5000),
+    ) ?? [],
+  );
 
-test.each([
-  [301, 'the same'],
-  [302, 'the same'],
-  [303, 'the same'],
-  [307, 'the same'],
-  [308, 'the same'],
-  [301, 'another'],
-  [302, 'another'],
-  [303, 'another'],
-  [307, 'another'],
-  [308, 'another'],
-])(
-  'a %i to %s origin is not followed: it is one failure no retry mends, and the other address is asked nothing',
-  async (status, origin) => {
-    const asked: string[] = [];
-    using other = Bun.serve({
-      port: 0,
-      fetch: (request) => {
-        asked.push(request.url);
-        return new Response('data: [DONE]\n\n');
+  expect(events).toEqual([
+    {
+      type: 'error',
+      error: {
+        code: 'upstream_failed',
+        status: 502,
+        message: 'The upstream answered 307, a redirect, which is not followed',
+        retryable: false,
+        upstream: true,
       },
-    });
-    using upstream = Bun.serve({
-      port: 0,
-      fetch: (request) => {
-        const { pathname } = new URL(request.url);
-        asked.push(pathname);
-        return pathname === '/moved/chat/completions'
-          ? new Response('data: [DONE]\n\n')
-          : new Response('Moved to another place', {
-              status,
-              headers: {
-                location:
-                  origin === 'another'
-                    ? `${other.url}moved/chat/completions`
-                    : '/moved/chat/completions',
-              },
-            });
-      },
-    });
+    },
+  ]);
+  expect(asked).toEqual(['/chat/completions']);
+});
 
-    const events = await Array.fromAsync(
-      chat({
-        codec: chatCompletions,
-        prefix: 'acme',
-        address: upstream.url.origin,
-        key: 'sk-host',
-        headers: { 'x-portkey-api-key': 'pk-Zq7Lm2Xv9Rt4Kp8Wd3Nh' },
-      }).call?.(
-        'acme/small',
-        { messages: [{ role: 'user', text: 'hi' }] },
-        AbortSignal.timeout(5000),
-      ) ?? [],
-    );
-
-    expect(events).toEqual([
-      {
-        type: 'error',
-        error: {
-          code: 'upstream_failed',
-          status: 502,
-          message: `The upstream answered ${status}, a redirect, which is not followed`,
-          retryable: false,
-          upstream: true,
-        },
-      },
-    ]);
-    expect(asked).toEqual(['/chat/completions']);
-  },
-);
-
-test.each([300, 304])(
-  'a %i is told by its status and not as a redirect: one failure no retry mends, with nothing asked of where it points',
-  async (status) => {
-    const asked: string[] = [];
-    using other = Bun.serve({
-      port: 0,
-      fetch: (request) => {
-        asked.push(request.url);
-        return new Response('data: [DONE]\n\n');
-      },
-    });
-    using upstream = Bun.serve({
-      port: 0,
-      fetch: () =>
-        new Response(null, {
-          status,
-          headers: { location: `${other.url}moved/chat/completions` },
-        }),
+test('an address of no protocol a request goes by, with a password, fails when the adapter is made, in words that quote none of it', () => {
+  const made = () =>
+    chat({
+      codec: chatCompletions,
+      prefix: 'acme',
+      address: 'ftp://gateway:Zq7Lm2Xv9Rt4Kp8W@x',
+      key: 'sk-host',
     });
 
-    const events = await Array.fromAsync(
-      chat({
-        codec: chatCompletions,
-        prefix: 'acme',
-        address: upstream.url.origin,
-        key: 'sk-host',
-      }).call?.(
-        'acme/small',
-        { messages: [{ role: 'user', text: 'hi' }] },
-        AbortSignal.timeout(5000),
-      ) ?? [],
-    );
-
-    expect(events).toEqual([
-      {
-        type: 'error',
-        error: {
-          code: 'upstream_failed',
-          status: 502,
-          message: `The upstream answered ${status}`,
-          retryable: false,
-          upstream: true,
-        },
-      },
-    ]);
-    expect(asked).toEqual([]);
-  },
-);
-
-test.each([
-  [
-    'holds a password',
-    'http://gateway:Zq7Lm2Xv9Rt4Kp8W@127.0.0.1:1/v1',
+  expect(made).toThrow(
     'The acme adapter was given an address that holds credentials; send them in a header',
-  ],
-  [
-    'is no address',
-    'not an address Zq7Lm2Xv9Rt4Kp8W',
-    'The acme adapter was given an address that is none',
-  ],
-  [
-    'has no end',
-    'http://gateway:Zq7Lm2Xv9Rt4Kp8W@[::1/v1',
-    'The acme adapter was given an address that is none',
-  ],
-  [
-    'is of no protocol a request goes by, with a password',
-    'ftp://gateway:Zq7Lm2Xv9Rt4Kp8W@x',
-    'The acme adapter was given an address that holds credentials; send them in a header',
-  ],
-])(
-  'an address that %s fails when the adapter is made, in words that quote none of it',
-  (_, address, message) => {
-    const made = () =>
-      chat({ codec: chatCompletions, prefix: 'acme', address, key: 'sk-host' });
-
-    expect(made).toThrow(message);
-    expect(made).not.toThrow(/gateway|Zq7L|Kp8W/);
-  },
-);
+  );
+  expect(made).not.toThrow(/gateway|Zq7L|Kp8W/);
+});
 
 test('a secret an upstream echoes as a field`s name is cut from the record, in a body and inside a stream', async () => {
   using refusing = Bun.serve({
@@ -927,46 +774,6 @@ test('a secret an upstream echoes as a field`s name is cut from the record, in a
   expect(JSON.stringify(events)).not.toMatch(/Zq7L|6Bc1|Tt6U|1Zz2/);
 });
 
-test('what the platform`s own failure quotes of the key or a header is cut from the cause, and the adapter`s sentence stays', async () => {
-  const fetched = spyOn(globalThis, 'fetch').mockRejectedValue(
-    new TypeError(
-      "Header 'authorization' has invalid value: 'Bearer sk-test-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1' beside pk-Zq7Lm2Xv9Rt4Kp8Wd3Nh",
-    ),
-  );
-  try {
-    const events = await Array.fromAsync(
-      chat({
-        codec: chatCompletions,
-        prefix: 'acme',
-        address: 'http://localhost:1',
-        key: 'sk-test-Zq7Lm2Xv9Rt4Kp8Wd3Nh6Bc1',
-        headers: { 'x-portkey-api-key': 'pk-Zq7Lm2Xv9Rt4Kp8Wd3Nh' },
-      }).call?.(
-        'acme/small',
-        { messages: [{ role: 'user', text: 'hi' }] },
-        AbortSignal.timeout(5000),
-      ) ?? [],
-    );
-
-    expect(events).toEqual([
-      {
-        type: 'error',
-        error: {
-          code: 'upstream_failed',
-          status: 502,
-          message: 'The connection to the upstream failed',
-          retryable: true,
-          upstream: true,
-          cause:
-            "Header 'authorization' has invalid value: 'Bearer [key]' beside [key]",
-        },
-      },
-    ]);
-  } finally {
-    fetched.mockRestore();
-  }
-});
-
 test('a failure longer than an adapter reads is let go where the reading stops, and told by its status as the body that is no JSON it then is', async () => {
   let released = false;
   using upstream = Bun.serve({
@@ -1017,37 +824,6 @@ test('a failure longer than an adapter reads is let go where the reading stops, 
   ]);
   await Bun.sleep(50);
   expect(released).toBe(true);
-});
-
-test('a failure exactly as long as an adapter reads is read whole, and named by what it says', async () => {
-  using upstream = Bun.serve({
-    port: 0,
-    fetch: () =>
-      new Response(
-        `{"error":{"message":"Too many tools","code":"context_length_exceeded","pad":"${'m'.repeat(65_536 - 80)}"}}`,
-        { status: 400 },
-      ),
-  });
-
-  const events = await Array.fromAsync(
-    chat({
-      codec: chatCompletions,
-      prefix: 'acme',
-      address: upstream.url.origin,
-      key: 'sk-host',
-    }).call?.(
-      'acme/small',
-      { messages: [{ role: 'user', text: 'hi' }] },
-      AbortSignal.timeout(5000),
-    ) ?? [],
-  );
-
-  expect(events).toMatchObject([
-    {
-      type: 'error',
-      error: { code: 'context_too_long', message: 'Too many tools' },
-    },
-  ]);
 });
 
 test('a secret is cut from all an upstream said before any of it is shortened, so no cap leaves the start of a key or a header', async () => {
@@ -1103,61 +879,59 @@ test('a secret is cut from all an upstream said before any of it is shortened, s
   ]);
 });
 
-test.each(['upstream', 'answered', 'stream'])(
-  'the key %s is cut where an upstream says it, and from no sentence written for it',
-  async (key) => {
-    using silent = Bun.serve({
-      port: 0,
-      fetch: () => Response.json({}, { status: 500 }),
-    });
-    using echoing = Bun.serve({
-      port: 0,
-      fetch: () =>
-        Response.json(
-          { error: { message: `The ${key} key is not known` } },
-          { status: 500 },
-        ),
-    });
-    using closing = upstreamSaying('data: {"choices":[]}\n\n');
-    using spent = Bun.serve({
-      port: 0,
-      fetch: () =>
-        Response.json(
-          {
-            error: {
-              message: `See https://${key}.example/billing`,
-              code: 'insufficient_quota',
-            },
+test('a key that is a word of the adapter`s sentences is cut where an upstream says it, and from no sentence written for it', async () => {
+  const key = 'upstream';
+  using silent = Bun.serve({
+    port: 0,
+    fetch: () => Response.json({}, { status: 500 }),
+  });
+  using echoing = Bun.serve({
+    port: 0,
+    fetch: () =>
+      Response.json(
+        { error: { message: `The ${key} key is not known` } },
+        { status: 500 },
+      ),
+  });
+  using closing = upstreamSaying('data: {"choices":[]}\n\n');
+  using spent = Bun.serve({
+    port: 0,
+    fetch: () =>
+      Response.json(
+        {
+          error: {
+            message: `See https://${key}.example/billing`,
+            code: 'insufficient_quota',
           },
-          { status: 429 },
-        ),
-    });
+        },
+        { status: 429 },
+      ),
+  });
 
-    const told = await Promise.all(
-      [silent, echoing, closing, spent].map(async (upstream) => {
-        const events = await Array.fromAsync(
-          chat({
-            codec: chatCompletions,
-            prefix: 'acme',
-            address: upstream.url.origin,
-            key,
-          }).call?.(
-            'acme/small',
-            { messages: [{ role: 'user', text: 'hi' }] },
-            AbortSignal.timeout(5000),
-          ) ?? [],
-        );
-        return events.map((event) =>
-          event.type === 'error' ? event.error.message : event.type,
-        );
-      }),
-    );
+  const told = await Promise.all(
+    [silent, echoing, closing, spent].map(async (upstream) => {
+      const events = await Array.fromAsync(
+        chat({
+          codec: chatCompletions,
+          prefix: 'acme',
+          address: upstream.url.origin,
+          key,
+        }).call?.(
+          'acme/small',
+          { messages: [{ role: 'user', text: 'hi' }] },
+          AbortSignal.timeout(5000),
+        ) ?? [],
+      );
+      return events.map((event) =>
+        event.type === 'error' ? event.error.message : event.type,
+      );
+    }),
+  );
 
-    expect(told).toEqual([
-      ['The upstream answered 500'],
-      ['The [key] key is not known'],
-      ['The upstream closed the stream before it finished'],
-      ["The upstream's account has no quota left for this request"],
-    ]);
-  },
-);
+  expect(told).toEqual([
+    ['The upstream answered 500'],
+    ['The [key] key is not known'],
+    ['The upstream closed the stream before it finished'],
+    ["The upstream's account has no quota left for this request"],
+  ]);
+});

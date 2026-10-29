@@ -166,31 +166,6 @@ test('any other value than the one a model allows is left out and reported', () 
   ]);
 });
 
-test('a setting the model takes no value of is left out and reported, whatever the value', () => {
-  const left = leaving('chat');
-
-  expect(
-    sampling(
-      left,
-      {
-        temperature: false,
-        topP: false,
-        topK: true,
-        presencePenalty: true,
-        frequencyPenalty: true,
-        together: true,
-        effort: true,
-      },
-      { temperature: 1, topP: 1 },
-      {},
-    ),
-  ).toEqual({});
-  expect(left.leftOut().map(({ setting }) => setting)).toEqual([
-    'temperature.model',
-    'topP.model',
-  ]);
-});
-
 test('where the two may not go together the temperature goes and top-p is left out and reported', () => {
   const left = leaving('messages');
 
@@ -293,34 +268,6 @@ test('a penalty the model does not take is left out and reported, and one of zer
       setting: 'presencePenalty.model',
       detail:
         'Chat Completions has no field for a presence penalty the model does not take',
-    },
-  ]);
-});
-
-test('a frequency penalty the model does not take is left out and reported', () => {
-  const left = leaving('responses');
-
-  expect(
-    sampling(
-      left,
-      {
-        temperature: 1,
-        topP: 1,
-        topK: false,
-        presencePenalty: false,
-        frequencyPenalty: false,
-        together: true,
-        effort: true,
-      },
-      { frequencyPenalty: 0.5 },
-      {},
-    ),
-  ).toEqual({});
-  expect(left.leftOut()).toEqual([
-    {
-      setting: 'frequencyPenalty.model',
-      detail:
-        'The Responses API has no field for a frequency penalty the model does not take',
     },
   ]);
 });

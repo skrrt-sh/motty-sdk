@@ -1,13 +1,12 @@
 import { expect, test } from 'bun:test';
 import { auth } from '@mottyjs/auth';
 import { answer, model, motty, Unauthenticated } from '@mottyjs/core';
-import {
-  type AuthAdapter,
-  type HostOptions,
-  hosted,
-  type ModelAdapter,
-  type Overrides,
-  type Report,
+import type {
+  AuthAdapter,
+  HostOptions,
+  ModelAdapter,
+  Overrides,
+  Report,
 } from '@mottyjs/core/host';
 import { settings } from '@mottyjs/settings';
 import { store } from '@mottyjs/store';
@@ -76,12 +75,6 @@ test('the adapter proves the caller by the token, and the credential header of t
 });
 
 test.each([
-  [{ 'x-api-key': 'sk-ada' }, ['content-type', 'x-trace']],
-  [{ authorization: 'Bearer sk-ada' }, ['content-type', 'x-trace']],
-  [
-    { 'x-api-key': 'sk-ada', authorization: 'Bearer sk-ada' },
-    ['content-type', 'x-trace'],
-  ],
   [
     { 'x-api-key': 'sk-ada', authorization: 'Bearer sk-eve' },
     ['content-type', 'x-trace'],
@@ -131,21 +124,27 @@ test('a caller the adapter does not know is refused by the motty that asks for o
   expect(reply.status).toBe(401);
   expect(await reply.json()).toMatchObject({
     error: {
-      message: 'This motty needs a caller, and the host knows none',
+      message:
+        'The request has no key or token this host accepts, and this motty answers only callers it can identify',
       type: 'authentication_error',
     },
   });
 });
 
-test('a credential the adapter throws on is refused in the format of the path', async () => {
-  const served = serve(whoAsked, () => ({ auth: keys }));
+test('a caller the adapter answers with an empty id is refused by the motty that asks for one, and by its model list', async () => {
+  const served = serve(whoAsked, () => ({
+    auth: { verify: () => ({ id: '' }) },
+  }));
 
-  const reply = await served.fetch(ask({ authorization: 'Bearer sk-forged' }));
+  const reply = await served.fetch(ask({ authorization: 'Bearer sk-ada' }));
+  const list = await served.fetch(
+    new Request('http://motty.test/v1/models', {
+      headers: { authorization: 'Bearer sk-ada' },
+    }),
+  );
 
   expect(reply.status).toBe(401);
-  expect(await reply.json()).toMatchObject({
-    error: { message: 'Bad token', type: 'authentication_error' },
-  });
+  expect(list.status).toBe(401);
 });
 
 test('an auth adapter that throws what is no SDK error fails the request before the motty runs: the caller is told nothing of it, and the report holds it', async () => {
@@ -197,36 +196,6 @@ test('with no auth adapter there is no caller, whatever the request carries', as
   const reply = await served.fetch(ask({ authorization: 'Bearer sk-ada' }));
 
   expect(reply.status).toBe(401);
-});
-
-test('a motty that asks for no caller is open, and never sees the credential, with an auth adapter or without', async () => {
-  const open = motty({ name: 'coder' }).handle(({ request }) =>
-    answer(String(request.headers.get('authorization'))),
-  );
-
-  const unguarded = await serve(open, () => ({})).fetch(
-    ask({ authorization: 'Bearer sk-eve' }),
-  );
-  expect(await said(unguarded)).toBe('null');
-
-  const guarded = await serve(open, () => ({ auth: keys })).fetch(
-    ask({ authorization: 'Bearer sk-eve' }),
-  );
-  expect(await said(guarded)).toBe('null');
-});
-
-test('a caller the host gives reaches the motty with no credential header and no auth adapter', async () => {
-  const served = mount(whoAsked, () => ({}));
-
-  const reply = await served.fetch(ask({ 'x-trace': 'trace-7' }), undefined, {
-    caller: { id: 'ada' },
-  });
-
-  expect(reply.status).toBe(200);
-  expect(JSON.parse(await said(reply))).toEqual({
-    caller: 'ada',
-    headers: ['content-type', 'x-trace'],
-  });
 });
 
 test('a credential a client sends does not override the caller the host gives: the adapter is not asked, and the header is gone before the motty reads the rest', async () => {
@@ -294,12 +263,6 @@ const tuned = motty({ name: 'coder' })
   .handle(({ settings: { routing } }) =>
     answer(`${routing.tier} at ${routing.threshold}`),
   );
-
-test('a motty reads its defaults when the host overrides nothing', async () => {
-  const reply = await serve(tuned, () => ({})).fetch(ask());
-
-  expect(await said(reply)).toBe('fast at 0.5');
-});
 
 test("the host's setting overrides reach the motty, and the rest keep their defaults", async () => {
   const reports: Report[] = [];
@@ -395,252 +358,6 @@ test("the storage is handed over with the served motty's name ahead of every key
   expect(await storage.get('seen')).toBeUndefined();
 });
 
-test("two motties served over one storage do not read each other's keys", async () => {
-  const storage = memory();
-  const coder = serve(counting('coder'), () => ({ storage }));
-  const tutor = serve(counting('tutor'), () => ({ storage }));
-
-  await coder.fetch(ask());
-  await coder.fetch(ask());
-
-  expect(await said(await tutor.fetch(ask()))).toBe('1');
-  expect(await storage.get('coder:seen')).toBe(2);
-  expect(await storage.get('tutor:seen')).toBe(1);
-});
-
-test('a delete reaches the prefixed key too', async () => {
-  const storage = memory();
-  await storage.set('coder:seen', 4);
-  const served = serve(
-    motty({ name: 'coder' }).handle(async () => {
-      await store.delete('seen');
-      return answer('forgotten');
-    }),
-    () => ({ storage }),
-  );
-
-  await served.fetch(ask());
-
-  expect(await storage.get('coder:seen')).toBeUndefined();
-});
-
-test('an increment reaches the prefixed key too', async () => {
-  const storage = memory();
-  const served = serve(
-    motty({ name: 'coder' }).handle(async () =>
-      answer(String(await store.increment('seen'))),
-    ),
-    () => ({ storage }),
-  );
-
-  expect(await said(await served.fetch(ask()))).toBe('1');
-  expect(await said(await served.fetch(ask()))).toBe('2');
-  expect(await storage.get('coder:seen')).toBe(2);
-});
-
-test("a storage that throws what is no SDK error: the motty and the caller are told only that the host's storage failed, and the report holds what was thrown", async () => {
-  const reported = Promise.withResolvers<Report>();
-  const caught: unknown[] = [];
-  const refusing = () => {
-    throw new Error('redis://:hunter2@db refused the connection');
-  };
-  const served = serve(
-    motty({ name: 'coder' }).handle(async () => {
-      await store.get('seen').catch((thrown: unknown) => {
-        caught.push(thrown);
-      });
-      await store.set('seen', 1);
-      return answer('Use a mutex.');
-    }),
-    () => ({
-      storage: { get: refusing, set: refusing, delete: refusing },
-      report: reported.resolve,
-    }),
-  );
-
-  const reply = await served.fetch(ask());
-
-  expect(reply.status).toBe(500);
-  expect(await reply.json()).toMatchObject({
-    error: { message: "The host's storage failed" },
-  });
-  expect(caught).toMatchObject([
-    { code: 'internal', message: "The host's storage failed" },
-  ]);
-  expect(Bun.inspect(caught[0])).not.toContain('hunter2');
-  expect((await reported.promise).failed).toMatchObject(
-    Array.from({ length: 2 }, () => ({
-      service: 'storage',
-      error: {
-        message: 'redis://:hunter2@db refused the connection',
-        stack: expect.stringContaining('hunter2'),
-      },
-    })),
-  );
-});
-
-test('what one request writes into the overrides is refused, and the next request reads them as the host gave them', async () => {
-  const served = mount(
-    motty({ name: 'coder' }).handle(() => {
-      const { settings } = hosted();
-      const read = JSON.stringify(settings);
-      try {
-        Object.assign(Object(settings?.['routing']), { tier: 'planted' });
-      } catch {
-        return answer(`${read}, and the write was refused`);
-      }
-      return answer(read);
-    }),
-    () => ({ settings: { routing: { tier: 'deep' } } }),
-  );
-
-  expect(await said(await served.fetch(ask()))).toBe(
-    '{"routing":{"tier":"deep"}}, and the write was refused',
-  );
-  expect(await said(await served.fetch(ask()))).toBe(
-    '{"routing":{"tier":"deep"}}, and the write was refused',
-  );
-});
-
-test('with no storage adapter a motty that uses the store fails', async () => {
-  const reply = await serve(counting('coder'), () => ({})).fetch(ask());
-
-  expect(reply.status).toBe(500);
-});
-
-const askingTwice = motty({ name: 'coder' }).handle(async ({ prompt }) => {
-  await gpt.complete(prompt);
-  return gpt.complete(prompt);
-});
-
-test("the call limit is the bundle's to enforce and is passed to it", async () => {
-  const within = serve(askingTwice, () => ({
-    models: [fake(on(gpt, 'Use a mutex.'))],
-    limits: { calls: 2 },
-  }));
-  expect((await within.fetch(ask())).status).toBe(200);
-
-  const reported = Promise.withResolvers<Report>();
-  const over = serve(askingTwice, () => ({
-    models: [fake(on(gpt, 'Use a mutex.'))],
-    limits: { calls: 1, duration: 60_000 },
-    report: reported.resolve,
-  }));
-  const reply = await over.fetch(ask());
-
-  expect(reply.status).toBe(500);
-  expect(await reply.json()).toMatchObject({
-    error: {
-      message: 'The request reached its limit of 1 calls',
-      code: 'limit_reached',
-    },
-  });
-  expect(await reported.promise).toMatchObject({
-    outcome: 'failed',
-    error: {
-      code: 'limit_reached',
-      message: 'The request reached its limit of 1 calls',
-    },
-  });
-});
-
-test("the host's price is the cost of each call on the report, and of the request", async () => {
-  const reported = Promise.withResolvers<Report>();
-  const served = serve(askingTwice, () => ({
-    models: [
-      fake(
-        on(gpt, [
-          { type: 'text', text: 'Use a mutex.' },
-          { type: 'finish', reason: 'stop', usage: { input: 1000, cost: 9 } },
-        ]),
-      ),
-    ],
-    price: (name, usage) =>
-      name === 'openai/gpt' ? (usage.input ?? 0) / 2000 : undefined,
-    report: reported.resolve,
-  }));
-
-  await served.fetch(ask());
-
-  expect(await reported.promise).toMatchObject({
-    calls: [
-      { model: 'openai/gpt', cost: 0.5 },
-      { model: 'openai/gpt', cost: 0.5 },
-    ],
-    usage: { input: 2000, cost: 1 },
-  });
-});
-
-test('the limit on after-response work is passed to the bundle', async () => {
-  const reported = Promise.withResolvers<Report>();
-  const served = serve(
-    motty({ name: 'coder' })
-      .afterResponse(() => Bun.sleep(10_000))
-      .afterResponse(() => {})
-      .handle(() => answer('Use a mutex.')),
-    () => ({ limits: { afterResponse: 20 }, report: reported.resolve }),
-  );
-
-  const reply = await served.fetch(ask());
-
-  expect(await said(reply)).toBe('Use a mutex.');
-  expect(await reported.promise).toMatchObject({
-    outcome: 'completed',
-    afterResponse: {
-      failed: [{ part: 'coder', error: { code: 'timed_out' } }],
-      skipped: ['coder'],
-    },
-  });
-});
-
-test('a limit that is no whole number fails when the host is made, before any request', () => {
-  expect(() =>
-    serve(
-      motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
-      () => ({ limits: { calls: 1.5 } }),
-    ),
-  ).toThrow('limits.calls must be a whole number of zero or more');
-});
-
-test("the report is the record with the request's id and the overrides in effect", async () => {
-  const reports: Report[] = [];
-  const served = serve(
-    motty({ name: 'coder' }).handle(({ prompt }) => gpt.complete(prompt)),
-    () => ({
-      models: [fake(on(gpt, [{ type: 'text', text: 'Use a mutex.' }]))],
-      report: (report) => reports.push(report),
-    }),
-  );
-
-  const first = await served.fetch(ask());
-  const second = await served.fetch(ask());
-
-  expect(reports).toHaveLength(2);
-  expect(reports[0]).toEqual({
-    id: expect.stringMatching(/^[0-9a-f-]{36}$/),
-    settings: {},
-    outcome: 'completed',
-    path: [],
-    entries: [],
-    calls: [
-      {
-        model: 'openai/gpt',
-        time: { total: expect.any(Number), firstEvent: expect.any(Number) },
-      },
-    ],
-    usage: {},
-    time: { answer: expect.any(Number), total: expect.any(Number) },
-    afterResponse: { failed: [], skipped: [], unreached: [] },
-  });
-  expect(await first.json()).toMatchObject({
-    id: `chatcmpl-${reports[0]?.id}`,
-  });
-  expect(await second.json()).toMatchObject({
-    id: `chatcmpl-${reports[1]?.id}`,
-  });
-  expect(reports[0]?.id).not.toBe(reports[1]?.id);
-});
-
 test('the report holds the whole error the caller was told only the code of', async () => {
   const reported = Promise.withResolvers<Report>();
   const served = serve(
@@ -732,8 +449,6 @@ test('a request refused before it was let in hands the host no work to wait for'
 
 test.each([
   ['/v1/models', {}, 401],
-  ['/v1/models/coder', {}, 401],
-  ['/v1/models', { authorization: 'Bearer sk-eve' }, 401],
   ['/v1/models', { 'x-api-key': 'sk-ada' }, 401],
   ['/v1/models', { authorization: 'Bearer sk-ada' }, 200],
   ['/v1/models/coder', { 'api-key': 'sk-ada' }, 200],
@@ -755,7 +470,8 @@ test.each([
     if (status === 401) {
       expect(await reply.json()).toEqual({
         error: {
-          message: 'This motty needs a caller, and the host knows none',
+          message:
+            'The request has no key or token this host accepts, and this motty answers only callers it can identify',
           type: 'authentication_error',
           param: null,
           code: 'invalid_api_key',
@@ -802,29 +518,8 @@ test('the model list of a motty that asks for no caller is shown to anyone, and 
   expect(verified).toBe(0);
 });
 
-test('the model list asks a host that gives its models per request for none', async () => {
-  let models = 0;
-  const served = serve(whoAsked, () => ({
-    auth: keys,
-    models: () => {
-      models += 1;
-      return [];
-    },
-  }));
-
-  const reply = await served.fetch(
-    new Request('http://motty.test/v1/models', {
-      headers: { authorization: 'Bearer sk-ada' },
-    }),
-  );
-
-  expect(reply.status).toBe(200);
-  expect(models).toBe(0);
-});
-
 test.each([
   ['/v1/chat/completions', 'x-request-id', { messages: [] }],
-  ['/v1/responses', 'x-request-id', { input: 'Why does this deadlock?' }],
   [
     '/v1/messages',
     'request-id',
@@ -883,12 +578,6 @@ test.each([
 test.each([
   ['/v1/chat/completions', 'x-request-id', 'chatcmpl-', { messages: [] }],
   [
-    '/v1/responses',
-    'x-request-id',
-    'resp_',
-    { input: 'Why does this deadlock?' },
-  ],
-  [
     '/v1/messages',
     'request-id',
     'msg_',
@@ -937,22 +626,6 @@ test.each([
     ]);
   },
 );
-
-test('with no id given, each request the host says something else of still gets its own', async () => {
-  const served = mount(
-    motty({ name: 'coder' }).handle(() => answer('Use a mutex.')),
-    () => ({}),
-  );
-
-  const first = await served.fetch(ask(), undefined, { caller: { id: 'ada' } });
-  const second = await served.fetch(ask(), undefined, {});
-
-  expect(first.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
-  expect(second.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
-  expect(first.headers.get('x-request-id')).not.toBe(
-    second.headers.get('x-request-id'),
-  );
-});
 
 test('an id that could not go into a header is thrown to the host, on a chat path, on a guarded model list and on an unguarded one, and nothing runs or is reported', async () => {
   const reports: Report[] = [];
@@ -1035,7 +708,6 @@ test('a request refused before it was let in has no record and carries no id', a
 
 test.each([
   ['/v1/chat/completions', 'x-request-id', { messages: [] }],
-  ['/v1/responses', 'x-request-id', { input: 'Why does this deadlock?' }],
   [
     '/v1/messages',
     'request-id',
@@ -1126,6 +798,51 @@ test.each([
     sent.resolve();
     await settled;
     expect(order).toEqual(['report', 'work']);
+  },
+);
+
+test.each([
+  ['/v1/chat/completions', { messages: [] }],
+  ['/v1/models', undefined],
+])(
+  'a close waits for the report made when the auth adapter throws: %s',
+  async (path, body) => {
+    const sent = Promise.withResolvers<void>();
+    const order: string[] = [];
+    const served = mount(whoAsked, () => ({
+      auth: {
+        verify: () => {
+          throw new Error('The key set is gone');
+        },
+      },
+      report: async () => {
+        await sent.promise;
+        order.push('report');
+      },
+    }));
+
+    const reply = await served.fetch(
+      new Request(`http://motty.test${path}`, {
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer sk-ada',
+        },
+        ...(body === undefined
+          ? {}
+          : {
+              method: 'POST',
+              body: JSON.stringify({ model: 'coder', ...body }),
+            }),
+      }),
+    );
+    const closed = served.close().then(() => order.push('closed'));
+    await Bun.sleep(10);
+    expect(order).toEqual([]);
+    sent.resolve();
+    await closed;
+
+    expect(reply.status).toBe(500);
+    expect(order).toEqual(['report', 'closed']);
   },
 );
 

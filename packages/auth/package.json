@@ -7,7 +7,8 @@
     "llm",
     "gateway",
     "auth",
-    "bun"
+    "bun",
+    "cloudflare-workers"
   ],
   "license": "Apache-2.0",
   "author": "Skrrt LLC",
@@ -34,11 +35,12 @@
     ".": {
       "@mottyjs/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
-      "default": "./src/index.ts"
+      "bun": "./src/index.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "prepack": "bun run --cwd ../.. declarations && rm -rf dist && cp -R ../../dist/auth/src dist"
+    "prepack": "bun run --cwd ../.. build && rm -rf dist && cp -R ../../dist/auth/src dist"
   },
   "dependencies": {
     "@mottyjs/core": "workspace:*"

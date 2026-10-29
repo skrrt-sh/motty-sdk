@@ -16,16 +16,22 @@ export function usageRead(raw: Dict, flat?: boolean): Usage {
     prompt_tokens_details: prompt,
     completion_tokens_details: completion,
     cached_tokens: outer,
+    prompt_cache_hit_tokens: hit,
   } = raw;
-  const { cached_tokens: inner, cache_write_tokens: written } = dict(prompt);
-  // The details outrank a count a model sends beside them.
-  const cached = inner ?? (flat === true ? outer : undefined);
+  const {
+    cached_tokens: inner,
+    cache_write_tokens: written,
+    cache_creation_input_tokens: created,
+  } = dict(prompt);
+  // The details outrank a count a model sends beside them, and DeepSeek's
+  // own count outranks one at the top.
+  const cached = inner ?? hit ?? (flat === true ? outer : undefined);
   const { reasoning_tokens: reasoning } = dict(completion);
   return {
     ...optional('input', number(input)),
     ...optional('output', number(output)),
     ...optional('cached', number(cached)),
-    ...optional('cacheWrite', number(written)),
+    ...optional('cacheWrite', number(written ?? created)),
     ...optional('reasoning', number(reasoning)),
     ...optional('cost', number(cost)),
   };

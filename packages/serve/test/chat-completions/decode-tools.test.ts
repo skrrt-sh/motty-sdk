@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { InvalidRequest } from '@mottyjs/core';
 import { choiceOf, toolOf } from '../../src/chat-completions/decode-tools.ts';
+import { toolTo } from '../../src/messages/tools.ts';
+import { leaving } from '../../src/wire/fieldless.ts';
 
 test('a function tool is read with its schema and strictness', () => {
   expect(
@@ -30,15 +32,6 @@ test('a function tool is read with its schema and strictness', () => {
     },
     strict: true,
   });
-});
-
-test('a function tool with no strictness named is read with none', () => {
-  expect(
-    toolOf({
-      type: 'function',
-      function: { name: 'weather', parameters: { type: 'object' } },
-    }),
-  ).toEqual({ type: 'function', name: 'weather', input: { type: 'object' } });
 });
 
 test('a function tool with no parameters takes none', () => {
@@ -107,9 +100,7 @@ test('a tool that is not well formed is refused', () => {
   ).toThrow('A grammar needs a syntax and a definition');
 });
 
-test('each plain tool choice is read as it is', () => {
-  expect(choiceOf('auto')).toBe('auto');
-  expect(choiceOf('none')).toBe('none');
+test('a plain tool choice is read as it is', () => {
   expect(choiceOf('required')).toBe('required');
 });
 
@@ -164,28 +155,47 @@ test('a field of a tool that is not read is kept as a hint, where it sat', () =>
     toolOf({
       type: 'function',
       function: { name: 'now', parameters: { type: 'object' }, vendor: 1 },
-      cache_control: { type: 'ephemeral' },
+      defer: true,
     }),
   ).toEqual({
     type: 'function',
     name: 'now',
     input: { type: 'object' },
-    hints: {
-      'openai.chat': {
-        cache_control: { type: 'ephemeral' },
-        function: { vendor: 1 },
-      },
-    },
+    hints: { 'openai.chat': { defer: true, function: { vendor: 1 } } },
   });
+});
+
+test("a tool's router marker is its cache, and what it says beside that a hint", () => {
   expect(
     toolOf({
-      type: 'custom',
-      custom: { name: 'shell', vendor: 1 },
-      defer: true,
+      type: 'function',
+      function: { name: 'now', parameters: { type: 'object' } },
+      cache_control: { type: 'ephemeral', ttl: '1h', scope: 'org' },
     }),
   ).toEqual({
-    type: 'custom',
-    name: 'shell',
-    hints: { 'openai.chat': { defer: true, custom: { vendor: 1 } } },
+    type: 'function',
+    name: 'now',
+    input: { type: 'object' },
+    cache: { ttl: '1h' },
+    hints: { 'openai.chat': { cache_control: { scope: 'org' } } },
   });
+});
+
+test("a Chat tool's marker reaches Anthropic on the tool, with its lifetime", () => {
+  const left = leaving('messages');
+  expect(
+    toolTo(
+      left,
+      toolOf({
+        type: 'function',
+        function: { name: 'now', parameters: { type: 'object' } },
+        cache_control: { type: 'ephemeral', ttl: '1h' },
+      }),
+    ),
+  ).toEqual({
+    name: 'now',
+    input_schema: { type: 'object' },
+    cache_control: { type: 'ephemeral', ttl: '1h' },
+  });
+  expect(left.leftOut()).toEqual([]);
 });

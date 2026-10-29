@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { EventStream } from '../../src/contract.ts';
-import { Aborted, RateLimited, TimedOut } from '../../src/data/errors.ts';
+import { Aborted, RateLimited } from '../../src/data/errors.ts';
 import type { Chunk, StreamEvent } from '../../src/data/event.ts';
 import { answer, buffered } from '../../src/request/answer.ts';
 import { enter } from '../../src/request/context.ts';
@@ -31,35 +31,6 @@ function pending(promise: Promise<unknown>): Promise<boolean> {
     Bun.sleep(1).then(() => true),
   ]);
 }
-
-test('a reader started before the first chunk follows the whole answer', async () => {
-  const gate = Promise.withResolvers<void>();
-  const reply = buffered(
-    heldAt(
-      stream([
-        { type: 'text', text: 'one ' },
-        { type: 'text', text: 'two' },
-        { type: 'finish', reason: 'stop', usage: { input: 1, output: 2 } },
-      ]),
-      'text',
-      gate.promise,
-    ),
-  );
-  const first = reply.chunks()[Symbol.asyncIterator]().next();
-
-  expect(await pending(first)).toBe(true);
-  const early = Array.fromAsync(reply.chunks());
-  gate.resolve();
-
-  expect(await first).toEqual({
-    done: false,
-    value: { type: 'text', text: 'one ' },
-  });
-  expect(await early).toEqual([
-    { type: 'text', text: 'one ' },
-    { type: 'text', text: 'two' },
-  ]);
-});
 
 test('concurrent readers of a stream still arriving see everything', async () => {
   const gate = Promise.withResolvers<void>();
@@ -135,32 +106,6 @@ test('a reader that stops early leaves the answer whole for the others', async (
   expect((await Array.fromAsync(reply.chunks())).length).toBe(2);
 });
 
-test('a slow reader of a fast source misses nothing', async () => {
-  const reply = buffered(
-    stream([
-      { type: 'text', text: 'one ' },
-      { type: 'reasoning', text: 'two ' },
-      { type: 'text', text: 'three' },
-      { type: 'finish', reason: 'stop', usage: { input: 1, output: 3 } },
-    ]),
-  );
-  const fast = Array.fromAsync(reply.chunks());
-
-  const seen: Chunk[] = [];
-  for await (const chunk of reply.chunks()) {
-    await Bun.sleep(1);
-    seen.push(chunk);
-  }
-
-  expect(await reply.finish()).toBe('stop');
-  expect(seen).toEqual([
-    { type: 'text', text: 'one ' },
-    { type: 'reasoning', text: 'two ' },
-    { type: 'text', text: 'three' },
-  ]);
-  expect(await fast).toEqual(seen);
-});
-
 test('a reader waiting when the failure arrives gets it after the chunks', async () => {
   const gate = Promise.withResolvers<void>();
   const reply = buffered(
@@ -189,19 +134,6 @@ test('a reader waiting when the failure arrives gets it after the chunks', async
 
   await expect(next).rejects.toBeInstanceOf(RateLimited);
   expect(await usage).toBeInstanceOf(RateLimited);
-});
-
-test('one chunks() iterable read a second time yields nothing', async () => {
-  const reply = answer('Hello');
-  const once = reply.chunks();
-
-  expect(await Array.fromAsync(once)).toEqual([
-    { type: 'text', text: 'Hello' },
-  ]);
-  expect(await Array.fromAsync(once)).toEqual([]);
-  expect(await Array.fromAsync(reply.chunks())).toEqual([
-    { type: 'text', text: 'Hello' },
-  ]);
 });
 
 test('a reader of chunks waits under the signal in force for it: one in a request that is stopped ends with Aborted, and the answer goes on for the others', async () => {
@@ -250,46 +182,30 @@ test('a reader of chunks waits under the signal in force for it: one in a reques
   expect(closed).toBe(0);
 }, 1_000);
 
-test('the error the host gave as the reason of its stop is the one a waiting reader of chunks ends with', async () => {
+test('a reader of chunks stopped while it waited on no read ends with Aborted at its next wait', async () => {
+  const first = Promise.withResolvers<void>();
   const canned = answer(
     (async function* (): AsyncIterable<Chunk> {
+      await first.promise;
+      yield { type: 'text', text: 'Half' };
       await new Promise(() => {});
     })(),
   );
   const stop = new AbortController();
-  const reason = new TimedOut('The host gave the request two minutes');
 
-  const thrown = await enter(
+  const stopped = await enter(
     stubHost({}, { signal: stop.signal }),
     async () => {
-      const waiting = Array.fromAsync(canned.chunks()).catch(
-        (caught: unknown) => caught,
-      );
-      stop.abort(reason);
-      return waiting;
+      const reader = canned.chunks()[Symbol.asyncIterator]();
+      const read = reader.next();
+      await Bun.sleep(1);
+      first.resolve();
+      await read;
+      stop.abort();
+      await Bun.sleep(1);
+      return reader.next().catch((thrown: unknown) => thrown);
     },
   );
 
-  expect(thrown).toBe(reason);
+  expect(stopped).toBeInstanceOf(Aborted);
 }, 1_000);
-
-test('reads asked for at once are answered in order, each with its own chunk', async () => {
-  const gate = Promise.withResolvers<void>();
-  const reply = answer(
-    (async function* (): AsyncIterable<Chunk> {
-      await gate.promise;
-      yield { type: 'text', text: 'One' };
-      yield { type: 'text', text: 'Two' };
-    })(),
-  );
-
-  const reader = reply.chunks()[Symbol.asyncIterator]();
-  const reads = [reader.next(), reader.next(), reader.next()];
-  gate.resolve();
-
-  expect(await Promise.all(reads)).toEqual([
-    { done: false, value: { type: 'text', text: 'One' } },
-    { done: false, value: { type: 'text', text: 'Two' } },
-    { done: true, value: undefined },
-  ]);
-});

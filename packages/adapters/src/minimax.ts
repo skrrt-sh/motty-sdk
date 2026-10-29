@@ -12,21 +12,36 @@ function numbered(code: Json | undefined): Json | undefined {
 const failures: FailureReader = (_status, _headers, { status_code: code }) => {
   switch (numbered(code)) {
     case 1001:
+    case 2066:
       return { code: 'timed_out' };
     case 1002:
+    case 1041:
+    case 2045:
+    case 2046:
+    case 2047:
       return { code: 'rate_limited' };
     case 1004:
+    case 2049:
       return { code: 'upstream_refused' };
     case 1008:
+    case 2053:
+    case 2056:
+    case 2067:
       return { code: 'quota_exceeded' };
     case 1013:
       return { code: 'upstream_failed' };
+    case 1026:
     case 1027:
       return { code: 'blocked' };
     case 1039:
       return { code: 'context_too_long' };
     case 2013:
       return { code: 'invalid_request' };
+    case 2022:
+    case 2069:
+      return { code: 'unknown_model' };
+    case 2064:
+      return { code: 'overloaded' };
     default:
       return undefined;
   }

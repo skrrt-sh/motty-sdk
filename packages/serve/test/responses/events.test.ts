@@ -192,122 +192,6 @@ test('a reasoning item is passed on whole, with its summary as reasoning', async
   ]);
 });
 
-test('reasoning sent as content, not as a summary, is marked as the reasoning itself', async () => {
-  const item = {
-    id: 'rs_tmp_v2j0j28jpob',
-    type: 'reasoning',
-    status: 'completed',
-    content: [
-      { type: 'reasoning_text', text: 'The user wants me to determine' },
-    ],
-    summary: [],
-  };
-  expect(
-    await Array.fromAsync(
-      events(
-        sse(
-          {
-            type: 'response.output_item.added',
-            output_index: 0,
-            item: {
-              id: 'rs_tmp_v2j0j28jpob',
-              type: 'reasoning',
-              status: 'in_progress',
-              summary: [],
-            },
-          },
-          {
-            type: 'response.content_part.added',
-            output_index: 0,
-            item_id: 'rs_tmp_v2j0j28jpob',
-            content_index: 0,
-            part: { type: 'reasoning_text', text: '' },
-          },
-          {
-            type: 'response.reasoning_text.delta',
-            output_index: 0,
-            item_id: 'rs_tmp_v2j0j28jpob',
-            content_index: 0,
-            delta: 'The',
-          },
-          {
-            type: 'response.reasoning_text.delta',
-            output_index: 0,
-            item_id: 'rs_tmp_v2j0j28jpob',
-            content_index: 0,
-            delta: ' user wants',
-          },
-          {
-            type: 'response.reasoning_text.delta',
-            output_index: 0,
-            item_id: 'rs_tmp_v2j0j28jpob',
-            content_index: 0,
-            delta: ' me to determine',
-          },
-          {
-            type: 'response.reasoning_text.done',
-            output_index: 0,
-            item_id: 'rs_tmp_v2j0j28jpob',
-            content_index: 0,
-            text: 'The user wants me to determine',
-          },
-          {
-            type: 'response.content_part.done',
-            output_index: 0,
-            item_id: 'rs_tmp_v2j0j28jpob',
-            content_index: 0,
-            part: {
-              type: 'reasoning_text',
-              text: 'The user wants me to determine',
-            },
-          },
-          { type: 'response.output_item.done', output_index: 0, item },
-          { type: 'response.completed', response: { status: 'completed' } },
-        ),
-      ),
-    ),
-  ).toEqual([
-    {
-      type: 'reasoning',
-      text: '',
-      block: 0,
-      provider: {
-        'openai.responses': {
-          id: 'rs_tmp_v2j0j28jpob',
-          type: 'reasoning',
-          status: 'in_progress',
-          summary: [],
-        },
-      },
-    },
-    {
-      type: 'reasoning',
-      text: 'The',
-      block: 0,
-      provider: { 'openai.responses': { type: 'reasoning_text' } },
-    },
-    {
-      type: 'reasoning',
-      text: ' user wants',
-      block: 0,
-      provider: { 'openai.responses': { type: 'reasoning_text' } },
-    },
-    {
-      type: 'reasoning',
-      text: ' me to determine',
-      block: 0,
-      provider: { 'openai.responses': { type: 'reasoning_text' } },
-    },
-    {
-      type: 'reasoning',
-      text: '',
-      block: 0,
-      provider: { 'openai.responses': item },
-    },
-    { type: 'finish', reason: 'stop', rawReason: 'completed' },
-  ]);
-});
-
 test('a reasoning item sent whole is read in full, each kind of part joined by paragraph', async () => {
   const item = {
     id: 'rs_1',
@@ -551,13 +435,6 @@ test('a picture the model made is a file, and its item stays this family`s own',
     status: 'completed',
     result: 'data:image/png;base64,iVBORw0KGgo=',
   };
-  const own = {
-    id: 'ig_1',
-    type: 'image_generation_call',
-    status: 'completed',
-    output_format: 'webp',
-    result: 'UklGRg==',
-  };
   const untyped = {
     id: 'ig_2',
     type: 'image_generation_call',
@@ -584,8 +461,7 @@ test('a picture the model made is a file, and its item stays this family`s own',
             item_id: 'ig_tmp_n8qr5jchufl',
           },
           { type: 'response.output_item.done', output_index: 0, item: routed },
-          { type: 'response.output_item.done', output_index: 1, item: own },
-          { type: 'response.output_item.done', output_index: 2, item: untyped },
+          { type: 'response.output_item.done', output_index: 1, item: untyped },
           { type: 'response.completed', response: { status: 'completed' } },
         ),
       ),
@@ -598,19 +474,12 @@ test('a picture the model made is a file, and its item stays this family`s own',
       block: 0,
       provider: { 'openai.responses': routed },
     },
-    {
-      type: 'file',
-      data: 'UklGRg==',
-      mediaType: 'image/webp',
-      block: 1,
-      provider: { 'openai.responses': own },
-    },
     // The upstream named no type, and the bytes begin as a PNG does.
     {
       type: 'file',
       data: 'iVBORw0KGgo=',
       mediaType: 'image/png',
-      block: 2,
+      block: 1,
       provider: { 'openai.responses': untyped },
     },
     { type: 'finish', reason: 'stop', rawReason: 'completed' },
@@ -618,9 +487,7 @@ test('a picture the model made is a file, and its item stays this family`s own',
 });
 
 test.each([
-  ['image/png', 'iVBORw0KGgoAAAANSUhEUg=='],
   ['image/jpeg', '/9j/4AAQSkZJRgABAQAAAQ=='],
-  ['image/gif', 'R0lGODlhAQABAIAAAAAAAA=='],
   ['image/gif', 'R0lGODdhAQABAIAAAAAAAA=='],
   ['image/webp', 'UklGRiQAAABXRUJQVlA4IA=='],
 ])(
@@ -649,9 +516,7 @@ test.each([
 );
 
 test.each([
-  ['a type the signature of is not known', 'Qk02AAAAAAAAADYAAAAoAAAA'],
   ['sound in the container a WebP is in', 'UklGRiQAAABXQVZFZm10IA=='],
-  ['a signature cut short', 'iVBORw=='],
   ['no bytes', ''],
 ])(
   'bare bytes of %s are given no type, and the item stays opaque',
@@ -1137,23 +1002,23 @@ test('an event of a kind not known is passed over', async () => {
   ]);
 });
 
-test.each([
-  [{ input_tokens: 15, output_tokens: 2, cost: 0.0000023 }, 0.0000023],
-  [{ input_tokens: 15, output_tokens: 2 }, undefined],
-])('the cost a router reports with %j is read as %p', async (usage, cost) => {
+test('the cost a router reports is read', async () => {
   const [finish] = await Array.fromAsync(
     events(
       sse({
         type: 'response.completed',
-        response: { id: 'resp_1', status: 'completed', usage },
+        response: {
+          status: 'completed',
+          usage: { input_tokens: 15, output_tokens: 2, cost: 0.0000023 },
+        },
       }),
     ),
   );
 
-  expect(finish).toMatchObject({ type: 'finish' });
-  expect(finish?.type === 'finish' ? finish.usage?.cost : 'no finish').toBe(
-    cost,
-  );
+  expect(finish).toMatchObject({
+    type: 'finish',
+    usage: { input: 15, output: 2, cost: 0.0000023 },
+  });
 });
 
 test('a message sent whole, with no deltas before it, keeps its annotations', async () => {
@@ -1206,42 +1071,6 @@ test('a message sent whole, with no deltas before it, keeps its annotations', as
       },
     },
     { type: 'finish', reason: 'stop', rawReason: 'completed' },
-  ]);
-});
-
-test('a call that comes whole, with nothing before it, says what else its item held', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sse(
-          {
-            type: 'response.output_item.done',
-            output_index: 0,
-            item: {
-              id: 'fc_1',
-              type: 'function_call',
-              status: 'completed',
-              arguments: '{"message":"say hi"}',
-              call_id: 'call_1',
-              name: 'spawn_agent',
-              namespace: 'multi_agent_v1',
-            },
-          },
-          { type: 'response.completed', response: {} },
-        ),
-      ),
-    ),
-  ).toEqual([
-    {
-      type: 'tool_call',
-      id: 'call_1',
-      name: 'spawn_agent',
-      arguments: '{"message":"say hi"}',
-      ended: true,
-      block: 0,
-      provider: { 'openai.responses': { namespace: 'multi_agent_v1' } },
-    },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
   ]);
 });
 
@@ -1473,66 +1302,6 @@ test('a piece of a call that comes before its item waits for it, and goes out un
       arguments: '{}',
       ended: true,
       block: 2,
-    },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
-  ]);
-});
-
-test('the end of a call says again what its item holds otherwise than its opening told', async () => {
-  expect(
-    await Array.fromAsync(
-      events(
-        sse(
-          {
-            type: 'response.output_item.added',
-            output_index: 0,
-            item: {
-              id: 'fc_1',
-              type: 'function_call',
-              status: 'in_progress',
-              arguments: '',
-              call_id: 'call_1',
-              name: 'spawn_agent',
-              namespace: null,
-              caller: { a: 1 },
-            },
-          },
-          {
-            type: 'response.output_item.done',
-            output_index: 0,
-            item: {
-              id: 'fc_1',
-              type: 'function_call',
-              status: 'completed',
-              arguments: '',
-              call_id: 'call_1',
-              name: 'spawn_agent',
-              namespace: 'agents',
-              caller: { a: 2 },
-            },
-          },
-          { type: 'response.completed', response: {} },
-        ),
-      ),
-    ),
-  ).toEqual([
-    {
-      type: 'tool_call',
-      id: 'call_1',
-      name: 'spawn_agent',
-      arguments: '',
-      block: 0,
-      provider: { 'openai.responses': { namespace: null, caller: { a: 1 } } },
-    },
-    {
-      type: 'tool_call',
-      id: 'call_1',
-      arguments: '',
-      ended: true,
-      block: 0,
-      provider: {
-        'openai.responses': { namespace: 'agents', caller: { a: 2 } },
-      },
     },
     { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
   ]);

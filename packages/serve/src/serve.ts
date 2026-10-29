@@ -40,8 +40,14 @@ type Undeclared<Given, Declared> = (
       }
   : never;
 
+// The environment as the runtime's own types declare it, so that names a host
+// declares there stay known; a consumer with no such types gets plain strings.
+type Env = typeof globalThis extends { process: { env: infer Declared } }
+  ? Declared
+  : Record<string, string | undefined>;
+
 type Options<Served, Given> = (
-  env: typeof process.env,
+  env: Env,
 ) => HostOptions<Given & Undeclared<Given, Overrides<Served>>>;
 
 // Bun's server is the second argument only when Bun calls: on Workers it is
@@ -72,7 +78,7 @@ export function mount<
   const { name } = description;
   const started = new Date();
   const { begin, landed, stopAll } = flights();
-  // A runtime with Node's globals off has no environment to read.
+  // A Worker without `nodejs_compat` has no environment to read.
   const given = options(typeof process === 'undefined' ? {} : process.env);
   // Made first: it refuses a limit that is no number, the body's among them.
   const admit = hosting(motty, given);
@@ -109,21 +115,31 @@ export function mount<
     from: FromHost,
   ): Promise<Response> {
     if (guarded) {
+      // In flight until the report of what the host's auth threw is
+      // delivered, as a chat request refused there is.
+      const flight = begin();
+      const told = toldBy(from);
+      let refusal = Promise.resolve();
       let reported: string | undefined;
       const caller = await serving
         .admit({
-          ...toldBy(from),
+          ...told,
           headers: request.headers,
           credentials: format.credentials,
+          delivered: (work) => {
+            refusal = work;
+            told.delivered(work);
+          },
           reported: (id) => {
             reported = id;
           },
         })
         .catch((thrown: unknown) => failed(format, thrown, reported));
+      flight.land(refusal);
       if (caller instanceof Response) return caller;
       if (caller === undefined) {
         throw new Unauthenticated(
-          'This motty needs a caller, and the host knows none',
+          'The request has no key or token this host accepts, and this motty answers only callers it can identify',
         );
       }
     }
@@ -198,6 +214,10 @@ export function mount<
   return { fetch, close };
 }
 
+// Bun's server by the one method used, so that the declaration a consumer's
+// compiler reads names no type of Bun's.
+type Listening = { stop(closeActiveConnections?: boolean): Promise<void> };
+
 // For a serve file, whose default export Bun starts: the edge and the
 // process. Only a request shows the listener there is to stop.
 export function serve<
@@ -205,7 +225,7 @@ export function serve<
   const Given extends Overrides<Served>,
 >(motty: Served, options: Options<Served, Given>, edge: Edge = {}) {
   const mounted = mount<Served, Given>(motty, options, edge);
-  let listening: Bun.Server<undefined> | undefined;
+  let listening: Listening | undefined;
 
   async function close(): Promise<void> {
     process.off('SIGTERM', onSignal);
@@ -222,7 +242,7 @@ export function serve<
 
   function fetch(
     request: Request,
-    server?: Bun.Server<undefined>,
+    server?: Listening,
     from?: FromHost,
   ): Promise<Response> {
     if (server !== undefined && listening === undefined) {

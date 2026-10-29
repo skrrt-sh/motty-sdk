@@ -258,9 +258,10 @@ a model adapter, host code written against the contract.
   a response after two minutes or less, too short for a motty. A replacement for the async
   context, tried on those engines, gave one request another request's answer when two ran at once.
 - **Tooling: all of it.** Workspaces, catalogs, isolated installs so a phantom dependency fails;
-  the bundler with its metafile for size; the test runner; `tsc` for declarations and type cost.
-- **`serve` and the adapters: all of it,** decided with that deliverable. A host need not run on
-  Bun. The core plan only leaves room: the
+  the bundler with its metafile for size; the test runner; `tsc` for the published JavaScript,
+  the declarations and type cost.
+- **`serve` and the Redis adapter: all of it,** decided with that deliverable. `mount` and the
+  other adapters are web-standard. The core plan only leaves room: the
   caller's abort signal reaches every upstream call, and the event stream maps onto a direct body.
 
 ## Gates
@@ -314,7 +315,7 @@ Baselines are recorded at the first milestone; each gate fails a change, not a r
 - **Reproducibility:** two builds of the example give the same hash, on a pinned Bun version.
 - **Surface:** the exported names of both entries match the held lists.
 - **Imports:** a bundle of the core is built from the core's own files and imports the async
-  context and nothing else. The package's manifest is one of those files, read for the version.
+  context and nothing else.
   A bundle of the example is built from its own files, the core, the plugins and its schema
   library: nothing of `serve`, the adapters or the host options is in it.
 - **Runtimes:** one set of host cases runs on Bun and on the Workers runtime: a streamed

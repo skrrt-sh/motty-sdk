@@ -1,7 +1,7 @@
-import type { Json, Message, Part, Role } from '@mottyjs/core/host';
+import type { Cache, Json, Message, Part, Role } from '@mottyjs/core/host';
 import type { Leaving } from '../wire/fieldless.ts';
 import { type Dict, given } from '../wire/json.ts';
-import { breakpoint } from '../wire/openai-cache.ts';
+import { asked, breakpoint, cacheFor } from '../wire/openai-cache.ts';
 import { a, unsupported } from '../wire/refusals.ts';
 import { thinking } from './content-chunks.ts';
 import { type Dialect, inlined, plain, returned } from './dialect.ts';
@@ -85,25 +85,48 @@ function call(
       });
 }
 
+// A marker on a result sits on the last text part of what it returned, which
+// both OpenAI's and a router's tool message take. Empty text is refused.
 function result(
   left: Leaving,
   dialect: Dialect,
   part: Extract<Known, { type: 'tool_result' }>,
+  held?: Cache,
 ): Dict {
-  left.without('tool.cache', part.cache);
   left.without('hosted', part.hosted);
   left.without('tool_result.failed', part.failed);
-  const content =
+  const said =
     part.text ??
     part.parts.flatMap((inner) => {
       const wire = contentPart(left, dialect, 'tool', inner);
       return wire === undefined ? [] : [wire];
     });
-  return { role: 'tool', tool_call_id: part.id, content };
+  const wire = { role: 'tool', tool_call_id: part.id, content: said };
+  const cache = part.cache ?? held;
+  if (cache === undefined) return wire;
+  // Where the lifetime is the request's, the marker only asks for it.
+  if (left.lifetime === 'prompt_cache_options') {
+    breakpoint(left, cache);
+    return wire;
+  }
+  const parts =
+    typeof said !== 'string'
+      ? said
+      : said === ''
+        ? []
+        : [{ type: 'text', text: said }];
+  const end = parts.at(-1);
+  if (!left.marks || end === undefined) {
+    left.without('tool.cache', asked(cache));
+    return wire;
+  }
+  const marked = { ...end, ...breakpoint(left, cache) };
+  return { ...wire, content: [...parts.slice(0, -1), marked] };
 }
 
 function encoded(left: Leaving, message: Message, dialect: Dialect): Dict[] {
-  const { role, name, cache } = message;
+  const { role, name } = message;
+  const cache = cacheFor(left, message.cache);
   const extra = {
     ...hinted(message.hints),
     ...own(message.provider, 'a message option'),
@@ -115,16 +138,15 @@ function encoded(left: Leaving, message: Message, dialect: Dialect): Dict[] {
   };
   const content: Dict[] = [];
   const calls: Dict[] = [];
-  const results: Dict[] = [];
+  const answers: Extract<Known, { type: 'tool_result' }>[] = [];
   const thoughts: Extract<Known, { type: 'reasoning' }>[] = [];
   const pictures: Dict[] = [];
   let heard: Dict | undefined;
   for (const part of message.parts ?? []) {
     const spoke = role === 'assistant';
     if (part.type === 'tool_call') calls.push(call(left, part));
-    else if (part.type === 'tool_result') {
-      results.push(result(left, dialect, part));
-    } else if (part.type === 'audio' && spoke && part.id) {
+    else if (part.type === 'tool_result') answers.push(part);
+    else if (part.type === 'audio' && spoke && part.id) {
       // Sound a model made is named by the id its reply gave it.
       if (dialect.sound === 'none') audio(dialect, part);
       heard = {
@@ -163,16 +185,21 @@ function encoded(left: Leaving, message: Message, dialect: Dialect): Dict[] {
   if (last !== undefined) {
     content.splice(-1, 1, { ...last, ...breakpoint(left, cache) });
   }
-  // A marker sits on content, and a turn of calls or results has none.
-  if (last === undefined) left.without('tool.cache', cache);
   if (role === 'tool' && content.length > 0) {
     unsupported('Chat Completions cannot carry a tool message with no result');
   }
   const silent = calls.length > 0 || heard !== undefined;
-  if (
-    role === 'tool' ||
-    (results.length > 0 && last === undefined && !silent)
-  ) {
+  const answered =
+    role === 'tool' || (answers.length > 0 && last === undefined && !silent);
+  // A marker sits on content, or on the last result of a turn of results.
+  const closing = answered ? answers.at(-1) : undefined;
+  if (last === undefined && closing === undefined) {
+    left.without('tool.cache', asked(cache));
+  }
+  const results = answers.map((part) =>
+    result(left, dialect, part, part === closing ? cache : undefined),
+  );
+  if (answered) {
     // A message that only answers tools is just those answers, each with
     // what the message held for this wire. A tool message has no name.
     left.without('message.name.tool', name);

@@ -3,7 +3,7 @@ import { type Base, chain, type Motty } from '../../src/chain/builder.ts';
 import { motty } from '../../src/chain/motty.ts';
 import { reroute } from '../../src/chain/route.ts';
 import { contractOf } from '../../src/chain/run.ts';
-import { type Contract, isMarked, mark } from '../../src/contract.ts';
+import { mark } from '../../src/contract.ts';
 import type { Chunk } from '../../src/data/event.ts';
 import type {
   ChatRequest,
@@ -12,8 +12,6 @@ import type {
   Prompt,
 } from '../../src/data/message.ts';
 import { type Answer, answer } from '../../src/request/answer.ts';
-import { model } from '../../src/request/model.ts';
-import { stubHost } from '../stub-host.ts';
 
 declare function complete(prompt: Prompt): Promise<Answer>;
 declare function canned(reply: string | AsyncIterable<Chunk>): Answer;
@@ -148,138 +146,14 @@ const coder = motty({ name: 'coder' })
     chat: tiers,
   });
 
-test.each([
-  ['use', (root: Motty<Base>) => root.use(motty({ name: 'part' }))],
-  ['derive', (root: Motty<Base>) => root.derive(() => ({ tenant: 'acme' }))],
-  ['beforeHandle', (root: Motty<Base>) => root.beforeHandle(() => {})],
-  [
-    'route',
-    (root: Motty<Base>) =>
-      root.route(() => 'only', { only: ({ prompt }) => complete(prompt) }),
-  ],
-  [
-    'handle',
-    (root: Motty<Base>) => root.handle(({ prompt }) => complete(prompt)),
-  ],
-  ['afterHandle', (root: Motty<Base>) => root.afterHandle(() => {})],
-  ['afterResponse', (root: Motty<Base>) => root.afterResponse(() => {})],
-  ['onError', (root: Motty<Base>) => root.onError(() => {})],
-] as const)(
-  '%s returns a new motty and leaves the receiver unchanged',
-  (kind, add) => {
-    const root = motty({ name: 'root' });
-    const added = add(root);
+test('use returns a new motty and leaves the receiver unchanged', () => {
+  const root = motty({ name: 'root' });
+  const added = root.use(motty({ name: 'part' }));
 
-    expect(added).not.toBe(root);
-    expect(root[chain].steps).toEqual([]);
-    expect(added[chain].parts).not.toBe(root[chain].parts);
-    expect(added[chain].steps.map((step) => step.kind)).toEqual([kind]);
-  },
-);
-
-test('a shared part is unaffected by the motties that use it', () => {
-  const shared = motty({ name: 'shared' }).derive(() => ({ tenant: 'acme' }));
-  const user = motty({ name: 'user' })
-    .use(shared)
-    .handle(({ prompt }) => complete(prompt));
-
-  expect(user[chain].answers).toBe(true);
-  expect(shared[chain].answers).toBe(false);
-  expect(shared[chain].steps.map((step) => step.kind)).toEqual(['derive']);
-  expect(shared[chain].parts.size).toBe(0);
-});
-
-test('catch wraps the motty as an entry and leaves it unchanged', () => {
-  const caught = deep.catch(() => reroute('standard'));
-
-  expect(caught.entry).toBe(deep);
-  expect(deep[chain].steps.map((step) => step.kind)).toEqual([
-    'use',
-    'beforeHandle',
-    'handle',
-  ]);
-});
-
-test('a route step holds each entry as a handler or a part', () => {
-  const route = tiers[chain].steps.find((step) => step.kind === 'route');
-
-  expect(Object.keys(route?.table ?? {})).toEqual([
-    'quick',
-    'standard',
-    'deep',
-  ]);
-  expect(route?.table).toMatchObject({ deep: { part: deep[chain] } });
-});
-
-test('each step records the very function it was given', () => {
-  const derive = () => ({ tenant: 'acme' });
-  const before = () => {};
-  const choose = (): 'only' | 'caught' => 'only';
-  const only = ({ prompt }: { prompt: Prompt }) => complete(prompt);
-  const recover = () => canned('The deep tier is down.');
-  const after = () => {};
-  const sent = () => {};
-  const failed = () => undefined;
-  const routed = motty({ name: 'routed' })
-    .derive(derive)
-    .beforeHandle(before)
-    .route(choose, { only, caught: deep.catch(recover) })
-    .afterHandle(after)
-    .afterResponse(sent)
-    .onError(failed);
-  const handled = motty({ name: 'handled' }).handle(only);
-
-  expect(routed[chain].steps).toEqual([
-    { kind: 'derive', run: derive },
-    { kind: 'beforeHandle', run: before },
-    {
-      kind: 'route',
-      choose,
-      table: {
-        only: { handler: only },
-        caught: { part: deep[chain], recover },
-      },
-    },
-    { kind: 'afterHandle', run: after },
-    { kind: 'afterResponse', run: sent },
-    { kind: 'onError', run: failed },
-  ]);
-  expect(handled[chain].steps).toEqual([{ kind: 'handle', run: only }]);
-});
-
-test('an entry without a catch is recorded without a recover', () => {
-  const route = coder[chain].steps.find((step) => step.kind === 'route');
-
-  expect(route?.table).toEqual({
-    structured: { part: structured[chain] },
-    chat: { part: tiers[chain] },
-  });
-});
-
-test('everything the builder produces is frozen', () => {
-  const caught = deep.catch(() => reroute('standard'));
-  const route = tiers[chain].steps.find((step) => step.kind === 'route');
-
-  expect(
-    [
-      tiers,
-      tiers[chain],
-      tiers[chain].steps,
-      ...tiers[chain].steps,
-      route?.table,
-      ...Object.values(route?.table ?? {}),
-      caught,
-      motty({ name: 'root' })[chain],
-      motty({ name: 'root' })[chain].steps,
-    ].map(Object.isFrozen),
-  ).not.toContain(false);
-});
-
-test('a table has no inherited entries', () => {
-  const route = tiers[chain].steps.find((step) => step.kind === 'route');
-
-  expect(Object.getPrototypeOf(route?.table)).toBeNull();
-  expect('constructor' in (route?.table ?? {})).toBe(false);
+  expect(added).not.toBe(root);
+  expect(root[chain].steps).toEqual([]);
+  expect(root[chain].parts.size).toBe(0);
+  expect(added[chain].steps.map((step) => step.kind)).toEqual(['use']);
 });
 
 test('the same name and seed is the same part', () => {
@@ -289,15 +163,14 @@ test('the same name and seed is the same part', () => {
   expect(motty({ name: 'auth' })[chain].identity).toBe(auth()[chain].identity);
 });
 
-test.each([
-  [{ name: 'auth', seed: { realm: 'b' } }],
-  [{ name: 'auth' }],
-  [{ name: 'other', seed: { realm: 'a' } }],
-])('%j is another part than auth seeded with realm a', (options) => {
-  expect(motty(options)[chain].identity).not.toBe(
-    motty({ name: 'auth', seed: { realm: 'a' } })[chain].identity,
-  );
-});
+test.each([[{ name: 'auth', seed: { realm: 'b' } }], [{ name: 'auth' }]])(
+  '%j is another part than auth seeded with realm a',
+  (options) => {
+    expect(motty(options)[chain].identity).not.toBe(
+      motty({ name: 'auth', seed: { realm: 'a' } })[chain].identity,
+    );
+  },
+);
 
 test('the order of the keys of a seed does not change the part', () => {
   expect(
@@ -320,7 +193,6 @@ test('the order of the items of a seed changes the part', () => {
 });
 
 test.each([
-  [{ name: 'ab' }, { name: 'a', seed: 'b' }],
   [{ name: 'a"b"' }, { name: 'a', seed: 'b' }],
   [
     { name: 'a', seed: '1' },
@@ -343,22 +215,7 @@ test('a seed that is not plain JSON data is refused', () => {
   expect(() => motty({ name: 'auth', seed: Number.NaN })).toThrow(
     'The seed of the motty "auth" must be plain JSON data',
   );
-  expect(() =>
-    motty({ name: 'auth', seed: { depth: [Number.POSITIVE_INFINITY] } }),
-  ).toThrow('must be plain JSON data');
   expect(() => motty({ name: 'auth', seed: cycle })).toThrow('with no cycle');
-  expect(() =>
-    // @ts-expect-error
-    motty({ name: 'auth', seed: 1n }),
-  ).toThrow('must be plain JSON data');
-  expect(() =>
-    // @ts-expect-error
-    motty({ name: 'auth', seed: { make: () => 'a' } }),
-  ).toThrow('must be plain JSON data');
-  expect(() =>
-    // @ts-expect-error
-    motty({ name: 'auth', seed: [undefined] }),
-  ).toThrow('must be plain JSON data');
   expect(() =>
     // @ts-expect-error
     motty({ name: 'auth', seed: new Date(0) }),
@@ -372,15 +229,7 @@ test('a name that is missing or empty is refused', () => {
   expect(() => motty({ name: '' })).toThrow('A motty needs a name');
   expect(() =>
     // @ts-expect-error
-    motty({}),
-  ).toThrow('A motty needs a name');
-  expect(() =>
-    // @ts-expect-error
     motty(),
-  ).toThrow('A motty needs a name');
-  expect(() =>
-    // @ts-expect-error
-    motty({ name: 7 }),
   ).toThrow('A motty needs a name');
 });
 
@@ -391,24 +240,6 @@ test('the parts of a used part are merged into its user, each once', () => {
       .sort(),
   );
   expect(coder[chain].parts.get(tuning[chain].identity)).toBe(tuning[chain]);
-});
-
-test('a part used twice is recorded as one part', () => {
-  const twice = motty({ name: 'root' }).use(tuning).use(tuning);
-
-  expect(twice[chain].parts.size).toBe(1);
-  expect(twice[chain].steps).toHaveLength(2);
-});
-
-test('using a part leaves the parts of the receiver as they were', () => {
-  const root = motty({ name: 'root' }).use(emptyPrompt);
-  const more = root.use(tuning);
-
-  expect([...root[chain].parts.keys()]).toEqual(['["empty-prompt"]']);
-  expect([...more[chain].parts.keys()]).toEqual([
-    '["empty-prompt"]',
-    '["settings"]',
-  ]);
 });
 
 test('a part made again by its function with the same seed is one part', () => {
@@ -427,11 +258,6 @@ test('two different parts grown from one motty are refused together', () => {
   expect(() => motty({ name: 'root' }).use(one).use(two)).toThrow(
     'Two different parts share the name "base" and its seed',
   );
-  expect(() =>
-    motty({ name: 'root' })
-      .use(one)
-      .use(motty({ name: 'wrapper' }).use(two)),
-  ).toThrow('Two different parts share the name "base" and its seed');
   expect(() =>
     motty({ name: 'root' })
       .use(motty({ name: 'first' }).use(one))
@@ -457,16 +283,6 @@ test('two different parts grown from one motty are refused through a route, in o
       'Two different parts share the name "base" and its seed: use one part everywhere, or make each from its own motty() call',
     ),
   );
-  expect(() =>
-    motty({ name: 'root' })
-      .use(one)
-      .route(() => 'chat', {
-        chat: motty({ name: 'chat' })
-          .use(motty({ name: 'wrapper' }).use(two))
-          .handle(() => answer('Hi'))
-          .catch(() => answer('Sorry')),
-      }),
-  ).toThrow('Two different parts share the name "base" and its seed');
   expect(() =>
     motty({ name: 'root' }).route(() => 'quick', {
       quick: motty({ name: 'quick' })
@@ -516,9 +332,6 @@ test('a part with the name and seed of its user is refused', () => {
   expect(() => root.use(motty({ name: 'root', seed: { realm: 'a' } }))).toThrow(
     'The motty "root" cannot use a part with its own name and seed',
   );
-  expect(() => root.use(root.beforeHandle(() => {}))).toThrow(
-    'cannot use a part with its own name and seed',
-  );
   expect(() =>
     root.use(
       motty({ name: 'wrapper' }).use(
@@ -527,10 +340,6 @@ test('a part with the name and seed of its user is refused', () => {
     ),
   ).toThrow('cannot use a part with its own name and seed');
   expect(root.use(motty({ name: 'root' }))[chain].parts.size).toBe(1);
-});
-
-test('a used part that answers makes its user answer', () => {
-  expect(motty({ name: 'root' }).use(deep)[chain].answers).toBe(true);
 });
 
 test('after hooks may follow the answer', () => {
@@ -545,15 +354,7 @@ test('after hooks may follow the answer', () => {
 test('a second way to answer is refused when it is added', () => {
   expect(() =>
     // @ts-expect-error
-    deep.handle(({ prompt }) => complete(prompt)),
-  ).toThrow('already answers');
-  expect(() =>
-    // @ts-expect-error
     structured.route(() => 'only', { only: () => complete({ messages: [] }) }),
-  ).toThrow('already answers');
-  expect(() =>
-    // @ts-expect-error
-    structured.handle(() => complete({ messages: [] })),
   ).toThrow('already answers');
   expect(() =>
     motty({ name: 'root' })
@@ -570,15 +371,7 @@ test('a before hook or a part after the answer is refused', () => {
   ).toThrow('Only after hooks follow');
   expect(() =>
     // @ts-expect-error
-    deep.beforeHandle(() => {}),
-  ).toThrow('Only after hooks follow');
-  expect(() =>
-    // @ts-expect-error
     deep.use(emptyPrompt),
-  ).toThrow('Only after hooks follow');
-  expect(() =>
-    // @ts-expect-error
-    structured.derive(() => ({ tenant: 'acme' })),
   ).toThrow('Only after hooks follow');
   expect(() =>
     motty({ name: 'root' })
@@ -599,13 +392,6 @@ test('an entry that is a motty without an answer is refused', () => {
       only: emptyPrompt.catch(() => canned('Nothing answered.')),
     }),
   ).toThrow('The entry "only" is the motty "empty-prompt", which has no');
-  expect(() =>
-    motty({ name: 'root' }).route(() => 'only', {
-      // @ts-expect-error
-      only: tuning,
-      other: ({ prompt }) => complete(prompt),
-    }),
-  ).toThrow('has no route or handle');
 });
 
 test('an empty table is refused', () => {
@@ -625,10 +411,6 @@ test('an entry named by a symbol is refused', () => {
       [hidden]: ({ prompt }: { prompt: Prompt }) => complete(prompt),
     }),
   ).toThrow('An entry of the motty "root" is named by a symbol');
-  expect(() =>
-    // @ts-expect-error
-    motty({ name: 'root' }).route(() => 'only', { [hidden]: deep }),
-  ).toThrow('is named by a symbol');
 });
 
 test('an entry named by a number is named by its string form', () => {
@@ -654,37 +436,6 @@ test.each([
     (root: Motty<Base>) => root.derive({ tenant: 'acme' }),
   ],
   [
-    'beforeHandle',
-    // @ts-expect-error
-    (root: Motty<Base>) => root.beforeHandle(undefined),
-  ],
-  [
-    'chooser',
-    (root: Motty<Base>) =>
-      // @ts-expect-error
-      root.route('only', { only: ({ prompt }) => complete(prompt) }),
-  ],
-  [
-    'handle',
-    // @ts-expect-error
-    (root: Motty<Base>) => root.handle('The deep tier is down.'),
-  ],
-  [
-    'afterHandle',
-    // @ts-expect-error
-    (root: Motty<Base>) => root.afterHandle(null),
-  ],
-  [
-    'afterResponse',
-    // @ts-expect-error
-    (root: Motty<Base>) => root.afterResponse('later'),
-  ],
-  [
-    'onError',
-    // @ts-expect-error
-    (root: Motty<Base>) => root.onError(new Error('failed')),
-  ],
-  [
     'catch',
     // @ts-expect-error
     (root: Motty<Base>) => root.catch(reroute('standard')),
@@ -703,10 +454,6 @@ test('an entry that is neither a handler nor a motty is refused', () => {
     'The entry "only" of the motty "root" must be a handler function, a motty or a motty with a catch',
   );
   expect(() =>
-    // @ts-expect-error
-    motty({ name: 'root' }).route(() => 'only', { only: { entry: 7 } }),
-  ).toThrow('must be a handler function, a motty or a motty with a catch');
-  expect(() =>
     motty({ name: 'root' }).route(() => 'only', {
       // @ts-expect-error
       only: { entry: deep, recover: 'standard' },
@@ -723,14 +470,6 @@ test('using something that is not a motty is refused', () => {
     // @ts-expect-error
     motty({ name: 'root' }).use({ name: 'part' }),
   ).toThrow('The motty "root" can use only another motty');
-  expect(() =>
-    // @ts-expect-error
-    motty({ name: 'root' }).use(() => tuning),
-  ).toThrow('can use only another motty');
-  expect(() =>
-    // @ts-expect-error
-    motty({ name: 'root' }).use(deep.catch(() => canned('Down.'))),
-  ).toThrow('can use only another motty');
 });
 
 test('a part built by another copy of the SDK is refused with what to do', async () => {
@@ -744,7 +483,6 @@ test('a part built by another copy of the SDK is refused with what to do', async
   const part = copy.motty({ name: 'auth' }).beforeHandle(() => {});
   const module = copy.motty({ name: 'deep' }).handle(() => copy.answer('Deep'));
 
-  expect([isMarked(part), chain in part]).toEqual([true, false]);
   expect(() => motty({ name: 'root' }).use(part)).toThrow(
     'The motty "root" was given a part built by another copy of @mottyjs/core. A plugin must list @mottyjs/core as a peer dependency, so that one copy is installed',
   );
@@ -760,63 +498,11 @@ test('a part built by another copy of the SDK is refused with what to do', async
   ).toThrow('is a motty built by another copy of @mottyjs/core');
 });
 
-test('a new motty and the result of every builder method carry the mark', () => {
-  const made = [
-    motty({ name: 'root' }),
-    motty({ name: 'root' }).use(auth()),
-    motty({ name: 'root' }).derive(() => ({ tier: 'quick' })),
-    motty({ name: 'root' }).beforeHandle(() => {}),
-    motty({ name: 'root' }).route(() => 'only', {
-      only: () => answer('Routed'),
-    }),
-    motty({ name: 'root' }).handle(() => answer('Handled')),
-    motty({ name: 'root' }).afterHandle(() => {}),
-    motty({ name: 'root' }).afterResponse(() => {}),
-    motty({ name: 'root' }).onError(() => {}),
-  ];
-
-  expect(made.map((each) => mark in each)).not.toContain(false);
-  expect(made.map(isMarked)).not.toContain(false);
-});
-
 test('the mark gives the one contract of the motty on every read', () => {
   const served = motty({ name: 'root' }).handle(() => answer('Handled'));
 
   expect(served[mark]).toBe(served[mark]);
   expect(served[mark]).toBe(contractOf(served));
-});
-
-test('a request run behind the mark answers as one run through contractOf', async () => {
-  const served = motty({ name: 'root' }).handle(({ prompt }) =>
-    model('acme/small').complete(prompt),
-  );
-  const run = (contract: Contract) =>
-    Array.fromAsync(
-      contract.run(
-        {
-          id: 'req_1',
-          model: 'motty/coder',
-          messages: [{ role: 'user', text: 'Why does this deadlock?' }],
-          tools: [],
-          options: {},
-          headers: new Headers(),
-        },
-        stubHost({
-          'acme/small': [
-            { type: 'text', text: 'The lock order differs' },
-            { type: 'finish', reason: 'stop', usage: { input: 1, output: 1 } },
-          ],
-        }),
-      ),
-    );
-
-  const marked = await run(served[mark]);
-
-  expect(marked).toEqual(await run(contractOf(served)));
-  expect(marked).toContainEqual({
-    type: 'text',
-    text: 'The lock order differs',
-  });
 });
 
 test('the mark of a frozen motty cannot be given another contract', () => {

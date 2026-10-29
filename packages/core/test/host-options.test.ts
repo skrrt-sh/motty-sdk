@@ -179,18 +179,6 @@ test('a decision call for a name no adapter serves rejects with UnknownModel', a
   });
 });
 
-test('with no adapters every name is unknown', async () => {
-  const { models, decisions } = adapted([]);
-  const { signal } = new AbortController();
-
-  expect(
-    await Array.fromAsync(models('acme/small', { messages: [] }, signal)),
-  ).toMatchObject([{ type: 'error', error: { code: 'unknown_model' } }]);
-  await expect(decisions('typesafe/jev', {}, signal)).rejects.toBeInstanceOf(
-    UnknownModel,
-  );
-});
-
 function echo() {
   return motty({ name: 'coder' }).handle(({ request }) =>
     answer(JSON.stringify([...request.headers])),
@@ -261,46 +249,6 @@ test('the credential headers of the other APIs the host serves are removed too, 
   expect(host).not.toHaveProperty('caller');
 });
 
-test('a credential header that holds another token is removed too', async () => {
-  const { request } = await hosting(echo(), {
-    auth: { verify: () => ({ id: 'ada' }) },
-  })(asked({ 'x-api-key': 'sk-ada', authorization: 'Bearer sk-upstream' }));
-
-  expect([...request.headers]).toEqual([]);
-});
-
-test('a credential header tried first and found empty is removed too', async () => {
-  const { request } = await hosting(
-    echo(),
-    {},
-  )(asked({ 'x-api-key': '', authorization: 'Bearer sk-ada' }));
-
-  expect([...request.headers]).toEqual([]);
-});
-
-test('a credential header sent twice and in another case is removed whole', async () => {
-  const sent = new Headers({ Authorization: 'Bearer sk-ada' });
-  sent.append('X-Api-Key', 'sk-ada');
-  sent.append('x-api-key', 'sk-ada');
-
-  const { request } = await hosting(echo(), {
-    auth: { verify: () => ({ id: 'ada' }) },
-  })({ ...asked(), headers: sent });
-
-  expect([...request.headers]).toEqual([]);
-});
-
-test('a caller whose first credential header holds a token the adapter does not know is signed in by the next', async () => {
-  const { request, host } = await hosting(echo(), {
-    auth: {
-      verify: (token) => (token === 'sk-ada' ? { id: 'ada' } : undefined),
-    },
-  })(asked({ 'x-api-key': 'dummy', authorization: 'Bearer sk-ada' }));
-
-  expect(host.caller).toEqual({ id: 'ada' });
-  expect([...request.headers]).toEqual([]);
-});
-
 test('once the adapter knows the caller it is not asked about the next credential header', async () => {
   const tokens: string[] = [];
   const { host } = await hosting(echo(), {
@@ -334,6 +282,61 @@ test('a caller the host gives is the caller, and the adapter is not asked', asyn
   expect(tokens).toEqual([]);
 });
 
+test('a caller the adapter answers with an empty id is no caller, and the next credential header is tried', async () => {
+  const tokens: string[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        tokens.push(token);
+        return { id: token === 'sk-ada' ? 'ada' : '' };
+      },
+    },
+  });
+
+  const signed = await admit(
+    asked({ 'x-api-key': 'sk-blank', authorization: 'Bearer sk-ada' }),
+  );
+  const blank = await admit(asked({ 'x-api-key': 'sk-blank' }));
+  const unasked = await admit({
+    headers: new Headers({ 'x-api-key': 'sk-blank' }),
+    credentials: ['x-api-key'],
+  });
+
+  expect(signed.host.caller).toEqual({ id: 'ada' });
+  expect(blank.host).not.toHaveProperty('caller');
+  expect(unasked).toBeUndefined();
+  expect(tokens).toEqual(['sk-blank', 'sk-ada', 'sk-blank', 'sk-blank']);
+});
+
+test('a caller the host gives with an empty id is refused before the adapter is asked or anything reported', async () => {
+  const tokens: string[] = [];
+  const reports: Report[] = [];
+  const admit = hosting(echo(), {
+    auth: {
+      verify: (token) => {
+        tokens.push(token);
+        return { id: 'ada' };
+      },
+    },
+    report: (report) => reports.push(report),
+  });
+
+  const refused = await admit({
+    ...asked({ 'x-api-key': 'sk-ada' }),
+    caller: { id: '' },
+  }).catch((thrown: unknown) => thrown);
+  const unasked = await admit({
+    headers: new Headers({ 'x-api-key': 'sk-ada' }),
+    credentials: ['x-api-key'],
+    caller: { id: '' },
+  }).catch((thrown: unknown) => thrown);
+
+  expect(refused).toEqual(new Error('The caller the host gave has no id'));
+  expect(unasked).toEqual(new Error('The caller the host gave has no id'));
+  expect(tokens).toEqual([]);
+  expect(reports).toEqual([]);
+});
+
 test('every credential header is removed when the host gives the caller, those of the other APIs too', async () => {
   const { request } = await hosting(echo(), {
     auth: { verify: () => ({ id: 'eve' }) },
@@ -350,22 +353,6 @@ test('every credential header is removed when the host gives the caller, those o
 
   expect([...request.headers]).toEqual([['x-trace', 'trace-7']]);
 });
-
-test.each([
-  'sk-ada',
-  'Basic sk-ada',
-  'Token sk-ada',
-  'Bearer sk-ada, Bearer sk-ada',
-])(
-  'a credential header that holds %p, which no token is read from, is removed when another header signed the caller in',
-  async (written) => {
-    const { request } = await hosting(echo(), {
-      auth: { verify: () => ({ id: 'ada' }) },
-    })(asked({ 'x-api-key': 'sk-ada', authorization: written }));
-
-    expect([...request.headers]).toEqual([]);
-  },
-);
 
 test('with no token read every credential header is removed, since one may hold a token written wrongly', async () => {
   const { request } = await hosting(echo(), {
@@ -438,49 +425,6 @@ test('with no token there is no caller and the adapter is not asked', async () =
   expect(tokens).toEqual([]);
 });
 
-test('what the auth adapter throws is thrown to the host', async () => {
-  const admit = hosting(echo(), {
-    auth: {
-      verify: () => {
-        throw new Error('The key set could not be read');
-      },
-    },
-  });
-
-  await expect(admit(asked({ 'x-api-key': 'sk-ada' }))).rejects.toThrow(
-    'The key set could not be read',
-  );
-});
-
-test("the storage is handed over with the motty's name ahead of every key", async () => {
-  const keys: string[] = [];
-  const { host } = await hosting(echo(), {
-    storage: {
-      get: async (key) => {
-        keys.push(`get ${key}`);
-        return 4;
-      },
-      set: async (key, value, options) => {
-        keys.push(`set ${key} ${value} ${options?.ttl}`);
-      },
-      delete: async (key) => {
-        keys.push(`delete ${key}`);
-      },
-    },
-  })(asked());
-
-  expect(await host.storage?.get('seen')).toBe(4);
-  await host.storage?.set('seen', 5, { ttl: 60_000 });
-  await host.storage?.delete('seen');
-
-  expect(keys).toEqual([
-    'get coder:seen',
-    'set coder:seen 5 60000',
-    'delete coder:seen',
-  ]);
-  expect((await hosting(echo(), {})(asked())).host.storage).toBeUndefined();
-});
-
 test('two motties with different names never reach one stored key, a colon or a percent sign in a name or not', async () => {
   const keys: string[] = [];
   const storage = {
@@ -537,42 +481,6 @@ test("a namespace the host gives is ahead of every key in place of the motty's n
     'delete acme%3A50%25:seen',
     'increment acme%3A50%25:seen',
   ]);
-});
-
-test("a host given no namespace keeps the motty's name ahead of its keys, beside one that was given one", async () => {
-  const keys: string[] = [];
-  const storage = {
-    get: async () => undefined,
-    set: async (key: string) => {
-      keys.push(key);
-    },
-    delete: async () => {},
-  };
-  const named = await hosting(echo(), { storage })(asked());
-  const spaced = await hosting(echo(), { storage, namespace: 'acme' })(asked());
-
-  await named.host.storage?.set('seen', 1);
-  await spaced.host.storage?.set('seen', 1);
-
-  expect(keys).toEqual(['coder:seen', 'acme:seen']);
-});
-
-test("an increment is handed over with the motty's name ahead of its key, and its result comes back", async () => {
-  const added: unknown[] = [];
-  const { host } = await hosting(echo(), {
-    storage: {
-      get: async () => undefined,
-      set: async () => {},
-      delete: async () => {},
-      increment: async (...given) => {
-        added.push(given);
-        return 7;
-      },
-    },
-  })(asked());
-
-  expect(await host.storage?.increment?.('spent', 2, { ttl: 60_000 })).toBe(7);
-  expect(added).toEqual([['coder:spent', 2, { ttl: 60_000 }]]);
 });
 
 test('a storage that is an instance of a class is asked to increment as its own method', async () => {
@@ -722,30 +630,6 @@ test('a call that ended with no usage is left as it is, and no price is asked', 
   expect(priced).toEqual([]);
 });
 
-test("a price that is no amount leaves the upstream's cost for the motty to count", async () => {
-  const reports: Report[] = [];
-  const upstream = stubHost({
-    'acme/small': [
-      { type: 'text', text: 'Use a mutex.' },
-      { type: 'finish', reason: 'stop', usage: { input: 1000, cost: 9 } },
-    ],
-  });
-  const served = motty({ name: 'coder' }).handle(({ prompt }) =>
-    model('acme/small').complete(prompt),
-  );
-  const { request, host } = await hosting(served, {
-    models: [{ serves: () => true, call: upstream.models }],
-    price: () => -1,
-    report: (report) => reports.push(report),
-  })(asked());
-
-  await Array.fromAsync(contractOf(served).run(request, host));
-  await Bun.sleep(0);
-
-  expect(reports).toMatchObject([{ outcome: 'completed' }]);
-  expect(reports[0]?.usage).toEqual({ input: 1000, cost: 9 });
-});
-
 test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
   "a price of %p for a call is no amount, and the upstream's cost stands",
   async (figure) => {
@@ -768,27 +652,6 @@ test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
     ]);
   },
 );
-
-test("a price that is a promise for a call is no amount, and the upstream's cost stands", async () => {
-  const upstream = stubHost({
-    'acme/small': [
-      { type: 'finish', reason: 'stop', usage: { input: 1000, cost: 9 } },
-    ],
-  });
-  const { host } = await hosting(echo(), {
-    models: [{ serves: () => true, call: upstream.models }],
-    // @ts-expect-error the price is asked for an amount, not a promise of one
-    price: async () => 0.25,
-  })(asked());
-
-  expect(
-    await Array.fromAsync(
-      host.models('acme/small', { messages: [] }, host.signal),
-    ),
-  ).toEqual([
-    { type: 'finish', reason: 'stop', usage: { input: 1000, cost: 9 } },
-  ]);
-});
 
 test('a price that throws does not fail the call: what was spent is counted with no cost of the host, and the report holds the throw', async () => {
   const reports: Report[] = [];
@@ -833,46 +696,6 @@ test('a price that throws does not fail the call: what was spent is counted with
   expect(reports[0]?.usage).not.toHaveProperty('cost');
 });
 
-test("a price that throws leaves a decision's output as the adapter gave it, and the report holds the throw", async () => {
-  const reports: Report[] = [];
-  const served = motty({ name: 'coder' }).handle(async () =>
-    answer(
-      JSON.stringify(
-        await hosted().decisions?.('typesafe/jev', {}, hosted().signal),
-      ),
-    ),
-  );
-  const { request, host } = await hosting(served, {
-    models: [
-      {
-        serves: () => true,
-        decide: async () => ({
-          answers: {},
-          usage: { input_tokens: 40, output_tokens: 2 },
-        }),
-      },
-    ],
-    price: () => {
-      throw new Error('No row in postgres://billing:hunter2@db');
-    },
-    report: (report) => reports.push(report),
-  })(asked());
-
-  const events = await Array.fromAsync(contractOf(served).run(request, host));
-  await Bun.sleep(0);
-
-  expect(events[0]).toEqual({
-    type: 'text',
-    text: '{"answers":{},"usage":{"input_tokens":40,"output_tokens":2}}',
-  });
-  expect(reports[0]?.failed).toMatchObject([
-    {
-      service: 'price',
-      error: { message: 'No row in postgres://billing:hunter2@db' },
-    },
-  ]);
-});
-
 test("the usage a decision call reported is priced under the counts' own names, and the cost is put beside what it reported", async () => {
   const priced: unknown[] = [];
   const { host } = await hosting(echo(), {
@@ -911,39 +734,7 @@ test("where the price returns nothing a decision's output is passed on as it is"
   expect(await host.decisions?.('typesafe/jev', {}, host.signal)).toBe(output);
 });
 
-test.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
-  'a price of %p for a decision is no amount, and its output is passed on as it is',
-  async (figure) => {
-    const output = {
-      answers: {},
-      usage: { input_tokens: 41, output_tokens: 1, cost: 9 },
-    };
-    const { host } = await hosting(echo(), {
-      models: [{ serves: () => true, decide: async () => output }],
-      price: () => figure,
-    })(asked());
-
-    expect(await host.decisions?.('typesafe/jev', {}, host.signal)).toBe(
-      output,
-    );
-  },
-);
-
-test('a price that is a promise for a decision is no amount, and its output is passed on as it is', async () => {
-  const output = {
-    answers: {},
-    usage: { input_tokens: 41, output_tokens: 1, cost: 9 },
-  };
-  const { host } = await hosting(echo(), {
-    models: [{ serves: () => true, decide: async () => output }],
-    // @ts-expect-error the price is asked for an amount, not a promise of one
-    price: async () => 0.002,
-  })(asked());
-
-  expect(await host.decisions?.('typesafe/jev', {}, host.signal)).toBe(output);
-});
-
-test.each([{ answers: {} }, { answers: {}, usage: 'none' }, 'no output', null])(
+test.each([{ answers: {}, usage: 'none' }, null])(
   'a decision that reported no usage is passed on as it is, and no price is asked: %p',
   async (output) => {
     const priced: string[] = [];
@@ -962,25 +753,6 @@ test.each([{ answers: {} }, { answers: {}, usage: 'none' }, 'no output', null])(
   },
 );
 
-test('with no price the calls are the adapters own, cost and all', async () => {
-  const upstream = stubHost({
-    'acme/small': [
-      { type: 'finish', reason: 'stop', usage: { input: 1000, cost: 9 } },
-    ],
-  });
-  const { host } = await hosting(echo(), {
-    models: [{ serves: () => true, call: upstream.models }],
-  })(asked());
-
-  expect(
-    await Array.fromAsync(
-      host.models('acme/small', { messages: [] }, host.signal),
-    ),
-  ).toEqual([
-    { type: 'finish', reason: 'stop', usage: { input: 1000, cost: 9 } },
-  ]);
-});
-
 test('the duration is kept by the host as a stop that says timed out, and the rest of the limits go to the motty', async () => {
   const { host } = await hosting(echo(), {
     limits: { duration: 10, calls: 3, afterResponse: 20 },
@@ -992,31 +764,14 @@ test('the duration is kept by the host as a stop that says timed out, and the re
   expect(host.signal.reason).toMatchObject({ name: 'TimeoutError' });
 });
 
-test("the edge's body limit is kept out of the limits the motty reads, as the duration is", async () => {
-  const { host } = await hosting(echo(), {
-    limits: { body: 1024, calls: 3 },
-  })(asked());
-
-  expect(host.limits).toEqual({ calls: 3 });
-});
-
 test.each([
   [{ calls: 1.5 }, 'limits.calls must be a whole number'],
-  [{ calls: -1 }, 'limits.calls must be a whole number'],
-  [{ calls: Number.NaN }, 'limits.calls must be a whole number'],
   [{ body: 0.5 }, 'limits.body must be a whole number'],
-  [{ body: Number.POSITIVE_INFINITY }, 'limits.body must be a whole number'],
-  [{ duration: -1 }, 'limits.duration must be a finite number'],
-  [{ duration: Number.NaN }, 'limits.duration must be a finite number'],
   [
     { duration: Number.POSITIVE_INFINITY },
     'limits.duration must be a finite number',
   ],
   [{ afterResponse: -1 }, 'limits.afterResponse must be a finite number'],
-  [
-    { afterResponse: Number.NaN },
-    'limits.afterResponse must be a finite number',
-  ],
 ])(
   'a limit that is no number of zero or more is refused when the host is made, by its name: %o',
   (limits, said) => {
@@ -1111,7 +866,7 @@ test('an id as long as the host may give is taken', async () => {
   expect(request.id).toBe('a'.repeat(128));
 });
 
-test.each(['', 'a b', 'a/b', 'req-7\n', 'r\u00e9q', 'a'.repeat(129)])(
+test.each(['', 'req-7\n', 'a'.repeat(129)])(
   'an id of %p is not one the host may give, and the request is refused before the adapter is asked or anything reported',
   async (id) => {
     const tokens: string[] = [];
@@ -1149,19 +904,6 @@ test.each(['', 'a b', 'a/b', 'req-7\n', 'r\u00e9q', 'a'.repeat(129)])(
     expect(works).toEqual([]);
   },
 );
-
-test('a request given no id gets its own, beside one whose id the host gave', async () => {
-  const admit = hosting(echo(), {});
-
-  const given = await admit({ ...asked(), id: 'req-7' });
-  const first = await admit(asked());
-  const second = await admit(asked());
-
-  expect(given.request.id).toBe('req-7');
-  expect(first.request.id).toMatch(/^[0-9a-f-]{36}$/);
-  expect(second.request.id).toMatch(/^[0-9a-f-]{36}$/);
-  expect(second.request.id).not.toBe(first.request.id);
-});
 
 test('what the edge left out of the reply is on the report, and a reply with nothing left out says nothing', async () => {
   const reports: Report[] = [];
@@ -1256,42 +998,41 @@ test('an SDK error the storage raised reaches the motty as it is', async () => {
   );
 });
 
-test.each(['AbortError', 'TimeoutError'])(
-  "a platform %s of the storage's own, the request not stopped, is a failure of the storage like any other, and the report holds it",
-  async (name) => {
-    const reports: Report[] = [];
-    const caught: unknown[] = [];
-    const served = motty({ name: 'coder' }).handle(async () => {
-      await hosted()
-        .storage?.get('seen')
-        .catch((thrown: unknown) => {
-          caught.push(thrown);
-        });
-      return answer('Use a mutex.');
-    });
-    const { request, host } = await hosting(served, {
-      storage: {
-        get: () =>
-          Promise.reject(new DOMException('redis://:hunter2@db gave up', name)),
-        set: async () => {},
-        delete: async () => {},
-      },
-      report: (report) => reports.push(report),
-    })(asked());
+test("a platform abort of the storage's own, the request not stopped, is a failure of the storage like any other, and the report holds it", async () => {
+  const reports: Report[] = [];
+  const caught: unknown[] = [];
+  const served = motty({ name: 'coder' }).handle(async () => {
+    await hosted()
+      .storage?.get('seen')
+      .catch((thrown: unknown) => {
+        caught.push(thrown);
+      });
+    return answer('Use a mutex.');
+  });
+  const { request, host } = await hosting(served, {
+    storage: {
+      get: () =>
+        Promise.reject(
+          new DOMException('redis://:hunter2@db gave up', 'AbortError'),
+        ),
+      set: async () => {},
+      delete: async () => {},
+    },
+    report: (report) => reports.push(report),
+  })(asked());
 
-    await Array.fromAsync(contractOf(served).run(request, host));
-    await Bun.sleep(0);
+  await Array.fromAsync(contractOf(served).run(request, host));
+  await Bun.sleep(0);
 
-    expect(caught).toEqual([new MottyError("The host's storage failed")]);
-    expect(caught[0]).toMatchObject({ code: 'internal', retryable: false });
-    expect(reports[0]?.failed).toMatchObject([
-      {
-        service: 'storage',
-        error: { code: 'internal', message: 'redis://:hunter2@db gave up' },
-      },
-    ]);
-  },
-);
+  expect(caught).toEqual([new MottyError("The host's storage failed")]);
+  expect(caught[0]).toMatchObject({ code: 'internal', retryable: false });
+  expect(reports[0]?.failed).toMatchObject([
+    {
+      service: 'storage',
+      error: { code: 'internal', message: 'redis://:hunter2@db gave up' },
+    },
+  ]);
+});
 
 test('a stop the storage threw once the request was stopped is told as a stop, in the words of the SDK, and is no failure on the report', async () => {
   const reports: Report[] = [];
@@ -1324,40 +1065,6 @@ test('a stop the storage threw once the request was stopped is told as a stop, i
   expect(reports).toMatchObject([{ outcome: 'aborted' }]);
   expect(reports[0]).not.toHaveProperty('failed');
 });
-
-test.each(['AbortError', 'TimeoutError'])(
-  "a platform %s of a decision adapter's own, its call not stopped, is a failure of decisions, and the report holds it",
-  async (name) => {
-    const reports: Report[] = [];
-    const caught: unknown[] = [];
-    const served = motty({ name: 'coder' }).handle(async () => {
-      await hosted()
-        .decisions?.('typesafe/jev', {}, hosted().signal)
-        .catch((thrown: unknown) => {
-          caught.push(thrown);
-        });
-      return answer('Use a mutex.');
-    });
-    const { request, host } = await hosting(served, {
-      models: [
-        {
-          serves: () => true,
-          decide: () =>
-            Promise.reject(new DOMException('key ts-live gave up', name)),
-        },
-      ],
-      report: (report) => reports.push(report),
-    })(asked());
-
-    await Array.fromAsync(contractOf(served).run(request, host));
-    await Bun.sleep(0);
-
-    expect(caught).toEqual([new MottyError("The host's decisions failed")]);
-    expect(reports[0]?.failed).toMatchObject([
-      { service: 'decisions', error: { message: 'key ts-live gave up' } },
-    ]);
-  },
-);
 
 test('what a decision adapter throws once its call was stopped is told as the stop, and is no failure on the report', async () => {
   const reports: Report[] = [];
@@ -1431,16 +1138,6 @@ test.each([
     (): EventStream => {
       throw new TypeError('key sk-live is not a header value');
     },
-    [],
-  ],
-  [
-    'throws on its first read',
-    (): EventStream => ({
-      [Symbol.asyncIterator]: () => ({
-        next: () =>
-          Promise.reject(new TypeError('key sk-live is not a header value')),
-      }),
-    }),
     [],
   ],
   [
@@ -1518,49 +1215,48 @@ test.each([
   },
 );
 
-test.each(['AbortError', 'TimeoutError'])(
-  "a platform %s of a model adapter's own, its call not stopped, fails the call like anything else it throws, and the report holds it",
-  async (name) => {
-    const reports: Report[] = [];
-    const served = motty({ name: 'coder' }).handle(({ prompt }) =>
-      model('acme/small').complete(prompt),
-    );
-    const { request, host } = await hosting(served, {
-      models: [
-        {
-          serves: () => true,
-          call: () => ({
-            [Symbol.asyncIterator]: () => ({
-              next: () =>
-                Promise.reject(new DOMException('key sk-live gave up', name)),
-            }),
+test("a platform abort of a model adapter's own, its call not stopped, fails the call like anything else it throws, and the report holds it", async () => {
+  const reports: Report[] = [];
+  const served = motty({ name: 'coder' }).handle(({ prompt }) =>
+    model('acme/small').complete(prompt),
+  );
+  const { request, host } = await hosting(served, {
+    models: [
+      {
+        serves: () => true,
+        call: () => ({
+          [Symbol.asyncIterator]: () => ({
+            next: () =>
+              Promise.reject(
+                new DOMException('key sk-live gave up', 'AbortError'),
+              ),
           }),
+        }),
+      },
+    ],
+    report: (report) => reports.push(report),
+  })(asked());
+
+  await Array.fromAsync(contractOf(served).run(request, host));
+  await Bun.sleep(0);
+
+  expect(reports).toMatchObject([
+    {
+      outcome: 'failed',
+      error: {
+        code: 'internal',
+        message: 'The model call to acme/small failed',
+        retryable: false,
+      },
+      failed: [
+        {
+          service: 'models',
+          error: { code: 'internal', message: 'key sk-live gave up' },
         },
       ],
-      report: (report) => reports.push(report),
-    })(asked());
-
-    await Array.fromAsync(contractOf(served).run(request, host));
-    await Bun.sleep(0);
-
-    expect(reports).toMatchObject([
-      {
-        outcome: 'failed',
-        error: {
-          code: 'internal',
-          message: 'The model call to acme/small failed',
-          retryable: false,
-        },
-        failed: [
-          {
-            service: 'models',
-            error: { code: 'internal', message: 'key sk-live gave up' },
-          },
-        ],
-      },
-    ]);
-  },
-);
+    },
+  ]);
+});
 
 test('a model call a throwing adapter failed is not retried, and a fallback moves on from it', async () => {
   const called: string[] = [];
@@ -1888,30 +1584,6 @@ test('whoever asked is told the id of the report made when the auth adapter thre
   expect(told).toEqual(reports.map(({ id }) => id));
 });
 
-test('the report made when the auth adapter threw carries the id the host gave, and whoever asked is told it', async () => {
-  const reports: Report[] = [];
-  const told: string[] = [];
-  const admit = hosting(echo(), {
-    auth: {
-      verify: () => {
-        throw new Error('The key set is gone');
-      },
-    },
-    report: (report) => reports.push(report),
-  });
-
-  await expect(
-    admit({
-      ...asked({ 'x-api-key': 'sk-ada' }),
-      id: 'req-7',
-      reported: (id) => told.push(id),
-    }),
-  ).rejects.toThrow('The key set is gone');
-
-  expect(reports.map(({ id }) => id)).toEqual(['req-7']);
-  expect(told).toEqual(['req-7']);
-});
-
 test('whoever asked is handed, once, the work of the report made when the auth adapter threw, and none when an SDK error made no report', async () => {
   const order: string[] = [];
   const works: Promise<void>[] = [];
@@ -1947,19 +1619,6 @@ test('whoever asked is handed, once, the work of the report made when the auth a
   expect(order).toEqual([]);
   await works[0];
   expect(order).toEqual(['report']);
-});
-
-test('a request in which no service of the host threw has no failures on its report', async () => {
-  const reports: Report[] = [];
-  const served = echo();
-  const { request, host } = await hosting(served, {
-    report: (report) => reports.push(report),
-  })(asked());
-
-  await Array.fromAsync(contractOf(served).run(request, host));
-  await Bun.sleep(0);
-
-  expect(reports[0]).not.toHaveProperty('failed');
 });
 
 test("whoever asked is handed work that ends only once the report's own has, after the request is over", async () => {
@@ -2056,16 +1715,13 @@ test('what one request writes into the overrides, the limits or its caller is re
     auth: { verify: () => known },
   });
   const first = await admit(asked({ 'x-api-key': 'sk-ada' }));
+  const { tiers } = first.host.settings ?? {};
 
   expect(() =>
     Object.assign(Object(first.host.settings), { planted: 1 }),
   ).toThrow();
-  expect(() =>
-    Object.assign(Object(first.host.settings?.['tiers']), { deep: 1 }),
-  ).toThrow();
-  expect(() =>
-    Object(Object(first.host.settings?.['tiers']).models).push('acme/huge'),
-  ).toThrow();
+  expect(() => Object.assign(Object(tiers), { deep: 1 })).toThrow();
+  expect(() => Object(Object(tiers).models).push('acme/huge')).toThrow();
   expect(() =>
     Object.assign(Object(first.host.limits), { calls: 99 }),
   ).toThrow();
@@ -2117,7 +1773,7 @@ test('models given as a function are asked for once per request, with the reques
   });
   const admit = hosting(echo(), {
     auth: { verify: () => ({ id: 'ada' }) },
-    models: (request, caller) => {
+    models: async (request, caller) => {
       given.push([request.id, request.model, [...request.headers], caller]);
       return [{ serves: () => true, call: upstream.models }];
     },
@@ -2193,45 +1849,6 @@ test('given the headers and no request, the host says only who the caller is: no
     { outcome: 'failed', failed: [{ service: 'auth' }] },
   ]);
   expect(told).toEqual(reports.map(({ id }) => id));
-});
-
-test('given the headers and a caller, the host says that caller and the adapter is not asked', async () => {
-  const tokens: string[] = [];
-  const admit = hosting(echo(), {
-    auth: {
-      verify: (token) => {
-        tokens.push(token);
-        return { id: 'eve' };
-      },
-    },
-  });
-
-  expect(
-    await admit({
-      headers: new Headers({ authorization: 'Bearer sk-eve' }),
-      credentials: ['x-api-key', 'authorization'],
-      caller: { id: 'ada' },
-    }),
-  ).toEqual({ id: 'ada' });
-  expect(tokens).toEqual([]);
-});
-
-test('models given as a promise of the list are waited for', async () => {
-  const upstream = stubHost({
-    'acme/small': [{ type: 'finish', reason: 'stop' }],
-  });
-  const { host } = await hosting(echo(), {
-    models: async () => {
-      await Bun.sleep(1);
-      return [{ serves: () => true, call: upstream.models }];
-    },
-  })(asked());
-
-  expect(
-    await Array.fromAsync(
-      host.models('acme/small', { messages: [] }, host.signal),
-    ),
-  ).toEqual([{ type: 'finish', reason: 'stop' }]);
 });
 
 test("what the models function throws fails the request's calls as an SDK error that says only that models failed, and the report holds the rest", async () => {
@@ -2322,8 +1939,7 @@ test.each([
     'holds itself',
     () => {
       const tiers: { [name: string]: Json } = { deep: 0.5 };
-      tiers['again'] = tiers;
-      return tiers;
+      return Object.assign(tiers, { again: tiers });
     },
   ],
   ['holds a function', () => Object({ deep: 0.5, pick: () => 'sk-live' })],

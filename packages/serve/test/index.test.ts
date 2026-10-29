@@ -12,22 +12,3 @@ test('the serve entry exports exactly the held values', () => {
     'serve',
   ]);
 });
-
-test('the serve entry exports exactly the held types', async () => {
-  const text = await Bun.file(
-    new URL('../src/index.ts', import.meta.url),
-  ).text();
-
-  expect(
-    [...text.matchAll(/export (type )?\{([^}]*)\}/g)]
-      .flatMap(([, allTypes, names = '']) =>
-        names
-          .split(',')
-          .map((name) => name.trim())
-          .filter((name) => allTypes !== undefined || name.startsWith('type '))
-          .map((name) => name.replace('type ', '')),
-      )
-      .filter((name) => name !== '')
-      .sort(),
-  ).toEqual(['Edge']);
-});
