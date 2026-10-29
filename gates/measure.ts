@@ -127,10 +127,11 @@ export async function share(
   ours: () => unknown,
   timed: (subject: () => unknown) => number | Promise<number> = (subject) =>
     nanosecondsPerCall(subject, 50),
+  rounds = 1000,
 ) {
   const taken: number[] = [];
   // The first rounds run code the engine has not compiled yet.
-  for (let round = -100; round < 1000; round++) {
+  for (let round = -rounds / 10; round < rounds; round++) {
     const [first, second] = round % 2 === 0 ? [theirs, ours] : [ours, theirs];
     const before = await timed(first);
     const after = await timed(second);

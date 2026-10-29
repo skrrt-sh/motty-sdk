@@ -34,11 +34,19 @@ export class MottyStorage extends DurableObject {
     return undefined;
   }
 
+  // The one alarm's time, read from storage once per instance: awaiting it
+  // on every write with an expiry made that write the slowest call.
+  #alarm: number | null | undefined;
+
   // One alarm per object, at the earliest expiry it holds.
   async #expire(until: number) {
     if (until === Number.POSITIVE_INFINITY) return;
-    const set = await this.ctx.storage.getAlarm();
-    if (set === null || until < set) await this.ctx.storage.setAlarm(until);
+    if (this.#alarm === undefined) {
+      this.#alarm = await this.ctx.storage.getAlarm();
+    }
+    if (this.#alarm !== null && this.#alarm <= until) return;
+    this.#alarm = until;
+    await this.ctx.storage.setAlarm(until);
   }
 
   async read(key: string): Promise<string | undefined> {
@@ -55,6 +63,7 @@ export class MottyStorage extends DurableObject {
   async remove(key: string): Promise<void> {
     this.ctx.storage.kv.delete(key);
     if ([...this.ctx.storage.kv.list({ limit: 1 })].length === 0) {
+      this.#alarm = null;
       await this.ctx.storage.deleteAll();
     }
   }
@@ -90,6 +99,7 @@ export class MottyStorage extends DurableObject {
   // deletes what has expired, waits for the next expiry, and deletes the
   // object once nothing is left.
   override async alarm(): Promise<void> {
+    this.#alarm = null;
     const now = Date.now();
     let next = Number.POSITIVE_INFINITY;
     let left = false;
@@ -103,6 +113,7 @@ export class MottyStorage extends DurableObject {
     }
     if (!left) await this.ctx.storage.deleteAll();
     else if (next !== Number.POSITIVE_INFINITY) {
+      this.#alarm = next;
       await this.ctx.storage.setAlarm(next);
     }
   }
