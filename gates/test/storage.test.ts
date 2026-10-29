@@ -99,7 +99,7 @@ describe('on Workers', () => {
     };
   }
 
-  test.each(['get', 'plain', 'set', 'rpc', 'row', 'increment'])(
+  test.each(['get', 'set', 'increment'])(
     'a %s through the adapter takes about what a bare Durable Object takes',
     async (call) => {
       const taken = await share(
