@@ -254,17 +254,18 @@ key-value calls. A gate runs the comparison on every change and fails when an ad
 | Set of a new key, in an object of its own | | | 0.68–0.72 ms | | 289–356 ms |
 | Set of a new key, in an object shared by `name` | | | 74–105 µs | | 18–19 ms |
 
-The local columns show what the adapter adds, and the last column what a host will see. On
-Cloudflare the simplest get on an object takes 3–4 ms and the simplest write 11–13 ms. A get through
-the adapter takes more, because it asks for the object anew on each call, which costs almost nothing
-locally, so the gate does not see it. Each key has an object of its own by default, and making an
+The local columns show what an adapter call takes on one machine, and the last column what a host
+will see. On Cloudflare a get on a bare object takes 3–4 ms and a write 11–13 ms. The same read on
+the same object took 9–12 ms with a new handle from `getByName` on each call, as the adapter does,
+and 3–4 ms with one handle reused. Locally the difference is too small to matter, so the gate does
+not see it. Each key has an object of its own by default, and making an
 object is the slowest step here. A host that writes many new keys should group them with `name`,
 though an object takes one call at a time.
 
 With 100 calls in flight the Redis adapter makes 226,000 gets, 181,000 sets and 131,000
 increments a second. With 50 in flight the local Durable Object makes 46,000 gets a second, and
-13,000 to 17,000 increments of one key. Increments made at once all count, and none is lost, which
-200 made at once from outside also showed on Cloudflare.
+13,000 to 17,000 increments of one key. Increments made at once all count, and none is lost. On
+Cloudflare, 200 sent at once from outside all counted too.
 
 The local figures were measured on 2026-10-29 on an Apple M4 Max with Bun 1.4.4, against Valkey 9.1.2
 in a container and a Durable Object in workerd 2026-10-25 on the same machine, and the two for a new
