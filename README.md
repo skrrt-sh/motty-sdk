@@ -246,22 +246,34 @@ that is Bun's own client sending one command, and for Workers a bare Durable Obj
 key-value calls. A gate runs the comparison on every change and fails when an adapter call takes
 1.5 times the bare one. One more round trip in a call reads 2.0.
 
-| Call | Redis | Share of the bare client | Durable Object | Share of the bare object |
-| --- | ---: | ---: | ---: | ---: |
-| Get | 0.24 ms | 1.00× | 21 µs | 1.06–1.09× |
-| Set with an expiry | 0.24 ms | 1.00× | 25 µs | 1.05–1.06× |
-| Increment with an expiry | 0.25 ms | 1.04× | 61–86 µs | 1.10–1.11× |
+| Call | Redis, local | Share of the bare client | Durable Object, local | Share of the bare object | Durable Object, on Cloudflare |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Get | 0.24 ms | 1.00× | 21 µs | 1.06–1.09× | 8–18 ms |
+| Set with an expiry | 0.24 ms | 1.00× | 25 µs | 1.05–1.06× | 18–20 ms |
+| Increment with an expiry | 0.25 ms | 1.04× | 61–86 µs | 1.10–1.11× | 16–22 ms |
+| Set of a new key, in an object of its own | | | 0.68–0.72 ms | | 289–356 ms |
+| Set of a new key, in an object shared by `name` | | | 74–105 µs | | 18–19 ms |
+
+The local columns show what the adapter adds, and the last column what a host will see. On
+Cloudflare the simplest get on an object takes 3–4 ms and the simplest write 11–13 ms. A get through
+the adapter takes more, because it asks for the object anew on each call, which costs almost nothing
+locally, so the gate does not see it. Each key has an object of its own by default, and making an
+object is the slowest step here. A host that writes many new keys should group them with `name`,
+though an object takes one call at a time.
 
 With 100 calls in flight the Redis adapter makes 226,000 gets, 181,000 sets and 131,000
-increments a second. With 50 in flight the Durable Object makes 46,000 gets a second, and 13,000
-to 17,000 increments of one key. Increments made at once all count, and none is lost.
+increments a second. With 50 in flight the local Durable Object makes 46,000 gets a second, and
+13,000 to 17,000 increments of one key. Increments made at once all count, and none is lost, which
+200 made at once from outside also showed on Cloudflare.
 
-The figures were measured on 2026-10-29 on an Apple M4 Max with Bun 1.4.4, against Valkey 9.1.2
-in a local container and a Durable Object in workerd 2026-10-25 on the same machine. A time is the
-median of 5,000 calls made one after another, with a value of 512 bytes. A share is the median
-over 200 rounds the two take in turn, and the range is over five runs. On Cloudflare the trip to
-the object costs more than any figure here. Run `bun test gates/test/storage.test.ts` with
-`REDIS_URL` set to measure the shares yourself.
+The local figures were measured on 2026-10-29 on an Apple M4 Max with Bun 1.4.4, against Valkey 9.1.2
+in a container and a Durable Object in workerd 2026-10-25 on the same machine, and the two for a new
+key on 2026-10-31. A time is the median of many calls made one after another, with a value of 512
+bytes. A share is the median over 200 rounds the two take in turn, and the range is over five runs.
+The Cloudflare figures were measured on 2026-10-31 from a deployed Worker to its objects, both near
+London, over three to six runs of 20 to 100 calls each. A caller far from an object will wait longer. No
+hosted Redis was measured. Run `bun test gates/test/storage.test.ts` with `REDIS_URL` set to measure
+the shares yourself.
 
 ## Status
 
