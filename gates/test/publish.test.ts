@@ -233,12 +233,11 @@ test('bundled for Workers, the packed packages answer in workerd', async () => {
     entrypoints: [join(project, 'worker.ts')],
     target: 'browser',
     conditions: ['workerd', 'worker'],
-    external: ['node:*'],
+    external: ['node:*', 'cloudflare:*'],
   });
   const bundle = (await outputs[0]?.text()) ?? '';
   const { address, stop } = await workerd({
     modules: { 'worker.js': bundle },
-    flags: ['nodejs_compat'],
     bindings: {},
   });
   try {
@@ -293,7 +292,6 @@ test('bundled for Workers, every entry of the packed packages but the Redis adap
   });
   const { address, stop } = await workerd({
     modules: { 'worker.js': (await outputs[0]?.text()) ?? '' },
-    flags: ['nodejs_compat'],
     bindings: {},
   });
   try {

@@ -61,9 +61,9 @@ on Messages.
 With no `report`, the failed records are written to stderr, with credentials masked. That covers a
 failure on the host's side, a 5xx, an upstream's refusal and a name no adapter serves. A 4xx the
 motty itself gave and a caller leaving write nothing. A `report` that throws or rejects is written too, with the failures of the
-record it lost. Masking learns a secret of no known shape from its value in `process.env`, if that
-value has at least 8 characters, so on Workers it relies on `nodejs_compat` with a compatibility
-date of 2025-04-01 or later, which is what fills `process.env`.
+record it lost. Masking learns a secret of no known shape from its value in the environment, if
+that value has at least 8 characters. On Workers that holds under any compatibility date and flag
+when the bundler resolves the `workerd` export condition, as Wrangler does.
 
 A host also refuses at start a motty with no route or handle, a bad settings override and a settings
 group the motty does not have. An async schema's verdict is only written to stderr, as a mount
@@ -80,14 +80,18 @@ a request in flight is cut off, so a deployed host runs the serve file plainly.
 ## Hosting with mount
 
 `mount` takes the same options as the serve file above, a function of the environment. On
-Workers the environment holds the Worker's bindings once `nodejs_compat` is on and the
-compatibility date is 2025-04-01 or later; with an older date it is empty.
+Workers the environment holds the Worker's secrets and variables as text, and no other binding.
 
 On Cloudflare Workers a mount is the module's default export. The third argument of `fetch` has
 the shape of a Workers execution context, so every record is waited for through
-`ctx.waitUntil` with no code of the host's. Turn on the `nodejs_compat` and
-`enable_request_signal` flags, the second so that a caller who leaves is noticed. A bundler other
-than Wrangler must leave `node:*` imports external.
+`ctx.waitUntil` with no code of the host's. Turn on the `enable_request_signal` flag so that a
+caller who leaves is noticed. A bundler other than Wrangler must resolve the `workerd` condition
+and leave `node:*` and `cloudflare:*` imports external.
+
+The core needs `AsyncLocalStorage`, as that is what keeps overlapping requests apart. A
+compatibility date of 2026-08-04 or later has it with no flag. An older date needs `nodejs_compat`
+or the smaller `nodejs_als`, and without either the Worker is refused with
+`No such module "node:async_hooks"`.
 
 ```ts
 export default mount(coder, options);

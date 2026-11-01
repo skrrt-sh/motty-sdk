@@ -29,7 +29,7 @@ export const runtimes = {
       },
       // Without the request signal flag workerd tells a worker nothing of a
       // caller who left, and the request runs to its end.
-      flags: ['nodejs_compat', 'enable_request_signal'],
+      flags: ['enable_request_signal'],
       bindings: { UPSTREAM: at.upstream, RECORDS: at.records },
     });
     return { address, fetch: (request: Request) => fetch(request), stop };

@@ -4,6 +4,7 @@ import {
   type Report,
   toFacts,
 } from '@mottyjs/core/host';
+import { environment } from '#environment';
 
 type Send = NonNullable<HostOptions['report']>;
 
@@ -39,9 +40,8 @@ function leaves(value: unknown): string[] {
 
 // A key held in the environment has no shape to know it by. A short value
 // there may be anything and says little, so only a long one is looked for.
-function environment(): string[] {
-  if (typeof process === 'undefined') return [];
-  const held: { [name: string]: string | undefined } = process.env;
+function heldInEnvironment(): string[] {
+  const held: { [name: string]: string | undefined } = environment();
   return Object.values(held).flatMap((value) =>
     value !== undefined && value.length >= 8 ? [value] : [],
   );
@@ -52,7 +52,7 @@ function environment(): string[] {
 // another goes whole.
 function unheld(message: string, held: unknown): string {
   let said = message;
-  for (const value of [...leaves(held), ...environment()].sort(
+  for (const value of [...leaves(held), ...heldInEnvironment()].sort(
     (left, right) => right.length - left.length,
   )) {
     if (value.length >= 8) said = said.replaceAll(value, mask);
