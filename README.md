@@ -230,23 +230,23 @@ one, Motty is ahead.
 
 | | Motty | AI SDK | Mastra | LangChain | TanStack AI |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Text, 20 chunks | 27.6 µs | 1.73× | 7.94× | 0.71× | 4.17× |
-| Stream, 20 chunks | 27.8 µs | 10.03× | 12.87× | 3.65× | 4.13× |
-| Stream, 200 chunks | 138 µs | 11.82× | 10.73× | 5.22× | 5.71× |
-| Structured output stream, 20 chunks | 37.7 µs | 10.79× | 14.32× | 4.02× | 3.64× |
-| Served over HTTP, 200 chunks | 358 µs | 5.07× | 4.72× | 3.61× | 3.14× |
-| Cold start, import to first streamed answer | 29.7 ms | 1.43× | 6.26× | 2.26× | 1.83× |
-| Minified program size | 265 KB | 2.57× | 23.32× | 4.43× | 3.19× |
+| Text, 20 chunks | 27.1 µs | 1.75× | 7.96× | 0.71× | 4.21× |
+| Stream, 20 chunks | 27.2 µs | 9.98× | 12.69× | 3.67× | 4.20× |
+| Stream, 200 chunks | 136 µs | 11.74× | 10.33× | 5.24× | 5.77× |
+| Structured output stream, 20 chunks | 37.4 µs | 10.79× | 13.99× | 3.97× | 3.62× |
+| Served over HTTP, 200 chunks | 348 µs | 5.13× | 4.63× | 3.62× | 3.17× |
+| Cold start, import to first streamed answer | 30.6 ms | 1.34× | 5.91× | 2.13× | 1.74× |
+| Minified program size | 268 KB | 2.54× | 23.04× | 4.38× | 3.15× |
 
 Motty is behind in one place, a non-streamed text call against LangChain. Motty always reads a
 stream upstream, and that is the entry the gate lists as a known loss.
 
-The figures were measured on 2026-11-01 on an Apple M4 Max with Bun 1.4.4, against `ai` 7.0.153,
+The figures were measured on 2026-11-02 on an Apple M4 Max with Bun 1.4.4, against `ai` 7.0.153,
 `@mastra/core` 1.79.0, `@langchain/openai` 1.7.0 and `@tanstack/ai` 1.0.0. Each time per call is
 the median of five runs, each of 15 rounds of 20,000 chunks after one discarded, with the SDKs
 taking turns in one process. Cold start is the median of five runs of 21 starts, each in a fresh
 process and taken before the timed calls. The machine had other work running, and cold start is
-the figure that moved most, with Motty at 29 to 31 ms across these runs and 21 to 35 ms on another day. Run
+the figure that moved most, with Motty at 30 to 31 ms across these runs and 21 to 35 ms on another day. Run
 `bun gates/bench/rivals/compare.ts` to measure it yourself.
 
 ### Storage
@@ -258,11 +258,11 @@ key-value calls. A gate runs the comparison on every change and fails when an ad
 
 | Call | Redis, local | Share of the bare client | Durable Object, local | Share of the bare object | Durable Object, on Cloudflare |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Get | 0.24 ms | 1.00× | 21 µs | 1.06–1.09× | 8–18 ms |
-| Set with an expiry | 0.24 ms | 1.00× | 25 µs | 1.05–1.06× | 18–20 ms |
-| Increment with an expiry | 0.25 ms | 1.04× | 61–86 µs | 1.10–1.11× | 16–22 ms |
-| Set of a new key, in an object of its own | | | 0.68–0.72 ms | | 289–356 ms |
-| Set of a new key, in an object shared by `name` | | | 74–105 µs | | 18–19 ms |
+| Get | 0.21 ms | 1.00× | 22 µs | 1.06–1.09× | 8–21 ms |
+| Set with an expiry | 0.21 ms | 1.00× | 25 µs | 1.05–1.06× | 18–30 ms |
+| Increment with an expiry | 0.24 ms | 1.04× | 52–55 µs | 1.10–1.11× | 14–22 ms |
+| Set of a new key, in an object of its own | | | 0.72–0.97 ms | | 289–375 ms |
+| Set of a new key, in an object shared by `name` | | | 68–70 µs | | 18–29 ms |
 
 The local columns show what an adapter call takes on one machine, and the last column what a host
 will see. On Cloudflare a get on a bare object takes 3–4 ms and a write 11–13 ms. The same read on
@@ -272,18 +272,18 @@ not see it. Each key has an object of its own by default, and making an
 object is the slowest step here. A host that writes many new keys should group them with `name`,
 though an object takes one call at a time.
 
-With 100 calls in flight the Redis adapter makes 224,000 gets, 179,000 sets and 179,000
-increments a second. With 50 in flight the local Durable Object makes 46,000 gets a second, and
-13,000 to 17,000 increments of one key. Increments made at once all count, and none is lost. On
+With 100 calls in flight the Redis adapter makes 228,000 gets, 182,000 sets and 184,000
+increments a second. With 50 in flight the local Durable Object makes 43,000 to 45,000 gets a second, and
+17,000 to 19,000 increments of one key. Increments made at once all count, and none is lost. On
 Cloudflare, 200 sent at once from outside all counted too.
 
-The local figures were measured on 2026-10-29 on an Apple M4 Max with Bun 1.4.4, against Valkey 9.1.2
-in a container and a Durable Object in workerd 2026-10-25 on the same machine, the two for a new
-key on 2026-10-31, and the Redis calls in flight on 2026-11-01. A time is the median of many calls made one after another, with a value of 512
-bytes. A share is the median over 200 rounds the two take in turn, and the range is over five runs.
-The Cloudflare figures were measured on 2026-10-31 from a deployed Worker to its objects, both near
-London, over three to six runs of 20 to 100 calls each. A caller far from an object will wait longer. No
-hosted Redis was measured. Run `bun gates/bench/storage.ts` to measure the local times yourself, and
+The local times were measured on 2026-11-02 on an Apple M4 Max with Bun 1.4.4, against Valkey 9.1.2
+in a container and a Durable Object in workerd 2026-10-25 on the same machine. A time is the median of
+many calls made one after another, with a value of 512 bytes. A share is the median over 200 rounds the
+two take in turn, and the range is over five runs, measured on 2026-10-29. The Cloudflare figures were
+measured on 2026-10-31 and 2026-11-02 from a deployed Worker to its objects, near London, over three to
+six runs of 20 to 100 calls each. The first call on a new object took 286–549 ms there. Called from
+Dubai, objects placed in London or Singapore took about 85–140 ms a call. No hosted Redis was measured. Run `bun gates/bench/storage.ts` to measure the local times yourself, and
 `bun test gates/test/storage.test.ts` for the shares, both with `REDIS_URL` set for Redis.
 
 ## Status

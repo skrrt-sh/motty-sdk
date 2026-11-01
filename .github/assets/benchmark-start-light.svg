@@ -4,28 +4,28 @@
 <text x="0" y="78" font-size="13" font-weight="600" fill="#1f2328">Cold start: import to first streamed answer</text>
 <line x1="86" x2="86" y1="89" y2="199" stroke="#d1d9e0" stroke-width="1"/>
 <text x="78" y="104" font-size="12" text-anchor="end" fill="#1f2328" font-weight="600">Motty</text>
-<path d="M86 94h26.695343669252278a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-26.695343669252278z" fill="#2a78d6"/>
-<text x="123.69534366925228" y="104" font-size="12" fill="#1f2328" font-weight="600">29.7 ms</text>
+<path d="M86 94h28.223207259475174a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-28.223207259475174z" fill="#2a78d6"/>
+<text x="125.22320725947517" y="104" font-size="12" fill="#1f2328" font-weight="600">30.6 ms</text>
 <text x="78" y="126" font-size="12" text-anchor="end" fill="#59636e">AI SDK</text>
-<path d="M86 116h37.36082996397354a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-37.36082996397354z" fill="#818b95"/>
-<text x="134.36082996397354" y="126" font-size="12" fill="#1f2328">40.0 ms<tspan fill="#59636e" font-weight="400">  1.4×</tspan></text>
+<path d="M86 116h37.906545529484085a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-37.906545529484085z" fill="#818b95"/>
+<text x="134.90654552948408" y="126" font-size="12" fill="#1f2328">39.8 ms<tspan fill="#59636e" font-weight="400">  1.3×</tspan></text>
 <text x="78" y="148" font-size="12" text-anchor="end" fill="#59636e">Mastra</text>
 <path d="M86 138h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#818b95"/>
-<text x="283" y="148" font-size="12" fill="#1f2328">183.6 ms<tspan fill="#59636e" font-weight="400">  6.3×</tspan></text>
+<text x="283" y="148" font-size="12" fill="#1f2328">180.4 ms<tspan fill="#59636e" font-weight="400">  5.9×</tspan></text>
 <text x="78" y="170" font-size="12" text-anchor="end" fill="#59636e">LangChain</text>
-<path d="M86 160h64.55099624299143a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-64.55099624299143z" fill="#818b95"/>
-<text x="161.55099624299143" y="170" font-size="12" fill="#1f2328">66.2 ms<tspan fill="#59636e" font-weight="400">  2.3×</tspan></text>
+<path d="M86 160h64.58596316628841a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-64.58596316628841z" fill="#818b95"/>
+<text x="161.58596316628842" y="170" font-size="12" fill="#1f2328">65.1 ms<tspan fill="#59636e" font-weight="400">  2.1×</tspan></text>
 <text x="78" y="192" font-size="12" text-anchor="end" fill="#59636e">TanStack AI</text>
-<path d="M86 182h51.208435939387044a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-51.208435939387044z" fill="#818b95"/>
-<text x="148.20843593938704" y="192" font-size="12" fill="#1f2328">53.4 ms<tspan fill="#59636e" font-weight="400">  1.8×</tspan></text>
+<path d="M86 182h51.736193445944835a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-51.736193445944835z" fill="#818b95"/>
+<text x="148.73619344594482" y="192" font-size="12" fill="#1f2328">52.9 ms<tspan fill="#59636e" font-weight="400">  1.7×</tspan></text>
 <text x="430" y="78" font-size="13" font-weight="600" fill="#1f2328">Minified program size</text>
 <line x1="516" x2="516" y1="89" y2="199" stroke="#d1d9e0" stroke-width="1"/>
 <text x="508" y="104" font-size="12" text-anchor="end" fill="#1f2328" font-weight="600">Motty</text>
-<path d="M516 94h4.147059964441571a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-4.147059964441571z" fill="#2a78d6"/>
-<text x="531.1470599644416" y="104" font-size="12" fill="#1f2328" font-weight="600">265 KB</text>
+<path d="M516 94h4.244747050266689a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-4.244747050266689z" fill="#2a78d6"/>
+<text x="531.2447470502667" y="104" font-size="12" fill="#1f2328" font-weight="600">268 KB</text>
 <text x="508" y="126" font-size="12" text-anchor="end" fill="#59636e">AI SDK</text>
 <path d="M516 116h16.925949571682562a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-16.925949571682562z" fill="#818b95"/>
-<text x="543.9259495716825" y="126" font-size="12" fill="#1f2328">681 KB<tspan fill="#59636e" font-weight="400">  2.6×</tspan></text>
+<text x="543.9259495716825" y="126" font-size="12" fill="#1f2328">681 KB<tspan fill="#59636e" font-weight="400">  2.5×</tspan></text>
 <text x="508" y="148" font-size="12" text-anchor="end" fill="#59636e">Mastra</text>
 <path d="M516 138h186a4 4 0 0 1 4 4v4a4 4 0 0 1 -4 4h-186z" fill="#818b95"/>
 <text x="713" y="148" font-size="12" fill="#1f2328">6,187 KB<tspan fill="#59636e" font-weight="400">  23×</tspan></text>
