@@ -62,8 +62,10 @@ With no `report`, the failed records are written to stderr, with credentials mas
 failure on the host's side, a 5xx, an upstream's refusal and a name no adapter serves. A 4xx the
 motty itself gave and a caller leaving write nothing. A `report` that throws or rejects is written too, with the failures of the
 record it lost. Masking learns a secret of no known shape from its value in the environment, if
-that value has at least 8 characters. On Workers that holds under any compatibility date and flag
-when the bundler resolves the `workerd` export condition, as Wrangler does.
+that value has at least 8 characters. On Workers that holds under any compatibility date and either
+Node flag when the bundler resolves the `workerd` export condition, as Wrangler does. The
+`disallow_importable_env` flag hides the environment from the SDK, so with it the options get none
+and masking knows only the shapes of credentials.
 
 A host also refuses at start a motty with no route or handle, a bad settings override and a settings
 group the motty does not have. An async schema's verdict is only written to stderr, as a mount

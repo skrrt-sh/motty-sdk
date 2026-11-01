@@ -10,6 +10,8 @@ const clock = Date.now();
 let given: string | undefined;
 const { fetch } = mount(
   motty({ name: 'coder' }).handle(() => {
+    // Written over, which hides the binding from `process.env` and from no log.
+    if (typeof process !== 'undefined') process.env['KEY'] = 'something else';
     // A secret of no known shape, as a thrower that read it would say it.
     throw new Error(`Refused ${given}`);
   }),

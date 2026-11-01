@@ -4,7 +4,7 @@ import {
   type Report,
   toFacts,
 } from '@mottyjs/core/host';
-import { environment } from '#environment';
+import { held as inEnvironment } from '#environment';
 
 type Send = NonNullable<HostOptions['report']>;
 
@@ -41,8 +41,7 @@ function leaves(value: unknown): string[] {
 // A key held in the environment has no shape to know it by. A short value
 // there may be anything and says little, so only a long one is looked for.
 function heldInEnvironment(): string[] {
-  const held: { [name: string]: string | undefined } = environment();
-  return Object.values(held).flatMap((value) =>
+  return inEnvironment().flatMap((value) =>
     value !== undefined && value.length >= 8 ? [value] : [],
   );
 }
