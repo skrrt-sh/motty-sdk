@@ -50,10 +50,23 @@ const failures: FailureReader = (_status, _headers, { code }) => {
   }
 };
 
+/**
+ * Connects to Z.ai's GLM over Chat Completions. It asks for JSON with no
+ * schema, and sends `tool_stream: true` unless `body` states otherwise.
+ */
 export function zai(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is
+     * `https://api.z.ai/api/paas/v4`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `zai/some-model`, taken off before
+     * the call. The default is `zai`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

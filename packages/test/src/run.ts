@@ -14,6 +14,7 @@ import { fake } from './fake.ts';
 import { memory } from './memory.ts';
 import { Unscripted } from './unscripted.ts';
 
+/** The request a test sends, as `text` or as `messages`. */
 export type Asked = Partial<
   Pick<ChatRequest, 'model' | 'tools' | 'options' | 'output'>
 > & {
@@ -24,11 +25,17 @@ export type Asked = Partial<
     | { messages: ChatRequest['messages']; text?: never }
   );
 
+/** What `run` gives back. */
 export type Ran<Paths extends string[] = string[]> = {
+  /** The first entry of the path, or undefined when no route ran. */
   route: Paths[0] | undefined;
+  /** Every entry from the root down. */
   path: Paths | [];
+  /** The answer the caller received, read with the usual methods. */
   answer: Answer;
+  /** The model calls of the request. */
   calls: RequestRecord['calls'];
+  /** The pieces of progress the motty offered with `think`. */
   thoughts: string[];
 };
 
@@ -38,6 +45,19 @@ async function* replayed(events: readonly StreamEvent[]) {
 
 // The path is typed here by the motty that ran: the record holds it as plain
 // names, and what they may be is known only to the motty's type.
+/**
+ * Runs a request through the whole lifecycle of a motty without the wire. It
+ * throws what the request failed with, and `Unscripted` for any call nobody
+ * scripted, even one the motty recovered from. Storage is a fresh `memory()`
+ * and the caller is `tester` unless `options` state otherwise.
+ *
+ * @example
+ * ```ts
+ * const models = fake(on(luna, 'quick reply'));
+ * const ran = await run(relay, { text: 'Hi' }, { models: [models] });
+ * expect(await ran.answer.text()).toBe('quick reply');
+ * ```
+ */
 export function run<Paths extends string[], Served>(
   motty: Motty<unknown, Paths> & Served,
   request: Asked,

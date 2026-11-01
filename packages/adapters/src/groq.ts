@@ -13,10 +13,20 @@ const failures: FailureReader = (status, _headers, { type }) => {
   return status === 413 ? { code: 'invalid_request' } : undefined;
 };
 
+/** Connects to Groq over Chat Completions. */
 export function groq(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is
+     * `https://api.groq.com/openai/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `groq/some-model`, taken off before
+     * the call. The default is `groq`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

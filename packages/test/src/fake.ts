@@ -29,9 +29,21 @@ type Entry = {
 // no headers of its own, so one a real connection or its API states arrives.
 type Connection = { forwardHeaders?: Parameters<typeof forwarded>[1] };
 
+/**
+ * A scripted model adapter. `sent(model)` gives what each call to that model
+ * was sent.
+ */
 export type Fake = ReturnType<typeof scripted>;
 
+/**
+ * Scripts one reply for a model, for `fake`. Several for one model answer in
+ * turn, and the last repeats.
+ */
 export function on(model: DecisionModel, reply: DecisionReply): Entry;
+/**
+ * Scripts one reply for a model, for `fake`. Several for one model answer in
+ * turn, and the last repeats.
+ */
 export function on(model: NamedModel, reply: ChatReply): Entry;
 export function on(model: NamedModel | DecisionModel, reply: ChatReply): Entry {
   return {
@@ -60,7 +72,17 @@ async function* warned(
   }
 }
 
+/**
+ * Makes a model adapter that answers from scripts, and takes the
+ * `forwardHeaders` of a connection ahead of them. It serves only the names it
+ * was given, so a real adapter beside it keeps its own.
+ */
 export function fake(connection: Connection, ...entries: Entry[]): Fake;
+/**
+ * Makes a model adapter that answers from scripts, and takes the
+ * `forwardHeaders` of a connection ahead of them. It serves only the names it
+ * was given, so a real adapter beside it keeps its own.
+ */
 export function fake(...entries: Entry[]): Fake;
 export function fake(first?: Connection | Entry, ...rest: Entry[]): Fake {
   if (first === undefined) return scripted([], {});

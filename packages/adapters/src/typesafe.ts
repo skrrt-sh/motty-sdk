@@ -109,20 +109,40 @@ function failure(
   };
 }
 
+/**
+ * Connects to a server of the Typesafe API, which answers `decision()`
+ * questions and no chat. A model is named as `typesafe/some-model`.
+ */
 export function typesafe(options: {
+  /** The API key, which is required unless `address` is given. */
   key?: string | undefined;
+  /**
+   * The base address of the API. The default is `https://api.typesafe.ai/v1`.
+   */
   address?: string;
+  /**
+   * The first word of a model name, taken off before the call. The default is
+   * `typesafe`.
+   */
   prefix?: string;
-  // In milliseconds.
+  /** How long one decision may take, in ms. The default is 2000. */
   timeout?: number;
+  /**
+   * Sent with every request. The content type and the credential stay the
+   * adapter's.
+   */
   headers?: { [name: string]: string };
-  // Fields in the server's own names, sent with every request. Laya takes
-  // controls that Jev refuses with a 400, so only a host that knows its
-  // server states them; the call's own state, questions and model replace it.
+  /**
+   * Fields in the server's own names, sent with every request. Laya takes
+   * controls that Jev refuses with a 400, so only a host that knows its server
+   * states them; the call's own state, questions and model replace it.
+   */
   body?: { [name: string]: Json };
-  // Laya answers a name of Jev's by its router on purpose, so one motty can
-  // run on both. Only the host knows its server does: unsaid, a name the
-  // server did not take is a model it does not know.
+  /**
+   * Says the server answers another server's model names by its router on
+   * purpose. Unsaid, as by default, a name it did not take is a model it does
+   * not know.
+   */
   routes?: boolean;
 }): ModelAdapter {
   const { key, routes = false } = options;

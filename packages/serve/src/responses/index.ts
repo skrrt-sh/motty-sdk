@@ -7,9 +7,11 @@ import { encode } from './encode.ts';
 import { events } from './events.ts';
 import { family } from './family.ts';
 
-// What an upstream takes beside what OpenAI's own does: a cache breakpoint
-// on input content, which most of OpenAI's own models refuse. A provider
-// names its own failures first, in a response that failed and in a stream.
+/**
+ * Makes the Responses codec of one upstream. `breakpoints` writes a cache
+ * breakpoint on input content, which most of OpenAI's own models refuse, and
+ * `byProvider` names the provider's own failures first.
+ */
 export function responsesIn(
   upstream: { breakpoints?: true | 'cache_control'; cuts?: readonly Cut[] },
   byProvider?: FailureReader,
@@ -29,4 +31,5 @@ export function responsesIn(
   };
 }
 
+/** The Responses codec as OpenAI's own API speaks it. */
 export const responses = responsesIn({});

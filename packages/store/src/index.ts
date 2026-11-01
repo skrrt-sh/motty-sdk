@@ -14,9 +14,10 @@ function storage() {
   return supplied;
 }
 
-// The type is the author's own claim about what they stored. The store is
-// one command over a database and holds no schema to check it with, so a
-// value another version wrote is read as that type all the same.
+/**
+ * Reads a key, or undefined when it holds nothing. The type is the author's own
+ * claim, since the store holds no schema to check it with.
+ */
 function get<Value extends ReadonlyJson = Json>(
   key: string,
 ): Promise<Value | undefined>;
@@ -24,8 +25,11 @@ async function get(key: string): Promise<Json | undefined> {
   return storage().get(key);
 }
 
-// Never made of a read and a write here: two requests adding at once would
-// each read the same number, and one addition would be lost.
+/**
+ * Adds to a number in one step of the database, starting from zero, and gives
+ * the total. A `ttl` applies only to a key this call makes, and a host whose
+ * storage cannot add throws `Unsupported`.
+ */
 async function increment(
   key: string,
   by = 1,
@@ -40,6 +44,18 @@ async function increment(
   return supplied(key, by, options);
 }
 
+/**
+ * What survives a request, with `get`, `set`, `delete` and `increment` over the
+ * storage the host supplies. The host puts the motty's name ahead of every key,
+ * a `ttl` is a whole number of ms, and each throws when the host supplied no
+ * storage.
+ *
+ * @example
+ * ```ts
+ * await store.set('tier:42', 'deep', { ttl: 86_400_000 });
+ * const tier = await store.get<string>('tier:42');
+ * ```
+ */
 export const store = Object.freeze({
   get,
   set: async (...given: Parameters<Storage['set']>) => storage().set(...given),

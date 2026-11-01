@@ -3,10 +3,20 @@ import { messages } from '@mottyjs/serve';
 import { type Connection, chat } from './chat.ts';
 import { anthropicTakes } from './takes.ts';
 
+/** Connects to Anthropic's Messages API, sending the key in `x-api-key`. */
 export function anthropic(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is
+     * `https://api.anthropic.com/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `anthropic/some-model`, taken off
+     * before the call. The default is `anthropic`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

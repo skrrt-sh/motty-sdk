@@ -27,9 +27,10 @@ function kept(value: ReadonlyJson): Json {
   );
 }
 
-// A copy is held and a copy is read back, as with a real store: a value
-// changed after it was set, or after it was read, does not change what is
-// stored.
+/**
+ * Storage for a test, held in memory. It copies values and refuses a `ttl` as a
+ * real store does, so a motty that passes here does not fail there.
+ */
 export function memory(): Storage {
   const held = new Map<string, { value: Json; until: number }>();
   return {

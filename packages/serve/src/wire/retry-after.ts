@@ -7,8 +7,10 @@ function waited(ms: number): number | undefined {
   return Number.isFinite(ms) ? Math.max(0, Math.round(ms)) : undefined;
 }
 
-// The standard header gives seconds or a date; some upstreams add one in
-// milliseconds, which is the more exact and so is read first.
+/**
+ * Reads how long an upstream asked to wait, in ms. The standard header gives
+ * seconds or a date, and some upstreams add one in ms, which is read first.
+ */
 export function retryAfter(headers: Headers): number | undefined {
   const exact = waited(Number(stated(headers, 'retry-after-ms')));
   if (exact !== undefined) return exact;
@@ -17,8 +19,10 @@ export function retryAfter(headers: Headers): number | undefined {
   return waited(Number(after) * 1000) ?? waited(Date.parse(after) - Date.now());
 }
 
-// The official client libraries obey this header before they look at a
-// status, so an upstream that sends it has said whether another try can work.
+/**
+ * Reads whether an upstream said another try can work, from the header the
+ * official client libraries obey before they look at a status.
+ */
 export function shouldRetry(headers: Headers): boolean | undefined {
   const said = stated(headers, 'x-should-retry')?.trim().toLowerCase();
   if (said === 'true') return true;

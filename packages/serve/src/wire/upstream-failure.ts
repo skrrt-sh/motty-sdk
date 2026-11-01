@@ -90,8 +90,10 @@ export function loose(body: Dict): Dict {
   return told === undefined ? {} : given({ message: told, detail });
 }
 
-// A provider's own table, read before its wire family's: given the status,
-// the headers and the error it sent, it names the failure or leaves it.
+/**
+ * A provider's own table, read before its wire family's: given the status, the
+ * headers and the error it sent, it names the failure or leaves it.
+ */
 export type FailureReader = (
   status: number | undefined,
   headers: Headers,
@@ -100,8 +102,10 @@ export type FailureReader = (
   | ({ code: KnownCode } & Pick<ErrorFacts, 'retryable' | 'retryAfter'>)
   | undefined;
 
-// What in a provider's failure names the host's account, and what stands in
-// its place. A bare one is the name alone, with none of the words around it.
+/**
+ * What in a provider's failure names the host's account, and what stands in its
+ * place. A bare one is the name alone, with none of the words around it.
+ */
 export type Cut = { pattern: RegExp; replacement: string; bare?: true };
 
 // A request told back to the caller may hold a name of the caller's own in
@@ -165,9 +169,10 @@ function capped(value: Json, fields: boolean): Json {
   return source.slice(0, longest);
 }
 
-// What is the host's alone in an upstream's words is known to whoever holds
-// the connection, who hands over what removes it. It runs over all that was
-// said before any of it is shortened, so no cap leaves a part behind.
+/**
+ * Cuts what is the host's alone from an upstream's words. It runs over all that
+ * was said before any of it is shortened, so no cap leaves a part behind.
+ */
 export type Clean = (text: string) => string;
 
 export function cleaned(

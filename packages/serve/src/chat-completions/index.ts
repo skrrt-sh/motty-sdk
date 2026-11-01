@@ -6,9 +6,11 @@ import { type Dialect, plain } from './dialect.ts';
 import { encode } from './encode.ts';
 import { events } from './events.ts';
 
-// One codec per dialect: a caller is always read and answered the same
-// way, and only what goes to and comes from an upstream differs. A provider
-// names its own failures first, in a response that failed and in a stream.
+/**
+ * Makes the Chat Completions codec of one provider. A caller is always read and
+ * answered the same way, and the dialect says only what differs going to and
+ * coming from that upstream.
+ */
 export function chatCompletionsIn(dialect: Dialect): Codec {
   return {
     paths: ['/v1/chat/completions'],
@@ -33,4 +35,5 @@ export function chatCompletionsIn(dialect: Dialect): Codec {
   };
 }
 
+/** The Chat Completions codec with no provider's additions. */
 export const chatCompletions = chatCompletionsIn(plain);

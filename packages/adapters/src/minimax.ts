@@ -47,10 +47,22 @@ const failures: FailureReader = (_status, _headers, { status_code: code }) => {
   }
 };
 
+/**
+ * Connects to MiniMax over Chat Completions. It asks for JSON with no schema
+ * and states no effort, since no word for one is taken by every model.
+ */
 export function minimax(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is `https://api.minimax.io/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `minimax/some-model`, taken off
+     * before the call. The default is `minimax`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {
