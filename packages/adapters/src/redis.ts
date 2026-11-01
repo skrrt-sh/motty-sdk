@@ -36,7 +36,13 @@ else
 end
 return text
 `;
+// Sent by its hash, the script is neither carried nor hashed again on each call.
+const addingHash = Bun.SHA1.hash(adding, 'hex');
 
+/**
+ * Stores in Redis through Bun's own client, so it runs on Bun alone. A missing
+ * or unreadable `url` throws when the adapter is made.
+ */
 export function redis(options: { url: string | undefined }): Storage {
   const { url } = options;
   if (url === undefined || url === '') {
@@ -87,13 +93,21 @@ export function redis(options: { url: string | undefined }): Storage {
       }
       const ms =
         options?.ttl === undefined ? '' : `${milliseconds(options.ttl)}`;
-      const text: unknown = await (await linked()).send('EVAL', [
-        adding,
-        '1',
-        key,
-        `${by}`,
-        ms,
-      ]);
+      const server = await linked();
+      const rest = ['1', key, `${by}`, ms];
+      // A restart, a flush or another node of a cluster leaves a server without
+      // the script. It then runs nothing and says so, so sending it counts once.
+      const text: unknown = await server
+        .send('EVALSHA', [addingHash, ...rest])
+        .catch((raised: unknown) => {
+          if (
+            raised instanceof Error &&
+            raised.message.startsWith('NOSCRIPT')
+          ) {
+            return server.send('EVAL', [adding, ...rest]);
+          }
+          throw raised;
+        });
       if (typeof text !== 'string') {
         throw new Error(`The value stored under ${key} is not a number`);
       }
