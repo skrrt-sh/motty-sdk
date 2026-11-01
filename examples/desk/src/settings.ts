@@ -12,7 +12,7 @@ export const tuning = settings({
     urgentProbability: probability.default(0.5),
   }),
   models: z.object({
-    frontline: z.enum(["nano", "haiku"]).default("nano"),
+    frontline: z.enum(["luna", "haiku"]).default("luna"),
     senior: z.enum(["sonnet", "oss"]).default("sonnet"),
     reader: z.enum(["gemini", "haiku"]).default("gemini"),
     firstChunk: positiveInteger.default(15_000),

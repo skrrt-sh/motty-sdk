@@ -53,7 +53,8 @@ flowchart TD
 
 Anyone who asks the same address without being an agent gets the board as the reply, so a plain
 chat request shows the fleet while it works. The board below is put together from the rows of
-several real runs, so that it shows both markers at once. No single run printed it.
+several real runs, so that it shows both markers at once. No single run printed it, and its costs
+come from the example's earlier rates.
 
 ```text
 lead        gpt-6.1-sol         7 req   $0.070  Spawn three subagents in parallel, one per file (orders.ts, payments.…

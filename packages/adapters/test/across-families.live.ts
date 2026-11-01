@@ -31,7 +31,7 @@ describe.skipIf(
       {
         text: 'Say ok.',
         options: {
-          maxTokens: 20,
+          maxTokens: 300,
           provider: {
             anthropic: { metadata: { user_id: 'motty-live' } },
             openai: {},
@@ -70,7 +70,7 @@ describe.skipIf(
       {
         text: 'Say ok.',
         options: {
-          maxTokens: 20,
+          maxTokens: 300,
           provider: {
             openai: { service_tier: 'default', prompt_cache_key: 'motty-live' },
           },
@@ -99,7 +99,7 @@ describe.skipIf(
   test('an option the Responses API alone has, said for OpenAI, fails a call to Chat Completions by name before it is sent', async () => {
     const ran = run(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       {
         text: 'Say ok.',
@@ -132,7 +132,7 @@ describe.skipIf(
       {
         text: 'Say ok.',
         options: {
-          maxTokens: 20,
+          maxTokens: 300,
           provider: { openai: { truncation: 'auto' } },
         },
       },
@@ -158,7 +158,7 @@ describe.skipIf(
   test('with an entry for Anthropic alone, a call to the Responses API fails as unsupported before it is sent', async () => {
     const ran = run(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       {
         text: 'Say ok.',
@@ -183,7 +183,7 @@ describe.skipIf(
   test('with an entry for Anthropic alone, a call to Chat Completions fails as unsupported before it is sent', async () => {
     const ran = run(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       {
         text: 'Say ok.',
@@ -209,7 +209,7 @@ describe.skipIf(
     const { answer, calls } = await run(
       motty({ name: 'relay' }).handle(async ({ prompt }) => {
         const reply = await fallback(
-          model('openai/gpt-5-nano'),
+          model('openai/gpt-6-luna'),
           model('anthropic/claude-haiku-5-5'),
         ).complete(prompt);
         named.push(await reply.model());
@@ -230,7 +230,7 @@ describe.skipIf(
     expect(await answer.finish()).toBe('stop');
     expect(named).toEqual(['anthropic/claude-haiku-5-5']);
     expect(calls.map(({ model: called, code }) => [called, code])).toEqual([
-      ['openai/gpt-5-nano', 'unsupported'],
+      ['openai/gpt-6-luna', 'unsupported'],
       ['anthropic/claude-haiku-5-5', undefined],
     ]);
   });
@@ -262,7 +262,7 @@ describe.skipIf(
     ['anthropic/claude-no-such-model', {}, 'unknown_model'],
     ['anthropic-keyless/claude-haiku-5-5', {}, 'upstream_refused'],
     ['openai/gpt-no-such-model', {}, 'unknown_model'],
-    ['openai-keyless/gpt-5-nano', {}, 'upstream_refused'],
+    ['openai-keyless/gpt-6-luna', {}, 'upstream_refused'],
     ['openai-chat/gpt-no-such-model', {}, 'unknown_model'],
     [
       'openai-chat/gpt-4o-mini',
@@ -275,7 +275,7 @@ describe.skipIf(
       'unsupported',
     ],
     ['openrouter/no-such-author/no-such-model', {}, 'unknown_model'],
-    ['openrouter-keyless/openai/gpt-4.1-nano', {}, 'upstream_refused'],
+    ['openrouter-keyless/openai/gpt-6-luna', {}, 'upstream_refused'],
   ] as const)(
     '%s given %j fails as %s, in words that name no account of any provider',
     async (name, provider, code) => {

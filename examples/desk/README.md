@@ -70,8 +70,8 @@ flowchart TD
   strong -- "rate limited, overloaded or timed out: reroute" --> standard
   strong -- "any other failure" --> failed([Request fails])
 
-  standard["standard<br/>fallback: nano, haiku, 15 s to the first chunk each"]
-  standard -- "context too long" --> compact["nano summarises the turns before the kept tail<br/>one more try"]
+  standard["standard<br/>fallback: luna, haiku, 15 s to the first chunk each"]
+  standard -- "context too long" --> compact["luna summarises the turns before the kept tail<br/>one more try"]
   compact --> answer
   standard --> answer([Answer])
   read --> answer
@@ -127,7 +127,7 @@ is the signal to route on, not the shape filled.
 
 ```mermaid
 flowchart TD
-  start([ticket]) --> first["fallback: nano, haiku<br/>output: the Ticket schema"]
+  start([ticket]) --> first["fallback: luna, haiku<br/>output: the Ticket schema"]
   first --> valid{"reply matches<br/>the schema?"}
   valid -- yes --> answer([Answer])
   valid -- "no: invalid_output" --> second["fallback: haiku, sonnet"]
