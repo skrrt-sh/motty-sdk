@@ -14,14 +14,35 @@ type Awaitable<Value> = Value | Promise<Value>;
 // The intersection drops this alias, so an error lists the properties.
 type Flat<Type> = { [Key in keyof Type]: Type[Key] } & unknown;
 
+/**
+ * What `reroute(name)` gives, which a handler returns to hand the request to
+ * another entry of its table.
+ */
 export type Reroute<Name extends string = string> = { readonly reroute: Name };
 
+/**
+ * How a request ended, as an `afterResponse` hook reads it. `aborted` means the
+ * caller left or a time limit of the host stopped it.
+ */
 export type Outcome = 'completed' | 'aborted' | 'failed';
 
 export type Base = {
+  /**
+   * The request as the caller sent it, read-only and with its credential
+   * headers removed.
+   */
   readonly request: ChatRequest;
+  /**
+   * What goes upstream, free to change in place. A motty used as a route entry
+   * works on its own copy, so its changes stay inside it.
+   */
   readonly prompt: Draft;
+  /**
+   * Fires when the request is stopped, as when the caller leaves. Model calls
+   * and the store follow it unasked.
+   */
   readonly signal: AbortSignal;
+  /** The model calls of this request so far, with their usage. */
   readonly calls: Calls;
 };
 
@@ -164,8 +185,11 @@ export type AnsweringMotty = AnyMotty & {
   readonly [paths]?: Answered | undefined;
 };
 
-// With no context named it is any motty, finished or not: the builder's
-// methods come only with the context they are typed by.
+/**
+ * A chain of hooks made by `motty()` that a host serves as a model. With no
+ * context named it stands for any motty, finished or not, and has no builder
+ * methods.
+ */
 export type Motty<
   Context = unknown,
   Paths extends string[] = string[],
@@ -174,9 +198,20 @@ export type Motty<
 };
 
 export type Builder<Context, Paths extends string[]> = {
+  /**
+   * Runs another motty's hooks at this point and adds what it derives to the
+   * context. A part of one name and seed runs once per request wherever it is
+   * used, and a function that makes a part is called first, as in
+   * `.use(auth())`.
+   */
   readonly use: <Given>(
     part: Before<Paths, Usable<Given>, AfterAnswer>,
   ) => Motty<With<Context, Brought<Given>[0]>, Brought<Given>[1]>;
+  /**
+   * Adds the values `fn` returns to the context of every later hook. It returns
+   * a plain object of known names, and the types refuse a name the chain
+   * already has.
+   */
   readonly derive: <Derived extends { readonly [name: string]: unknown }>(
     fn: Before<
       Paths,
@@ -192,9 +227,18 @@ export type Builder<Context, Paths extends string[]> = {
       AfterAnswer
     >,
   ) => Motty<Flat<Context & Derived>, Paths>;
+  /**
+   * Runs before the answering step and may change `prompt`. Return an answer to
+   * reply at once, throw to refuse, or return nothing to go on.
+   */
   readonly beforeHandle: (
     fn: Before<Paths, (context: Context) => Early, AfterAnswer>,
   ) => Motty<Context, Paths>;
+  /**
+   * Asks `chooser` for the name of an entry in `table` and lets that entry
+   * answer. An entry is a handler that gives an answer or a `reroute`, or a
+   * motty that answers, and it runs at most once per request.
+   */
   readonly route: <Name extends PropertyKey, Table>(
     chooser: Before<
       Paths,
@@ -217,18 +261,44 @@ export type Builder<Context, Paths extends string[]> = {
       AnswersTwice
     >,
   ) => Motty<Context, PathsOf<Table>>;
+  /**
+   * Answers the request with what `fn` returns, an answer from a model call or
+   * from `answer()`. A motty answers once, so only after hooks may follow.
+   */
   readonly handle: (
     fn: Before<Paths, (context: Context) => Awaitable<Answer>, AnswersTwice>,
   ) => Motty<Context, []>;
+  /**
+   * Runs once there is an answer and before it is sent, and may assign a new
+   * `answer` on the context. An early answer skips the ones registered after
+   * the step that gave it.
+   */
   readonly afterHandle: (
     fn: (context: AfterHandle<Context, Paths>) => Awaitable<void>,
   ) => Motty<Context, Paths>;
+  /**
+   * Runs after the caller has the whole answer, for every outcome, so read
+   * `outcome` before relying on an answer. It is skipped only when a `derive`
+   * or `.route` before it in its own chain made nothing, its time is
+   * `limits.afterResponse`, and what it throws only goes in the record.
+   */
   readonly afterResponse: (
     fn: (context: AfterResponse<Context, Paths>) => Awaitable<void>,
   ) => Motty<Context, Paths>;
+  /**
+   * Gets what was thrown inside this motty and not caught nearer, wherever in
+   * the chain it is registered. Return an answer to recover, return nothing to
+   * pass the error on, or throw to pass on another. After-response failures
+   * reach no boundary.
+   */
   readonly onError: (
     fn: (thrown: unknown, context: Flat<Partway<Context>>) => Early,
   ) => Motty<Context, Paths>;
+  /**
+   * Makes this motty a route entry with a boundary around it. `recover` gets
+   * what was thrown and the parent's context, and may return an answer or a
+   * `reroute`, or nothing to pass the error on.
+   */
   readonly catch: <Name extends string = never, Outer = Base>(
     recover: Caught<never, Name, Outer>['recover'],
   ) => Caught<Motty<Context, Paths>, NoInfer<Name>, Outer>;

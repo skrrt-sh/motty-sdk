@@ -142,6 +142,11 @@ function stageOf(entry: Staging): Stage {
   return entry.stage;
 }
 
+/**
+ * Offers a line of progress, or an answer still arriving, to the caller as
+ * reasoning until the answer starts being sent. Outside that stage it does
+ * nothing and does not throw.
+ */
 export function think(progress: string | Answer): void {
   // Past the types anything may come: only a line or an answer is progress.
   if (typeof progress === 'string' ? progress === '' : !isAnswer(progress)) {

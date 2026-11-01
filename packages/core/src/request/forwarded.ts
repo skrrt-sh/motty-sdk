@@ -1,8 +1,10 @@
 import type { Finish } from '../data/event.ts';
 import type { Options } from '../data/message.ts';
 
-// Every header one of the wire APIs takes a credential in, in lower case. A
-// token in one of them reaches no motty and no upstream but the host's own.
+/**
+ * Every header one of the wire APIs takes a credential in, in lower case. A
+ * token in one of them reaches no motty and no upstream but the host's own.
+ */
 export const credentials: readonly string[] = [
   'authorization',
   'api-key',
@@ -82,6 +84,12 @@ function checked(name: string, value: string): void {
 
 // Naming an origin header is the host's choice and forwarding any is not
 // one, and a header the request already has is the host's or the API's.
+/**
+ * Sorts the headers a call stated into those a connection sends and warnings
+ * for those it leaves out. `allowed` is a list of names or `true`, none by
+ * default, and `taken` is what the request already states. It throws on a
+ * header no request can carry or one stated twice in two letter cases.
+ */
 export function forwarded(
   stated: Stated,
   allowed: readonly string[] | true = [],

@@ -1,3 +1,4 @@
+import { timerMax } from '../contract.ts';
 import { stopped, stopReason } from '../data/errors.ts';
 import { keyed } from '../data/message.ts';
 
@@ -21,9 +22,6 @@ type Followed = AbortSignal & { [waiters]?: Waiters };
 
 // Shared by every stop with no reason given, so ending a phase makes no error.
 const noReason = new DOMException(stopped, 'AbortError');
-
-// A timer given a longer delay than this fires after one millisecond.
-const timerMax = 2 ** 31 - 1;
 
 // Shared and frozen: an iterator read out says nothing of its own.
 export const readOut: IteratorReturnResult<undefined> = Object.freeze({

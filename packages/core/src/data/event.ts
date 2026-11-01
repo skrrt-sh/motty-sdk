@@ -1,5 +1,10 @@
 import type { ErrorFacts } from './errors.ts';
-import type { Closed, Json, ProviderData } from './message.ts';
+import {
+  type Closed,
+  isObject,
+  type Json,
+  type ProviderData,
+} from './message.ts';
 
 type Data = Readonly<ProviderData>;
 
@@ -52,8 +57,11 @@ type KnownChunk =
     }
   | { readonly type: 'refusal'; readonly text: string };
 
-// Chunks with the same block number are one block of the answer; a new number
-// starts a new one, so two adjacent blocks of a kind stay apart.
+/**
+ * A piece of an answer as it arrives. Chunks with the same block number are one
+ * block of the answer, and a new number starts a new one, so two adjacent
+ * blocks of a kind stay apart.
+ */
 export type Chunk =
   | (KnownChunk & {
       readonly block?: number;
@@ -65,11 +73,6 @@ export type Chunk =
       readonly provider: Data;
     };
 
-// One meaning for every family: input counts every prompt token, cached reads
-// and cache writes included; output includes reasoning. A count is absent when
-// the upstream did not report it; a reported zero is a zero. The cost is the
-// upstream's own figure in its own unit, US dollars from OpenRouter: it is
-// never worked out here, and a total adds what each call reported.
 export const counts = [
   'input',
   'output',
@@ -79,6 +82,13 @@ export const counts = [
   'cost',
 ] as const;
 
+/**
+ * What a call used, with one meaning for every provider. `input` counts every
+ * prompt token, cached reads and cache writes included, and `output` includes
+ * reasoning. A count is absent when the upstream did not report it. `cost` is
+ * the upstream's own figure in its own unit unless the host's `price` replaces
+ * it, and it is never worked out here.
+ */
 export type Usage = { [Count in (typeof counts)[number]]?: number };
 
 const reasons = [
@@ -90,8 +100,10 @@ const reasons = [
   'other',
 ] as const;
 
+/** Why an answer ended, in one vocabulary across providers. */
 export type FinishReason = (typeof reasons)[number];
 
+/** The event that ends an answer that succeeded. */
 export type Finish = {
   readonly type: 'finish';
   readonly reason: FinishReason;
@@ -99,6 +111,10 @@ export type Finish = {
   readonly rawReason?: string;
   readonly id?: string;
   readonly model?: string;
+  /**
+   * What the call left out because the upstream, the connection or the model
+   * has no place for it.
+   */
   readonly warnings?: readonly {
     readonly setting: string;
     readonly detail?: string;
@@ -106,14 +122,17 @@ export type Finish = {
   readonly provider?: Data;
 };
 
+/** The event that ends an answer that failed. */
 export type Failed = {
   readonly type: 'error';
   readonly error: Closed<ErrorFacts>;
   readonly usage?: Readonly<Usage>;
 };
 
+/** The one event that ends a stream. */
 export type Terminal = Finish | Failed;
 
+/** What a model call streams, chunks and then one terminal event. */
 export type StreamEvent = Chunk | Terminal;
 
 type Fields<Shape> = Shape extends unknown ? keyof Shape : never;
@@ -126,7 +145,7 @@ type Loose = {
 const finishes: ReadonlySet<unknown> = new Set(reasons);
 
 function loose(value: unknown): value is Loose {
-  return typeof value === 'object' && value !== null;
+  return isObject(value);
 }
 
 const maybe = (kind: 'string' | 'boolean') => (value: unknown) =>
@@ -203,6 +222,7 @@ function isChunk(value: Loose): value is Chunk {
   }
 }
 
+/** Tells whether an event ends its stream. */
 export function isTerminal(event: {
   readonly type: string;
 }): event is Terminal {

@@ -11,6 +11,7 @@ import {
   mark,
   type RequestRecord,
   type Storage,
+  timerMax,
   version,
 } from './contract.ts';
 import {
@@ -18,6 +19,7 @@ import {
   fromFacts,
   MottyError,
   stopReason,
+  timedOut,
   toFacts,
   unexpected,
 } from './data/errors.ts';
@@ -29,15 +31,23 @@ import {
 } from './data/event.ts';
 import type { ChatRequest, Json } from './data/message.ts';
 
-// A decision provider's adapter carries only the decision call.
+/**
+ * A connection to model providers, which a factory such as `openai` makes or a
+ * host writes. A chat adapter and a decision adapter may claim the same prefix,
+ * since each carries only its kind of call.
+ */
 export type ModelAdapter = {
+  /** Whether this adapter takes a model, by its full name. */
   serves: (model: string) => boolean;
   call?: ModelCall;
   decide?: DecisionCall;
 };
 
-// Which header carries the token is the wire API's to say, so an adapter is
-// given the token alone.
+/**
+ * Proves who a caller is. Which header carries the token is the wire API's to
+ * say, so `verify` is given the token alone and returns the caller, or
+ * undefined for nobody.
+ */
 export type AuthAdapter = {
   verify: (token: string) => Caller | undefined | Promise<Caller | undefined>;
 };
@@ -59,9 +69,11 @@ type Seal = (
   cut?: AbortSignal,
 ) => MottyError;
 
-// The warnings are what the host's edge left out of the reply it wrote, and
-// the failures what a service of the host threw, which the motty was told
-// only the service of.
+/**
+ * The record of one request as `report` is given it. `warnings` are what the
+ * edge left out of the reply, and `failed` is what a service of the host threw,
+ * of which the motty was told only the service.
+ */
 export type Report = RequestRecord & {
   id: string;
   settings: AnyOverrides;
@@ -69,8 +81,10 @@ export type Report = RequestRecord & {
   failed?: Sealed[];
 };
 
-// Any of the groups the motty's settings declare, each with any of its
-// values. A motty held without its types takes any overrides.
+/**
+ * Any of the groups the motty's settings declare, each with any of its values.
+ * A motty held without its types takes any overrides.
+ */
 export type Overrides<Served> =
   Served extends Motty<infer Context, infer _Paths>
     ? Context extends { readonly settings: infer Held }
@@ -78,26 +92,51 @@ export type Overrides<Served> =
       : AnyOverrides
     : AnyOverrides;
 
+/** What a host states for `serve`, `mount` and `run`. */
 export type HostOptions<Settings = AnyOverrides> = {
-  // A function is asked once per request, so a key may live as long as one.
-  // Its request is the host's own: the headers are as the caller sent them.
+  /**
+   * The adapters that make model calls, the first to serve a name taking the
+   * call. A function is asked once per request, so a key may live as long as
+   * one, and the headers of its request are as the caller sent them.
+   */
   models?:
     | readonly ModelAdapter[]
     | ((
         request: ChatRequest,
         caller: Caller | undefined,
       ) => readonly ModelAdapter[] | Promise<readonly ModelAdapter[]>);
+  /** What the store reads and writes. With none, the store throws when used. */
   storage?: Storage;
+  /**
+   * Proves who a caller is. It refuses nobody by itself, so a motty without
+   * `.use(auth())` runs for anyone.
+   */
   auth?: AuthAdapter;
-  // The duration is in milliseconds and is the host's to enforce. The body
-  // is in bytes and is the edge's.
-  limits?: Limits & { duration?: number; body?: number };
+  limits?: Limits & {
+    /** The time a whole request may take, in ms. No limit unless stated. */
+    duration?: number;
+    /** The largest body, in bytes. The default is 33554432, or 32 MB. */
+    body?: number;
+  };
+  /**
+   * Overrides of the motty's settings, checked against its schemas when the
+   * host is made.
+   */
   settings?: Settings;
-  // In the host's own unit. Nothing returned leaves the upstream's cost.
+  /**
+   * Works out a call's cost in the host's own unit. Returning nothing leaves
+   * the upstream's cost.
+   */
   price?: (model: string, usage: Readonly<Usage>) => number | undefined;
-  // Ahead of every stored key, in place of the motty's name.
+  /**
+   * Goes ahead of every stored key in place of the motty's name, so two motties
+   * of one name sharing a storage keep apart.
+   */
   namespace?: string;
-  // A promise returned is waited for, and anything else is no work at all.
+  /**
+   * Is given the record of every request. A promise it returns is waited for,
+   * and anything else is no work at all.
+   */
   report?: (report: Report) => unknown;
 };
 
@@ -158,8 +197,10 @@ async function* failing(error: ErrorFacts): EventStream {
   yield { type: 'error', error };
 }
 
-// An adapter that serves the name but not this kind of call is passed over,
-// so a chat adapter and a decision adapter may claim the same prefix.
+/**
+ * An adapter that serves the name but not this kind of call is passed over, so
+ * a chat adapter and a decision adapter may claim the same prefix.
+ */
 export function adapted(adapters: readonly ModelAdapter[]): Calls {
   return {
     models: (model, prompt, signal) => {
@@ -383,7 +424,10 @@ function tokenIn(headers: Headers, name: string): string | undefined {
     : sent;
 }
 
-// The id goes into a response header and into the ids of a reply's body.
+/**
+ * Checks a request id the host gives, which goes into a response header and
+ * into the ids of a reply's body, and throws on one that does not fit.
+ */
 export function givenId(id: string | undefined): string | undefined {
   if (id !== undefined && !/^[\w.~-]{1,128}$/.test(id)) {
     throw new Error('The request id is not one the host may give');
@@ -393,6 +437,10 @@ export function givenId(id: string | undefined): string | undefined {
 
 // The overrides are checked against the motty's own settings here and read
 // as plain data from here on: the motty's schemas check their values.
+/**
+ * Checks a host's options against a motty and gives the function that admits
+ * each request, for a host written without `serve` or `mount`.
+ */
 export function hosting<Served extends Marked>(
   motty: Served,
   options: HostOptions<Overrides<Served>>,
@@ -495,16 +543,46 @@ export function hosting(motty: Marked, options: HostOptions) {
         };
       }
     }
-    const stop = new AbortController();
-    // A stop with no reason ends the request as one whose caller left; the
-    // time limit's own reason ends it as timed out.
-    const signals = [stop.signal];
-    if (asked.signal !== undefined) signals.push(asked.signal);
-    if (duration !== undefined) {
-      signals.push(AbortSignal.timeout(duration));
-    }
-    // One signal is its own sum, and summing it costs more than admitting.
-    signal = signals.length === 1 ? stop.signal : AbortSignal.any(signals);
+    // Made when first read, which a run does: a host that admits and never
+    // runs leaves no listener on its signal and no timer. Whatever ends the
+    // request lets go of both, the record too: a long-lived signal of the
+    // host's would keep every request that followed it, and workerd allows
+    // one context ten thousand timers.
+    let own:
+      | {
+          signal: AbortSignal;
+          end: (reason?: unknown) => void;
+          release: () => void;
+        }
+      | undefined;
+    const begun = () => {
+      if (own !== undefined) return own;
+      const { signal: caller } = asked;
+      const stop = new AbortController();
+      const follow = () => end(caller?.reason);
+      const timer =
+        duration === undefined
+          ? undefined
+          : setTimeout(
+              () => end(new DOMException(timedOut, 'TimeoutError')),
+              Math.min(duration, timerMax),
+            );
+      const release = () => {
+        caller?.removeEventListener('abort', follow);
+        clearTimeout(timer);
+      };
+      // A stop with no reason ends the request as one whose caller left; the
+      // time limit's own reason ends it as timed out.
+      const end = (reason?: unknown) => {
+        release();
+        stop.abort(reason);
+      };
+      signal = stop.signal;
+      own = { signal, end, release };
+      if (caller?.aborted) follow();
+      else caller?.addEventListener('abort', follow);
+      return own;
+    };
     // A price that throws leaves the call as the upstream told it: what was
     // spent is counted, and the host reads of its price on the report.
     const quote: Price | undefined =
@@ -522,11 +600,14 @@ export function hosting(motty: Marked, options: HostOptions) {
       request: { ...request, id, headers },
       host: {
         ...priced(calls, quote, seal),
-        signal,
+        get signal() {
+          return begun().signal;
+        },
         limits,
         // Asked for whether or not anyone reads it: nothing else says that
         // the work after the response is over.
         record: (record) => {
+          own?.release();
           asked.over?.(record);
           const warnings = asked.leftOut?.() ?? [];
           deliver(
@@ -550,7 +631,7 @@ export function hosting(motty: Marked, options: HostOptions) {
           : { caller: Object.freeze({ ...caller }) }),
         ...(options.settings === undefined ? {} : { settings }),
       },
-      stop: (reason) => stop.abort(reason),
+      stop: (reason) => begun().end(reason),
     };
   }
   return admit;

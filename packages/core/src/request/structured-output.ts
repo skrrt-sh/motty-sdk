@@ -1,5 +1,6 @@
 import { InvalidOutput } from '../data/errors.ts';
 import {
+  isObject,
   keyed,
   type OutputSchema,
   type StandardSchema,
@@ -17,10 +18,7 @@ export function isStandard(schema: unknown): schema is StandardSchema {
 
 function isIssue(issue: unknown): issue is { message: string } {
   return (
-    typeof issue === 'object' &&
-    issue !== null &&
-    'message' in issue &&
-    typeof issue.message === 'string'
+    isObject(issue) && 'message' in issue && typeof issue.message === 'string'
   );
 }
 
@@ -29,7 +27,7 @@ async function validated(
   value: unknown,
 ): Promise<unknown> {
   const result: unknown = await schema['~standard'].validate(value);
-  if (typeof result === 'object' && result !== null) {
+  if (isObject(result)) {
     const issues = 'issues' in result ? result.issues : undefined;
     // The spec's rule: a falsy `issues` is a success, so an empty list is not.
     if (!issues) {

@@ -9,18 +9,50 @@ import {
   type Terminal,
   type Usage,
 } from '../data/event.ts';
-import type { OutputSchema, StandardSchema } from '../data/message.ts';
+import {
+  isObject,
+  type OutputSchema,
+  type StandardSchema,
+} from '../data/message.ts';
 import { running } from './context.ts';
 import { type Arrival, replayed } from './replay.ts';
 import { structured } from './structured-output.ts';
 import { readToEnd, wait } from './wait.ts';
 
+/**
+ * What a model call or `answer()` gives. It may be read in any way, any number
+ * of times, while it is arriving or after.
+ */
 export type Answer<Output = unknown> = {
+  /**
+   * Waits for the whole answer and gives its text. It rejects if the answer
+   * failed.
+   */
   text: () => Promise<string>;
+  /**
+   * Streams the chunks from the start as they arrive, and throws where the
+   * answer failed.
+   */
   chunks: () => AsyncIterable<Chunk>;
+  /**
+   * Waits for the whole answer and parses it, checked by the prompt's validator
+   * if it has one. It rejects with `InvalidOutput` on what does not fit.
+   */
   json: () => Promise<Output>;
+  /**
+   * Waits for the end and gives what the call used. It rejects if the answer
+   * failed and reported no usage.
+   */
   usage: () => Promise<Usage>;
+  /**
+   * Waits for the end and gives why the answer ended. It rejects if the answer
+   * failed.
+   */
   finish: () => Promise<FinishReason>;
+  /**
+   * Waits for the end and gives the name of the model that answered, or
+   * undefined for an answer no model wrote.
+   */
   model: () => Promise<string | undefined>;
 };
 
@@ -135,21 +167,20 @@ function buffering(
   const buffer: Chunk[] = [];
   const settled = Promise.withResolvers<Settled>();
   let state: AnswerState = { at: 'arriving' };
-  let readers: Set<() => void> | undefined;
+  let readers: (() => void)[] = [];
   let whole: Promise<string> | undefined;
   let parsed: Promise<unknown> | undefined;
 
   function move(next: AnswerState) {
     state = next;
     if (state.at !== 'arriving') settled.resolve(state);
-    if (readers !== undefined) for (const wake of readers) wake();
+    for (const wake of readers) wake();
   }
 
   function onArrival(wake: () => void) {
-    readers ??= new Set();
-    readers.add(wake);
+    readers.push(wake);
     return () => {
-      readers?.delete(wake);
+      readers = readers.filter((held) => held !== wake);
     };
   }
 
@@ -157,6 +188,8 @@ function buffering(
     const signal = state.at === 'arriving' ? running()?.signal : undefined;
     return signal === undefined ? arriving : wait(arriving, signal);
   }
+
+  const ended = () => underReader(settled.promise);
 
   async function wholeText() {
     finishOf(await settled.promise);
@@ -179,14 +212,14 @@ function buffering(
   }
 
   async function usage() {
-    const over = await underReader(settled.promise);
+    const over = await ended();
     if (over.at === 'finished') return over.finish.usage ?? {};
     if (over.usage === undefined) throw over.error();
     return over.usage;
   }
 
   async function model() {
-    const over = await underReader(settled.promise);
+    const over = await ended();
     return over.at === 'finished' ? callers.get(over.finish) : over.model;
   }
 
@@ -205,7 +238,7 @@ function buffering(
     chunks: () => replayed(arriving, running()?.signal),
     json,
     usage,
-    finish: async () => finishOf(await underReader(settled.promise)).reason,
+    finish: async () => finishOf(await ended()).reason,
     model,
   };
   endings.set(made, { ...arriving, settled: settled.promise, output });
@@ -228,6 +261,10 @@ async function upstream(events: EventStream, into: Intake): Promise<void> {
   });
 }
 
+/**
+ * Reads a stream of events into an answer. It is for a host or a test kit, and
+ * a motty gets its answers from a model call.
+ */
 export function buffered<Schema extends OutputSchema>(
   events: EventStream,
   output?: Schema,
@@ -238,7 +275,7 @@ export function buffered(events: EventStream, output?: OutputSchema): Answer {
 
 // A look-alike would have the core run and wait on code of its own.
 export function isAnswer(value: unknown): value is Answer {
-  return typeof value === 'object' && value !== null && endings.has(value);
+  return isObject(value) && endings.has(value);
 }
 
 function endingOf(answer: Answer): Ending {
@@ -265,6 +302,17 @@ function chunkFrom(value: unknown): Chunk {
   throw new MottyError('The stream gave something that is not a chunk');
 }
 
+/**
+ * Makes an answer from a string or a stream of chunks, for a canned reply or a
+ * rewrite. Given `from`, it ends as that answer ends, with its finish, usage,
+ * model and schema or its failure, and given none it finishes with `stop`.
+ *
+ * @example
+ * ```ts
+ * const draft = await sol.complete(prompt);
+ * return answer((await draft.text()).trim(), draft);
+ * ```
+ */
 export function answer(
   content: string | AsyncIterable<Chunk>,
   from?: Answer,
