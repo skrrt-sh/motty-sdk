@@ -19,12 +19,12 @@ import { expect, test } from "bun:test";
 import { model, motty } from "@mottyjs/core";
 import { fake, on, run } from "@mottyjs/test";
 
-const mini = model("openai/gpt-5-mini");
+const luna = model("openai/gpt-6-luna");
 
-const relay = motty({ name: "relay" }).handle(({ prompt }) => mini.complete(prompt));
+const relay = motty({ name: "relay" }).handle(({ prompt }) => luna.complete(prompt));
 
 test("a question is answered by the small model", async () => {
-  const models = fake(on(mini, "quick reply"));
+  const models = fake(on(luna, "quick reply"));
 
   const { answer } = await run(
     relay,
@@ -42,7 +42,7 @@ own, so a name a real connection or its API states is not left out by a fake. Wh
 holds only the headers the rules let through, and the rest are warnings on the call:
 
 ```ts
-const models = fake({ forwardHeaders: ["x-session"] }, on(mini, "quick reply"));
+const models = fake({ forwardHeaders: ["x-session"] }, on(luna, "quick reply"));
 ```
 
 The SDK as a whole is described in the

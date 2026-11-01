@@ -20,16 +20,16 @@ any other with a strong model, retried twice, with a second one behind it:
 ```ts
 import { fallback, model, motty, race, retry, reroute } from "@mottyjs/core";
 
-const mini = model("openai/gpt-5-mini");
-const gpt = model("openai/gpt-5");
-const haiku = model("anthropic/claude-haiku");
-const sonnet = model("anthropic/claude-sonnet");
+const luna = model("openai/gpt-6-luna");
+const sol = model("openai/gpt-6.1-sol");
+const haiku = model("anthropic/claude-haiku-5-5");
+const sonnet = model("anthropic/claude-sonnet-5-5");
 
 export default motty({ name: "coder" })
   .route(({ request }) => (request.tools.length === 0 ? "quick" : "standard"), {
     // A quick question still gets an answer when both small models are down
-    quick: ({ prompt }) => race(mini, haiku).complete(prompt).catch(() => reroute("standard")),
-    standard: ({ prompt }) => fallback(retry(sonnet, 2), gpt).complete(prompt),
+    quick: ({ prompt }) => race(luna, haiku).complete(prompt).catch(() => reroute("standard")),
+    standard: ({ prompt }) => fallback(retry(sonnet, 2), sol).complete(prompt),
   });
 ```
 

@@ -24,7 +24,7 @@ import { jwt } from "@mottyjs/adapters/jwt";
 import { openai } from "@mottyjs/adapters/openai";
 import { openrouter } from "@mottyjs/adapters/openrouter";
 import { redis } from "@mottyjs/adapters/redis";
-import desk from "./motty";
+import desk from "./motty"; // Holds .use(auth())
 
 export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL }) => ({
   models: [
@@ -37,11 +37,14 @@ export default serve(desk, ({ OPENAI_KEY, OPENROUTER_KEY, REDIS_URL, JWKS_URL })
 }));
 ```
 
+An `auth` adapter only proves who a caller is, so a motty without `.use(auth())` runs for anyone.
+
 On Workers, storage is a Durable Object class of the host's own Worker. The worker entry exports
 `MottyStorage`, and `cloudflare` is given its binding, read from the `env` that `cloudflare:workers`
 exports, since a binding is not a string and so is not in the environment `mount` reads:
 
 ```ts
+// src/index.ts
 import { env } from "cloudflare:workers";
 import { mount } from "@mottyjs/serve";
 import { cloudflare } from "@mottyjs/adapters/cloudflare";
@@ -60,6 +63,7 @@ The binding and its migration in `wrangler.jsonc`:
 
 ```jsonc
 {
+  "main": "src/index.ts",
   "compatibility_date": "2026-02-24",
   "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   "durable_objects": {
@@ -68,6 +72,9 @@ The binding and its migration in `wrangler.jsonc`:
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MottyStorage"] }]
 }
 ```
+
+The type of `env.STORAGE` comes from the file `wrangler types` generates, so run it once the entry
+that `main` names exists.
 
 Each key is an object of its own, so keys never wait on each other, and an object whose keys
 have all expired is deleted whole. A compatibility date of 2026-02-24 or later lets that delete
@@ -96,7 +103,7 @@ export default motty({ name: "relay" }).handle(({ request, prompt }) => {
     "x-session": request.headers.get("x-session"),
   };
   prompt.options = { ...prompt.options, headers };
-  return model("anthropic/claude-sonnet").complete(prompt);
+  return model("anthropic/claude-sonnet-5-5").complete(prompt);
 });
 ```
 
@@ -164,6 +171,29 @@ export default serve(desk, ({ OPENAI_KEY }) => ({
   },
 }));
 ```
+
+A server that speaks the OpenAI API is reached through `openai` at its own `address`. Model names
+start with `prefix`, which is taken off before the call and which should be a word of its own when
+OpenAI itself is also in `models`. The adapter speaks the Responses API unless `api` says
+`"chat-completions"`:
+
+```ts
+// In the host
+openai({
+  key: ACME_KEY,
+  address: "https://llm.acme.example/v1",
+  prefix: "acme",
+  api: "chat-completions",
+});
+
+// In the motty
+model("acme/some-model").complete(prompt);
+```
+
+The key is required and goes to that address as a bearer token. A server the host runs itself that
+wants no key is for `local`, which sends a caller's `prompt_cache_key` only when given
+`cacheKey: true`. What the adapter knows of OpenAI's own models does not apply at another
+address, so an option is sent as stated and the server may refuse it.
 
 How far each model provider's adapter is proven differs. `openai`, `anthropic`, `openrouter` and
 `typesafe` are proven against the live API, by tests that make real calls and run under

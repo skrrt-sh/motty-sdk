@@ -13,9 +13,23 @@ bun add @mottyjs/serve
 import { mount, serve } from "@mottyjs/serve";
 ```
 
-A serve file. The keys are read from the environment and stay with the host:
+A motty that requires a caller, and its serve file. The keys are read from the environment and
+stay with the host. The `auth` adapter only proves who a caller is, so a motty without `.use(auth())`
+runs for anyone, whatever the adapter says. A host warns at start of an adapter with no `auth()`,
+and of `auth()` with no adapter, where every caller gets a 401 unless the host states the caller:
 
 ```ts
+// src/motty.ts
+import { auth } from "@mottyjs/auth";
+import { model, motty } from "@mottyjs/core";
+
+export default motty({ name: "coder" })
+  .use(auth())
+  .handle(({ prompt }) => model("openai/gpt-6.1-sol").complete(prompt));
+```
+
+```ts
+// src/serve.ts
 import { serve } from "@mottyjs/serve";
 import { anthropic } from "@mottyjs/adapters/anthropic";
 import { jwt } from "@mottyjs/adapters/jwt";
@@ -41,6 +55,15 @@ argument beside `keepAlive` and `drain`: `serve(coder, options, { receive: 30_00
 and every time of the edge is checked when the host is made. Every reply to a request that was
 let in carries the id of its report, in `x-request-id` on the two OpenAI APIs and in `request-id`
 on Messages.
+
+With no `report`, the failed records are written to stderr, with credentials masked. That covers a
+failure on the host's side, a 5xx, an upstream's refusal and a name no adapter serves. A 4xx the
+motty itself gave and a caller leaving write nothing. A `report` that throws or rejects is written too, with the failures of the
+record it lost.
+
+A host also refuses at start a motty with no route or handle, a bad settings override and a settings
+group the motty does not have. An async schema's verdict is only written to stderr, as a mount
+returns at once.
 
 In development, start the serve file with `bun --watch src/serve.ts`, the examples'
 `bun run dev`. Bun starts the process again on the same port whenever the motty or a file it
@@ -68,7 +91,8 @@ export default mount(coder, options);
 A host that has already authenticated and numbered a request states both in the third argument,
 `fetch(request, undefined, { id, caller, waitUntil })`, and the auth adapter is not asked. The
 `namespace` option prefixes every stored key in place of the motty's name, so two motties of one
-name sharing a storage keep apart when each is given its own namespace. `report` may return a promise, and the record is waited for until it settles.
+name sharing a storage keep apart when each is given its own namespace. `report` may return a
+promise, and the record is waited for until it settles.
 
 A caller of the Responses API through the AI SDK sets `providerOptions.openai.store` to `false`,
 since a motty holds no Responses state on the server and refuses an `item_reference`.
@@ -81,7 +105,7 @@ Codex reaches a motty whose upstream is not OpenAI through a provider of its own
 Responses API, in its `config.toml`:
 
 ```toml
-model = "gpt-5.5"
+model = "gpt-6.1-sol"
 model_provider = "motty"
 [model_providers.motty]
 base_url = "http://127.0.0.1:3000/v1"
