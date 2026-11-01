@@ -187,7 +187,7 @@ type Admit = {
 
 function unknown(model: string): ErrorFacts {
   return {
-    code: 'unknown_model',
+    code: 'unknownModel',
     status: 404,
     message: `No model named ${model}`,
   };

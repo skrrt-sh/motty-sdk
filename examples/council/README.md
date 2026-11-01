@@ -21,10 +21,10 @@ flowchart TD
   prose -- no --> hello{"greeting<br/>nothing but a greeting?"}
   hello -- yes --> canned(["Reply made by hand, no route<br/>no model called, nothing added to the day"])
   hello -- no --> day{"daily-limit<br/>caller's spend today >= $2?"}
-  day -- yes --> quota(["Error: quota_exceeded, 429<br/>no model was called"])
+  day -- yes --> quota(["Error: quotaExceeded, 429<br/>no model was called"])
   day -- no --> panel[[panel stage]]
 
-  panel -- "fewer than two answers" --> failed(["Error: upstream_failed, 502"])
+  panel -- "fewer than two answers" --> failed(["Error: upstreamFailed, 502"])
   panel -- "opinions" --> verdict[[verdict stage]]
   verdict --> agreed{"chair: do they agree?"}
   agreed -- yes --> merge
@@ -72,7 +72,7 @@ flowchart TD
   live["think: each answer is forwarded to the caller as it arrives"]
   live --> quorum{"at least two answers<br/>with any text?"}
   quorum -- yes --> opinions([derive: opinions])
-  quorum -- no --> failed(["Error: upstream_failed"])
+  quorum -- no --> failed(["Error: upstreamFailed"])
 ```
 
 - Each seat starts at another provider and falls back to a third, so one provider's outage costs

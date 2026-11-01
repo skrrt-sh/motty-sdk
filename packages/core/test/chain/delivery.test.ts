@@ -119,7 +119,7 @@ test('a request that failed before any answer ends with one error after its prog
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         status: 502,
         message: 'Every model is down',
         retryable: true,
@@ -136,10 +136,10 @@ test('the finish keeps what the answer ended with besides its usage', async () =
     ),
     stubHost({
       'acme/large': [
-        { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+        { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
         {
           type: 'finish',
-          reason: 'tool_calls',
+          reason: 'toolCalls',
           rawReason: 'tool_use',
           id: 'msg_1',
           model: 'large-2026',
@@ -150,10 +150,10 @@ test('the finish keeps what the answer ended with besides its usage', async () =
   );
 
   expect(seen).toEqual([
-    { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+    { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
     {
       type: 'finish',
-      reason: 'tool_calls',
+      reason: 'toolCalls',
       rawReason: 'tool_use',
       id: 'msg_1',
       model: 'large-2026',
@@ -366,10 +366,10 @@ test('every kind of chunk and a full finish survive a JSON round trip', async ()
       'acme/small': [
         { type: 'reasoning', text: 'Two locks', block: 0 },
         { type: 'text', text: 'The lock order differs', block: 1 },
-        { type: 'tool_call', id: 'call_1', name: 'read', arguments: '{"pa' },
-        { type: 'tool_call', id: 'call_1', arguments: 'th":"a.ts"}' },
+        { type: 'toolCall', id: 'call_1', name: 'read', arguments: '{"pa' },
+        { type: 'toolCall', id: 'call_1', arguments: 'th":"a.ts"}' },
         {
-          type: 'tool_result',
+          type: 'toolResult',
           id: 'call_2',
           output: { lines: [1, 2], found: true, note: null },
           failed: false,
@@ -383,7 +383,7 @@ test('every kind of chunk and a full finish survive a JSON round trip', async ()
         { type: 'provider', provider: { acme: { signature: 'abc' } } },
         {
           type: 'finish',
-          reason: 'tool_calls',
+          reason: 'toolCalls',
           usage: {
             input: 9,
             output: 4,
@@ -404,9 +404,9 @@ test('every kind of chunk and a full finish survive a JSON round trip', async ()
   expect(seen.map((event) => event.type)).toEqual([
     'reasoning',
     'text',
-    'tool_call',
-    'tool_call',
-    'tool_result',
+    'toolCall',
+    'toolCall',
+    'toolResult',
     'file',
     'file',
     'file',

@@ -117,12 +117,12 @@ test('a tool call beside a list of chunks follows what the list said', async () 
   ).toEqual([
     { type: 'reasoning', text: 'I need the weather.' },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'D681PevKs',
       name: 'get_weather',
       arguments: '{"city": "Paris"}',
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'tool_calls' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'tool_calls' },
   ]);
 });
 

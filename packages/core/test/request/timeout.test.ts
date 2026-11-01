@@ -299,7 +299,7 @@ test('timeout ends a stalled stream with a TimedOut error after the events it ha
     {
       type: 'error',
       error: {
-        code: 'timed_out',
+        code: 'timedOut',
         status: 504,
         message: expect.stringContaining('50 ms'),
         retryable: true,
@@ -479,7 +479,7 @@ test('timeout ends a stalled stream that never ends without waiting for it, and 
 
   expect(events).toEqual([
     { type: 'text', text: 'Hel' },
-    { type: 'error', error: expect.objectContaining({ code: 'timed_out' }) },
+    { type: 'error', error: expect.objectContaining({ code: 'timedOut' }) },
   ]);
   expect(log).toEqual(['iterator', 'return']);
 });

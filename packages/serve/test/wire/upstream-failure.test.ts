@@ -15,17 +15,17 @@ function unnamed(status?: number) {
 }
 
 test.each([
-  [400, 'invalid_request'],
-  [401, 'upstream_refused'],
-  [402, 'quota_exceeded'],
-  [403, 'upstream_refused'],
-  [408, 'timed_out'],
-  [429, 'rate_limited'],
+  [400, 'invalidRequest'],
+  [401, 'upstreamRefused'],
+  [402, 'quotaExceeded'],
+  [403, 'upstreamRefused'],
+  [408, 'timedOut'],
+  [429, 'rateLimited'],
   [498, 'overloaded'],
-  [500, 'upstream_failed'],
+  [500, 'upstreamFailed'],
   [503, 'overloaded'],
-  [504, 'timed_out'],
-  [524, 'timed_out'],
+  [504, 'timedOut'],
+  [524, 'timedOut'],
   [529, 'overloaded'],
 ] as const)('a failure nothing names, answered %i, is %s', (status, code) => {
   expect(unnamed(status).code).toBe(code);
@@ -43,7 +43,7 @@ test('a 404 with an error in its body is a model the upstream does not know', ()
       404,
     ),
   ).toEqual({
-    code: 'unknown_model',
+    code: 'unknownModel',
     message: 'Not Found',
     provider: { up: {} },
     upstream: true,
@@ -52,7 +52,7 @@ test('a 404 with an error in its body is a model the upstream does not know', ()
 
 test('a 404 with no error in its body is a wrong address, which no retry mends', () => {
   expect(unnamed(404)).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream answered 404',
     retryable: false,
     provider: { up: {} },
@@ -69,27 +69,27 @@ test('the status a caller gets is the kind`s own, so the upstream`s is not passe
   });
   expect(
     upstreamFailure(
-      { code: 'context_too_long', message: 'Too long', record: { up: {} } },
+      { code: 'contextTooLong', message: 'Too long', record: { up: {} } },
       413,
     ),
   ).not.toHaveProperty('status');
 });
 
 test('a request the caller got wrong keeps the 4xx it came with', () => {
-  expect(unnamed(413)).toMatchObject({ code: 'invalid_request', status: 413 });
+  expect(unnamed(413)).toMatchObject({ code: 'invalidRequest', status: 413 });
   expect(
     upstreamFailure(
-      { code: 'invalid_request', message: 'Bad', record: { up: {} } },
+      { code: 'invalidRequest', message: 'Bad', record: { up: {} } },
       422,
     ),
-  ).toMatchObject({ code: 'invalid_request', status: 422 });
+  ).toMatchObject({ code: 'invalidRequest', status: 422 });
 });
 
 test('an invalid request keeps no status that means something else, nor a server`s', () => {
   for (const status of [403, 429, 500]) {
     expect(
       upstreamFailure(
-        { code: 'invalid_request', message: 'Bad', record: { up: {} } },
+        { code: 'invalidRequest', message: 'Bad', record: { up: {} } },
         status,
       ),
     ).not.toHaveProperty('status');
@@ -100,7 +100,7 @@ test('a refused key is the host`s, told in the SDK`s words with no status', () =
   for (const status of [401, 403]) {
     const facts = unnamed(status);
 
-    expect(facts.code).toBe('upstream_refused');
+    expect(facts.code).toBe('upstreamRefused');
     expect(facts.message).toBe(
       "The upstream refused the host's credentials or account",
     );
@@ -112,11 +112,11 @@ test('a refused key is the host`s, told in the SDK`s words with no status', () =
 test('what the upstream calls the failure outranks its status', () => {
   expect(
     upstreamFailure(
-      { code: 'quota_exceeded', message: 'Spent', record: { up: {} } },
+      { code: 'quotaExceeded', message: 'Spent', record: { up: {} } },
       429,
     ),
   ).toEqual({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message: 'Spent',
     provider: { up: {} },
     upstream: true,
@@ -135,12 +135,12 @@ test('a number in the error is read as the status where none was sent', () => {
       status,
     );
 
-  expect(inStream(429).code).toBe('rate_limited');
-  expect(inStream(402).code).toBe('quota_exceeded');
-  expect(inStream(404).code).toBe('unknown_model');
+  expect(inStream(429).code).toBe('rateLimited');
+  expect(inStream(402).code).toBe('quotaExceeded');
+  expect(inStream(404).code).toBe('unknownModel');
   expect(inStream(503, 200).code).toBe('overloaded');
   expect(inStream(502)).not.toHaveProperty('retryable');
-  expect(inStream(422)).toMatchObject({ code: 'invalid_request', status: 422 });
+  expect(inStream(422)).toMatchObject({ code: 'invalidRequest', status: 422 });
 });
 
 test('a number in the error that is no error status names nothing', () => {
@@ -152,7 +152,7 @@ test('a number in the error that is no error status names nothing', () => {
         record: { up: {} },
         error: { code },
       }),
-    ).toMatchObject({ code: 'upstream_failed', retryable: false });
+    ).toMatchObject({ code: 'upstreamFailed', retryable: false });
   }
 });
 
@@ -167,18 +167,18 @@ test('the status that was sent outranks a number in the error', () => {
       },
       500,
     ).code,
-  ).toBe('upstream_failed');
+  ).toBe('upstreamFailed');
 });
 
 test('the family`s name outranks a number in the error', () => {
   expect(
     upstreamFailure({
-      code: 'context_too_long',
+      code: 'contextTooLong',
       message: 'Too long',
       record: { up: {} },
       error: { code: 429 },
     }).code,
-  ).toBe('context_too_long');
+  ).toBe('contextTooLong');
 });
 
 test('a provider`s own reader is given the status, the headers and the error', () => {
@@ -206,17 +206,17 @@ test('a provider`s own name outranks the family`s, the number and the status', (
   expect(
     upstreamFailure(
       {
-        code: 'rate_limited',
+        code: 'rateLimited',
         message: 'No credit',
         record: { up: {} },
         error: { code: 429 },
       },
       400,
       undefined,
-      () => ({ code: 'quota_exceeded' }),
+      () => ({ code: 'quotaExceeded' }),
     ),
   ).toEqual({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message: 'No credit',
     provider: { up: {} },
     upstream: true,
@@ -226,12 +226,12 @@ test('a provider`s own name outranks the family`s, the number and the status', (
 test('a failure the provider`s reader leaves is named as if there were none', () => {
   expect(
     upstreamFailure(
-      { code: 'rate_limited', message: 'Slow down', record: { up: {} } },
+      { code: 'rateLimited', message: 'Slow down', record: { up: {} } },
       400,
       undefined,
       () => undefined,
     ).code,
-  ).toBe('rate_limited');
+  ).toBe('rateLimited');
   expect(
     upstreamFailure(
       { code: undefined, message: undefined, record: { up: {} } },
@@ -274,7 +274,7 @@ test('the retry facts a provider`s reader states outrank the headers', () => {
 });
 
 test('the upstream`s own word on another try replaces the kind`s', () => {
-  const told = (code: 'rate_limited' | 'invalid_request', flag: string) =>
+  const told = (code: 'rateLimited' | 'invalidRequest', flag: string) =>
     upstreamFailure({
       code,
       message: 'x',
@@ -282,15 +282,15 @@ test('the upstream`s own word on another try replaces the kind`s', () => {
       headers: new Headers({ 'x-should-retry': flag }),
     });
 
-  expect(told('rate_limited', 'false').retryable).toBe(false);
-  expect(told('invalid_request', 'true').retryable).toBe(true);
-  expect(told('rate_limited', 'maybe')).not.toHaveProperty('retryable');
+  expect(told('rateLimited', 'false').retryable).toBe(false);
+  expect(told('invalidRequest', 'true').retryable).toBe(true);
+  expect(told('rateLimited', 'maybe')).not.toHaveProperty('retryable');
 });
 
 test('the upstream`s word outranks the family`s, and what nothing names', () => {
   expect(
     upstreamFailure({
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       message: 'x',
       record: { up: {} },
       retryable: false,
@@ -324,7 +324,7 @@ test('no flag makes a spent quota worth another try', () => {
       { code: undefined, message: undefined, record: { up: {} } },
       429,
       undefined,
-      () => ({ code: 'quota_exceeded', retryable: true }),
+      () => ({ code: 'quotaExceeded', retryable: true }),
     ),
   ).not.toHaveProperty('retryable');
 });
@@ -332,7 +332,7 @@ test('no flag makes a spent quota worth another try', () => {
 test('the family`s word on another try stands when the upstream sent none', () => {
   expect(
     upstreamFailure({
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       message: 'Not found',
       record: { up: {} },
       retryable: false,
@@ -345,11 +345,11 @@ test('the retry flag is left to the code unless nothing names the failure', () =
   expect(unnamed(500)).not.toHaveProperty('retryable');
   expect(unnamed(400)).not.toHaveProperty('retryable');
   expect(unnamed(302)).toMatchObject({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     retryable: false,
   });
   expect(unnamed()).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream answered with an error',
     retryable: false,
     provider: { up: {} },
@@ -357,7 +357,7 @@ test('the retry flag is left to the code unless nothing names the failure', () =
   });
   expect(
     upstreamFailure({
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       message: 'Oops',
       record: { up: {} },
     }),
@@ -480,7 +480,7 @@ test('a sentence of a spent quota that holds a link is not the caller`s, and the
       402,
     ),
   ).toEqual({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message:
       'This request requires more credits, or fewer max_tokens. You requested up to 128000 tokens, but can only afford 58128.',
     provider: {
@@ -497,7 +497,7 @@ test('a sentence of a spent quota that holds a link is not the caller`s, and the
 test('a spent quota told in one sentence that holds a link is told in words of our own, never as a part of it', () => {
   expect(
     upstreamFailure({
-      code: 'quota_exceeded',
+      code: 'quotaExceeded',
       message: 'Out of credits, see http://billing.example/acct/7 to add more',
       record: { up: {} },
     }),
@@ -515,7 +515,7 @@ test('a spent quota told in one sentence that holds a link is told in words of o
 test('every link of a spent quota is cut, wherever its sentence stands', () => {
   expect(
     upstreamFailure({
-      code: 'quota_exceeded',
+      code: 'quotaExceeded',
       message:
         'Top up at https://a.example/pay. Your balance is spent! Details: https://b.example/usage?key=1',
       record: { up: {} },
@@ -526,12 +526,12 @@ test('every link of a spent quota is cut, wherever its sentence stands', () => {
 test('a spent quota told with no link is told as it came, and its record is left alone', () => {
   expect(
     upstreamFailure({
-      code: 'quota_exceeded',
+      code: 'quotaExceeded',
       message: 'You exceeded your current quota. Check your plan.',
       record: { up: {} },
     }),
   ).toEqual({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message: 'You exceeded your current quota. Check your plan.',
     provider: { up: {} },
     upstream: true,
@@ -542,7 +542,7 @@ test('a link in a failure of another kind is left to the caller', () => {
   expect(
     upstreamFailure(
       {
-        code: 'invalid_request',
+        code: 'invalidRequest',
         message: 'Bad schema. See https://docs.example/schemas for the form',
         record: { up: {} },
       },
@@ -555,7 +555,7 @@ test.each([['']])(
   'a spent quota told as %j leaves nothing to tell, so the caller is told in words of our own',
   (message) => {
     expect(
-      upstreamFailure({ code: 'quota_exceeded', message, record: { up: {} } })
+      upstreamFailure({ code: 'quotaExceeded', message, record: { up: {} } })
         .message,
     ).toBe("The upstream's account has no quota left for this request");
   },
@@ -564,7 +564,7 @@ test.each([['']])(
 test('a link written with no scheme is cut with its sentence', () => {
   expect(
     upstreamFailure({
-      code: 'quota_exceeded',
+      code: 'quotaExceeded',
       message: 'Your balance is spent. Top up at www.pay.example/top-up',
       record: { up: {} },
     }).message,
@@ -629,11 +629,11 @@ test('no flag makes a refused credential worth another try', () => {
 });
 
 test.each([
-  ['upstream_failed', 500, 'Slow down, account. Wait 2s.'],
-  ['invalid_request', 400, 'Slow down, account id-12345678. Wait 2s.'],
+  ['upstreamFailed', 500, 'Slow down, account. Wait 2s.'],
+  ['invalidRequest', 400, 'Slow down, account id-12345678. Wait 2s.'],
   ['unsupported', 400, 'Slow down, account id-12345678. Wait 2s.'],
-  ['context_too_long', 400, 'Slow down, account id-12345678. Wait 2s.'],
-  ['unknown_model', 404, 'Slow down, account id-12345678. Wait 2s.'],
+  ['contextTooLong', 400, 'Slow down, account id-12345678. Wait 2s.'],
+  ['unknownModel', 404, 'Slow down, account id-12345678. Wait 2s.'],
 ] as const)(
   'an id read alone is cut from a failure that is %s unless the kind tells the caller`s own request back',
   (code, status, told) => {
@@ -693,7 +693,7 @@ test('an id read by the words around it is cut from every kind, each cut in its 
   expect(
     upstreamFailure(
       {
-        code: 'invalid_request',
+        code: 'invalidRequest',
         message: 'Bad request for account id-12345678 (trace 77).',
         record: { up: { status: 400 } },
       },
@@ -706,7 +706,7 @@ test('an id read by the words around it is cut from every kind, each cut in its 
       ],
     ),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 400,
     message: 'Bad request.',
     provider: {
@@ -791,7 +791,7 @@ test.each([
   ],
 ])('a rate limit is told without %s', (_, message, told) => {
   const facts = upstreamFailure(
-    { code: 'rate_limited', message, record: { up: {} } },
+    { code: 'rateLimited', message, record: { up: {} } },
     429,
   );
 
@@ -805,7 +805,7 @@ test('a rate limit told in one sentence that holds a link is told in words of ou
   expect(
     upstreamFailure(
       {
-        code: 'rate_limited',
+        code: 'rateLimited',
         message:
           'Need more? Raise your limit at https://console.example/billing',
         record: { up: {} },
@@ -813,7 +813,7 @@ test('a rate limit told in one sentence that holds a link is told in words of ou
       429,
     ),
   ).toEqual({
-    code: 'rate_limited',
+    code: 'rateLimited',
     message: "The upstream's rate limit has no room left for this request",
     provider: {
       up: {
@@ -899,7 +899,7 @@ test('a name is cut from a list of what was refused as from any message', () => 
       [{ pattern: / for account id-\d{4,16}/g, replacement: '' }],
     ),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 422,
     message: 'body: Refused',
     provider: { up: { message: 'body: Refused for account id-12345678' } },
@@ -913,7 +913,7 @@ test('a message of many sentences is read in time that grows as its length does'
     let best = Number.POSITIVE_INFINITY;
     for (let run = 0; run < 3; run++) {
       const start = performance.now();
-      upstreamFailure({ code: 'rate_limited', message, record: { up: {} } });
+      upstreamFailure({ code: 'rateLimited', message, record: { up: {} } });
       best = Math.min(best, performance.now() - start);
     }
     return best;
@@ -959,7 +959,7 @@ test('a message is shortened after its names are cut, so none is left in part', 
 test('a rate limit longer than any provider`s loses its links before it is shortened', () => {
   expect(
     upstreamFailure({
-      code: 'rate_limited',
+      code: 'rateLimited',
       message: `Wait. ${'x'.repeat(1990)} see https://up.test/account.`,
       record: { up: {} },
     }).message,

@@ -2,59 +2,37 @@ import type { Json, ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
+import { mistralFields } from './fields.ts';
 import { parsed } from './json.ts';
 import { mistralTakes } from './takes.ts';
 
 // Mistral tells a refused key and a rate limit by type, and a model it does
 // not know by code. Its 503 is an overload under whatever type it comes.
 const failures: FailureReader = (status, _headers, { type, code }) => {
-  if (code === 'unknown_model') return { code: 'unknown_model' };
+  if (code === 'unknown_model') return { code: 'unknownModel' };
   if (status === 503) return { code: 'overloaded' };
   switch (type) {
     case 'authentication_error':
-      return { code: 'upstream_refused' };
+      return { code: 'upstreamRefused' };
     case 'rate_limit_error':
-      return { code: 'rate_limited' };
+      return { code: 'rateLimited' };
     default:
       return undefined;
   }
 };
 
 // Reasoning comes as a chunk of the content and goes back as one, an effort
-// has six levels and no budget, the output limit has the older name, and an
-// answer the model's own length ended has Mistral's word, and one an error
-// ended is a failed call.
+// has six levels and no budget, and an answer the model's own length ended has
+// Mistral's word, and one an error ended is a failed call.
 const codec = chatCompletionsIn({
   name: 'mistral',
   chunked: true,
   efforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
-  limit: 'max_tokens',
+  fields: mistralFields,
   endings: { model_length: 'length' },
   broken: ['error'],
-  cacheKey: true,
   failures,
 });
-
-// The request is closed to a field Mistral does not list: usage comes
-// unasked, the seed has a name of its own, and an end user has no field.
-function closed(encoded: ReturnType<typeof codec.encode>) {
-  const { body, leftOut } = encoded;
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    return encoded;
-  }
-  const { stream_options: _, seed, user, ...listed } = body;
-  return {
-    ...encoded,
-    body: { ...listed, ...(seed === undefined ? {} : { random_seed: seed }) },
-    leftOut:
-      user === undefined
-        ? leftOut
-        : [
-            ...leftOut,
-            { setting: 'user', detail: 'Mistral has no field for an end user' },
-          ],
-  };
-}
 
 // The failure is at the top of the body, with no error object around it.
 function raised(body: string): string {
@@ -71,10 +49,7 @@ function raised(body: string): string {
   return object === 'error' ? JSON.stringify({ error: told }) : body;
 }
 
-/**
- * Connects to Mistral over Chat Completions. It has no field for an end user,
- * so `options.user` is left out with a warning.
- */
+/** Connects to Mistral over Chat Completions. */
 export function mistral(
   options: {
     /** The API key. A missing or blank one throws when the adapter is made. */
@@ -102,7 +77,6 @@ export function mistral(
   return chat({
     codec: {
       ...codec,
-      encode: (...said) => closed(codec.encode(...said)),
       failure: (status, headers, body, clean) =>
         codec.failure(status, headers, raised(body), clean),
     },

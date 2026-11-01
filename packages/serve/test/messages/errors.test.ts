@@ -9,11 +9,11 @@ function body(type: string, message: string) {
   });
 }
 
-test('a 413 request_too_large is invalid_request, and keeps its status', () => {
+test('a 413 request_too_large is invalidRequest, and keeps its status', () => {
   expect(
     failure(413, new Headers(), body('request_too_large', 'It failed.')),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 413,
     message: 'It failed.',
     provider: {
@@ -28,8 +28,8 @@ test('a 413 request_too_large is invalid_request, and keeps its status', () => {
 });
 
 test.each([
-  [500, 'api_error', 'upstream_failed'],
-  [504, 'timeout_error', 'timed_out'],
+  [500, 'api_error', 'upstreamFailed'],
+  [504, 'timeout_error', 'timedOut'],
 ] as const)(
   'a %i %s is %s, with no status of the upstream`s',
   (status, type, code) => {
@@ -65,7 +65,7 @@ test("a refused key is the host's, with no status of its own", () => {
       new Headers(),
       body(type, 'invalid x-api-key'),
     );
-    expect(facts.code).toBe('upstream_refused');
+    expect(facts.code).toBe('upstreamRefused');
     expect(facts).not.toHaveProperty('status');
     expect(facts).not.toHaveProperty('retryable');
     expect(facts.message).toBe(
@@ -90,7 +90,7 @@ test('a model the upstream does not know is named by it', () => {
       '{"type":"error","error":{"type":"not_found_error","message":"model: no-such-model-xyz"},"request_id":"req_011CZq7Lm2Xv9Rt4Kp8Wd3Nh"}',
     ),
   ).toEqual({
-    code: 'unknown_model',
+    code: 'unknownModel',
     message: 'model: no-such-model-xyz',
     retryable: false,
     provider: {
@@ -112,7 +112,7 @@ test('an address the API does not have names no model, and no retry mends it', (
       '{"type":"error","error":{"type":"not_found_error","message":"Not found"},"request_id":"req_011CNh6Wd3Kp8Rt4Xv9Lm2Zq"}',
     ),
   ).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'Not found',
     retryable: false,
     provider: {
@@ -134,7 +134,7 @@ test('a spend limit that is reached is a spent quota, not a rate limit to wait o
       '{"type":"error","error":{"type":"rate_limit_error","message":"Your organization has reached its spend limit.","details":{"error_code":"enforced_spend_limit_reached"}},"request_id":"req_1"}',
     ),
   ).toEqual({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message: 'Your organization has reached its spend limit.',
     provider: {
       anthropic: {
@@ -156,7 +156,7 @@ test('a bill the upstream turned down is a spent quota, in its own words', () =>
       body('billing_error', 'Your payment could not be processed.'),
     ),
   ).toMatchObject({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message: 'Your payment could not be processed.',
   });
 });
@@ -172,7 +172,7 @@ test('usage limits that are reached are a spent quota, though told as a bad requ
       ),
     ),
   ).toMatchObject({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message:
       'You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.',
   });
@@ -188,7 +188,7 @@ test('a credit balance too low is a spent quota, though told as a bad request', 
     ),
   );
 
-  expect(facts.code).toBe('quota_exceeded');
+  expect(facts.code).toBe('quotaExceeded');
   expect(facts).not.toHaveProperty('status');
 });
 
@@ -202,7 +202,7 @@ test('a prompt too long for the model is told from other bad requests', () => {
         'prompt is too long: 250000 tokens > 200000 maximum',
       ),
     ).code,
-  ).toBe('context_too_long');
+  ).toBe('contextTooLong');
 });
 
 test('the wait an upstream asks for is read from its headers', () => {
@@ -225,7 +225,7 @@ test('a failure told inside a stream is named by its type alone', () => {
     upstream: true,
   });
   expect(failed({ type: 'error' })).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream answered with an error',
     retryable: false,
     provider: { anthropic: {} },
@@ -236,7 +236,7 @@ test('a failure told inside a stream is named by its type alone', () => {
 test("the caller's own mistake is described in this API's error body", () => {
   expect(
     error({
-      code: 'invalid_request',
+      code: 'invalidRequest',
       status: 400,
       message: 'max_tokens must be a number',
     }),
@@ -253,9 +253,9 @@ test("the caller's own mistake is described in this API's error body", () => {
 });
 
 test.each([
-  ['unknown_model', 404, 'not_found_error'],
-  ['upstream_refused', 502, 'api_error'],
-  ['timed_out', 504, 'timeout_error'],
+  ['unknownModel', 404, 'not_found_error'],
+  ['upstreamRefused', 502, 'api_error'],
+  ['timedOut', 504, 'timeout_error'],
 ])(
   '%s, with no status but its kind`s %i, is written as %s',
   (code, status, type) => {
@@ -268,7 +268,7 @@ test.each([
 
 test('a request of too many bytes keeps the name this API gives it', () => {
   expect(
-    error({ code: 'invalid_request', status: 413, message: 'x' }),
+    error({ code: 'invalidRequest', status: 413, message: 'x' }),
   ).toMatchObject({
     status: 413,
     body: { error: { type: 'request_too_large' } },
@@ -288,13 +288,13 @@ test('the type of what a model call can end in never follows the status', () => 
   const typed = (code: string, status: number) =>
     error({ code, status, message: 'x' }).body;
 
-  expect(typed('context_too_long', 403)).toMatchObject({
+  expect(typed('contextTooLong', 403)).toMatchObject({
     error: { type: 'invalid_request_error' },
   });
-  expect(typed('quota_exceeded', 402)).toMatchObject({
+  expect(typed('quotaExceeded', 402)).toMatchObject({
     error: { type: 'billing_error' },
   });
-  expect(typed('upstream_failed', 404)).toMatchObject({
+  expect(typed('upstreamFailed', 404)).toMatchObject({
     error: { type: 'api_error' },
   });
 });
@@ -303,7 +303,7 @@ test('a kind no model call ends in is written as it was, by its code or its stat
   for (const [code, status, type] of [
     ['unauthenticated', 401, 'authentication_error'],
     ['aborted', 499, 'invalid_request_error'],
-    ['limit_reached', 400, 'invalid_request_error'],
+    ['limitReached', 400, 'invalid_request_error'],
     ['empty_prompt', 413, 'request_too_large'],
   ] as const) {
     expect(error({ code, status, message: 'x' })).toMatchObject({
@@ -353,17 +353,17 @@ test('a failure told inside a stream is named by the same table', () => {
         details: { error_code: 'enforced_spend_limit_reached' },
       },
     }).code,
-  ).toBe('quota_exceeded');
+  ).toBe('quotaExceeded');
   expect(
     failed({
       type: 'error',
       error: { type: 'not_found_error', message: 'Not found' },
     }),
-  ).toMatchObject({ code: 'upstream_failed', retryable: false });
+  ).toMatchObject({ code: 'upstreamFailed', retryable: false });
 });
 
 test.each([
-  ['quota_exceeded', 402, 'billing_error'],
+  ['quotaExceeded', 402, 'billing_error'],
   ['overloaded', 529, 'overloaded_error'],
 ])(
   '%s is answered with %i, this API`s own status for it, as %s',
@@ -383,7 +383,7 @@ test('a list of what a gateway`s validator refused is the message, as where and 
       '{"detail":[{"type":"missing","loc":["body","max_tokens"],"msg":"Field required","input":{}}]}',
     ),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 422,
     message: 'body.max_tokens: Field required',
     provider: {
@@ -408,7 +408,7 @@ test('a rate limit is told without the organisation it names and without its lin
     "This request would exceed your organization's rate limit of 30,000 input tokens per minute (org: 3a68180d-2011-422d-afea-f25a64613009, model: claude-sonnet-4-20250514). For details, refer to: https://docs.claude.com/en/api/rate-limits. You can see the response headers for current usage. Please reduce the prompt length or the maximum tokens requested, or try again later. You may also contact sales at https://www.anthropic.com/contact-sales to discuss your options for a rate limit increase.";
 
   expect(failure(429, new Headers(), body('rate_limit_error', said))).toEqual({
-    code: 'rate_limited',
+    code: 'rateLimited',
     message:
       "This request would exceed your organization's rate limit of 30,000 input tokens per minute (model: claude-sonnet-4-20250514). You can see the response headers for current usage. Please reduce the prompt length or the maximum tokens requested, or try again later.",
     provider: {
@@ -461,7 +461,7 @@ test.each([
     expect(
       failure(400, new Headers(), body('invalid_request_error', said)),
     ).toEqual({
-      code: 'invalid_request',
+      code: 'invalidRequest',
       status: 400,
       message: said,
       provider: {

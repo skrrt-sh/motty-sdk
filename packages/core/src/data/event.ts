@@ -14,7 +14,7 @@ type KnownChunk =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'reasoning'; readonly text: string }
   | {
-      readonly type: 'tool_call';
+      readonly type: 'toolCall';
       readonly id: string;
       readonly name?: string;
       readonly arguments: string;
@@ -22,7 +22,7 @@ type KnownChunk =
       readonly ended?: boolean;
     }
   | {
-      readonly type: 'tool_result';
+      readonly type: 'toolResult';
       readonly id: string;
       readonly output: Json;
       readonly failed?: boolean;
@@ -94,8 +94,8 @@ export type Usage = { [Count in (typeof counts)[number]]?: number };
 const reasons = [
   'stop',
   'length',
-  'tool_calls',
-  'content_filter',
+  'toolCalls',
+  'contentFilter',
   'pause',
   'other',
 ] as const;
@@ -194,7 +194,7 @@ function isChunk(value: Loose): value is Chunk {
     case 'reasoning':
     case 'refusal':
       return typeof value.text === 'string';
-    case 'tool_call':
+    case 'toolCall':
       return (
         typeof value.id === 'string' &&
         typeof value.arguments === 'string' &&
@@ -202,7 +202,7 @@ function isChunk(value: Loose): value is Chunk {
         maybeFlag(value.hosted) &&
         maybeFlag(value.ended)
       );
-    case 'tool_result':
+    case 'toolResult':
       return (
         typeof value.id === 'string' &&
         json(value.output) &&

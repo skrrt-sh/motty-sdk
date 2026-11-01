@@ -5,10 +5,15 @@ import { unsupported } from './refusals.ts';
 
 // A null, an empty list and an empty object say what leaving the field out
 // says, so none of them is worth failing a call of another family for.
-function says(value: ReadonlyJson): boolean {
+export function says(value: ReadonlyJson): boolean {
   if (value === null) return false;
   if (typeof value !== 'object') return true;
   return Object.keys(value).length > 0;
+}
+
+// What `leaving` is asked of an option, which an empty one asks nothing of.
+export function meaningful(value: ReadonlyJson | undefined) {
+  return value !== undefined && says(value) ? value : undefined;
 }
 
 export function meant(fields: Dict): Dict {
@@ -74,8 +79,8 @@ export function providerData(
   }
 
   // Sent on, such a field would be dropped by an upstream that ignores what
-  // it does not know. A field no list names is sent as said, so a list that
-  // has gone stale never leaves one out.
+  // it does not know. A field this list does not name passes, so going stale
+  // it never leaves one out.
   function strays(data: ProviderData | undefined): Dict {
     const shared = vendor === undefined ? undefined : data?.[vendor];
     if (shared === undefined || elsewhere === undefined) return {};

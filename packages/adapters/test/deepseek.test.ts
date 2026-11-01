@@ -244,7 +244,7 @@ data: [DONE]
             role: 'tool',
             parts: [
               {
-                type: 'tool_result',
+                type: 'toolResult',
                 id: 'call_1',
                 parts: [{ type: 'image', id: 'file-api-2' }],
               },
@@ -435,7 +435,7 @@ test('the id of a failed request is cut from what the caller is told, and kept f
     {
       type: 'error',
       error: {
-        code: 'rate_limited',
+        code: 'rateLimited',
         message: 'Rate Limit Reached',
         provider: { deepseek: { message: said } },
       },

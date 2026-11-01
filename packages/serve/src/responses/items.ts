@@ -7,8 +7,8 @@ import { inputContent } from './content.ts';
 import { carried, held, hinted, mine, own } from './family.ts';
 import { callNeutral, clientRun, field } from './fields.ts';
 
-type Call = Part & { type: 'tool_call' };
-type Result = Part & { type: 'tool_result' };
+type Call = Part & { type: 'toolCall' };
+type Result = Part & { type: 'toolResult' };
 
 function callItem(left: Leaving, part: Call, custom: boolean): Dict {
   left.without('hosted', part.hosted);
@@ -44,7 +44,7 @@ function resultItem(
   held?: Cache,
 ): Dict {
   left.without('hosted', part.hosted);
-  left.without('tool_result.failed', part.failed);
+  left.without('toolResult.failed', part.failed);
   const kept = carried(part, 'a tool result');
   const cache = part.cache ?? held;
   if (clientRun(kept) !== undefined) {
@@ -108,7 +108,7 @@ function items(
     content = [];
     cited = undefined;
   };
-  const apart = ['tool_call', 'tool_result', 'reasoning', 'citation'];
+  const apart = ['toolCall', 'toolResult', 'reasoning', 'citation'];
   // A message's marker goes on the last content of it that can hold one.
   const closing =
     role === 'assistant' || role === 'tool'
@@ -117,7 +117,7 @@ function items(
   // With no content, an upstream that takes markers has one on the last result.
   const answer =
     closing === undefined && role !== 'assistant' && left.marks
-      ? message.parts.findLast((part) => part.type === 'tool_result')
+      ? message.parts.findLast((part) => part.type === 'toolResult')
       : undefined;
   if (closing === undefined && answer === undefined) {
     left.without('cache.outside', message.cache);
@@ -127,13 +127,13 @@ function items(
     ...(part === closing ? breakpoint(left, message.cache) : {}),
   });
   for (const part of message.parts) {
-    if (part.type === 'tool_call') left.without('tool.cache', part.cache);
-    else if (part.type !== 'tool_result' && part.type !== 'provider') {
+    if (part.type === 'toolCall') left.without('tool.cache', part.cache);
+    else if (part.type !== 'toolResult' && part.type !== 'provider') {
       const outside = role === 'assistant' || apart.includes(part.type);
       if (outside) left.without('cache.outside', part.cache);
     }
     switch (part.type) {
-      case 'tool_call': {
+      case 'toolCall': {
         flushed();
         // Free text is the input of a custom tool, whoever declared it.
         const custom =
@@ -142,7 +142,7 @@ function items(
         out.push(callItem(left, part, custom));
         break;
       }
-      case 'tool_result':
+      case 'toolResult':
         flushed();
         out.push(
           resultItem(

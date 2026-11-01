@@ -57,7 +57,7 @@ test('an upstream nobody listens at is one retryable error', async () => {
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         status: 502,
         retryable: true,
         upstream: true,
@@ -237,7 +237,7 @@ test('what an upstream echoes of the key it refused is cut from the record, and 
     {
       type: 'error',
       error: {
-        code: 'upstream_refused',
+        code: 'upstreamRefused',
         message: "The upstream refused the host's credentials or account",
         provider: {
           'openai.chat': {
@@ -319,7 +319,7 @@ test('a refused credential told inside a stream keeps the sentence whole, even w
     {
       type: 'error',
       error: {
-        code: 'upstream_refused',
+        code: 'upstreamRefused',
         message: "The upstream refused the host's credentials or account",
       },
     },
@@ -360,7 +360,7 @@ test('a key that is the word a body is written with leaves the body readable and
     {
       type: 'error',
       error: {
-        code: 'invalid_request',
+        code: 'invalidRequest',
         status: 400,
         message: 'bad thing happened',
         provider: {
@@ -409,7 +409,7 @@ test('a placeholder key that names a field of the body leaves the failure named,
     {
       type: 'error',
       error: {
-        code: 'invalid_request',
+        code: 'invalidRequest',
         status: 400,
         message: 'the request has no messages',
         provider: {
@@ -448,7 +448,7 @@ test('a reply that is one JSON body under a status that tells no failure is a fa
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream answered 200',
         retryable: false,
         provider: { 'openai.chat': { status: 200 } },
@@ -674,7 +674,7 @@ test('a redirect to another origin is not followed: it is one failure no retry m
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         status: 502,
         message: 'The upstream answered 307, a redirect, which is not followed',
         retryable: false,
@@ -814,7 +814,7 @@ test('a failure longer than an adapter reads is let go where the reading stops, 
     {
       type: 'error',
       error: {
-        code: 'invalid_request',
+        code: 'invalidRequest',
         status: 400,
         message: 'The upstream answered 400',
         provider: { 'openai.chat': { status: 400 } },
@@ -863,7 +863,7 @@ test('a secret is cut from all an upstream said before any of it is shortened, s
     {
       type: 'error',
       error: {
-        code: 'invalid_request',
+        code: 'invalidRequest',
         status: 400,
         message: `Provider returned error: ${'x'.repeat(280)} [key]`,
         provider: {

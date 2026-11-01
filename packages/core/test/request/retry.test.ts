@@ -183,7 +183,7 @@ test('retry calls again at once on a retry-after of zero', async () => {
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           status: 429,
           message: 'Slow down',
           retryAfter: 0,
@@ -222,7 +222,7 @@ test('retry follows what the upstream said about a failure over its class', asyn
       {
         type: 'error',
         error: {
-          code: 'invalid_request',
+          code: 'invalidRequest',
           status: 400,
           message: 'Try again',
           retryable: true,
@@ -287,7 +287,7 @@ test('retry ends its wait with Aborted when the request is stopped, and calls no
         {
           type: 'error',
           error: {
-            code: 'rate_limited',
+            code: 'rateLimited',
             status: 429,
             message: 'Slow down',
             retryAfter: 1500,
@@ -407,7 +407,7 @@ test('retry gives up at once on a retry-after longer than its backoff cap, with 
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           status: 429,
           message: 'Slow down',
           retryAfter: 30_001,
@@ -455,7 +455,7 @@ test('retry waits out a retry-after as long as its backoff cap', async () => {
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           status: 429,
           message: 'Slow down',
           retryAfter: 30_000,
@@ -524,7 +524,7 @@ test('retry never repeats Aborted or LimitReached, whatever their facts say abou
       {
         type: 'error',
         error: {
-          code: 'limit_reached',
+          code: 'limitReached',
           status: 400,
           message: 'Enough',
           retryable: true,

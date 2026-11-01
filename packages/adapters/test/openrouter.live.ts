@@ -440,14 +440,14 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'unknown_model',
+          code: 'unknownModel',
           status: 404,
           message: 'nobody/no-such-model is not a valid model ID',
           provider: { openrouter: { status: 400, code: 400 } },
           upstream: true,
         },
         calls: [
-          { model: 'openrouter/nobody/no-such-model', code: 'unknown_model' },
+          { model: 'openrouter/nobody/no-such-model', code: 'unknownModel' },
         ],
       },
     ]);
@@ -517,7 +517,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           status: 502,
           provider: { openrouter: { status: 401, code: 401 } },
           upstream: true,
@@ -526,7 +526,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           provider: { openrouter: { status: 401, code: 401 } },
         },
       },
@@ -608,7 +608,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           status: 502,
           provider: {
             anthropic: { status: 401, type: 'authentication_error' },
@@ -619,7 +619,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           provider: {
             anthropic: { status: 401, type: 'authentication_error' },
           },
@@ -1068,7 +1068,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     expect(reports).toMatchObject([
       {
         outcome: 'failed',
-        error: { code: 'invalid_request', status: 400, upstream: true },
+        error: { code: 'invalidRequest', status: 400, upstream: true },
       },
     ]);
   });
@@ -1321,7 +1321,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'context_too_long',
+          code: 'contextTooLong',
           message: expect.stringContaining('maximum context length is'),
           provider: { openrouter: { status: 400, code: 400 } },
           upstream: true,
@@ -1373,7 +1373,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'quota_exceeded',
+          code: 'quotaExceeded',
           message: expect.stringContaining('fewer max_tokens'),
           provider: { openrouter: { status: 402, code: 402 } },
           upstream: true,
@@ -1447,7 +1447,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     expect(await answer.finish()).toBe('stop');
     expect(named).toEqual(['openrouter/mistralai/mistral-nemo']);
     expect(calls.map(({ model: called, code }) => [called, code])).toEqual([
-      ['openrouter/nobody/no-such-model', 'unknown_model'],
+      ['openrouter/nobody/no-such-model', 'unknownModel'],
       ['openrouter/mistralai/mistral-nemo', undefined],
     ]);
     expect(answered?.input).toBeGreaterThan(0);

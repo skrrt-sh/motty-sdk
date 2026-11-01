@@ -11,14 +11,14 @@ export function reasonRead(
   switch (raw) {
     case 'stop':
     case 'length':
-    case 'tool_calls':
-    case 'content_filter':
       return raw;
+    case 'tool_calls':
     case 'function_call':
-      return 'tool_calls';
+      return 'toolCalls';
     // Providers' own names for endings this wire has a reason for.
+    case 'content_filter':
     case 'sensitive':
-      return 'content_filter';
+      return 'contentFilter';
     case 'model_context_window_exceeded':
       return 'length';
     default:
@@ -47,7 +47,7 @@ export function reasonFailed(
       });
     case 'network_error':
       return upstreamFailure({
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream lost its connection before it finished',
         record,
         retryable: true,
@@ -55,7 +55,7 @@ export function reasonFailed(
     default:
       return own?.includes(raw) === true
         ? upstreamFailure({
-            code: 'upstream_failed',
+            code: 'upstreamFailed',
             message: 'The upstream failed before it finished',
             record,
             retryable: true,
@@ -70,9 +70,11 @@ export function reasonWritten(reason: FinishReason): string {
   switch (reason) {
     case 'stop':
     case 'length':
-    case 'tool_calls':
-    case 'content_filter':
       return reason;
+    case 'toolCalls':
+      return 'tool_calls';
+    case 'contentFilter':
+      return 'content_filter';
     case 'pause':
     case 'other':
       return 'stop';

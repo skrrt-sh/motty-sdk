@@ -2,6 +2,7 @@ import type { ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
+import { dashscopeFields } from './fields.ts';
 import { dashscopeTakes } from './takes.ts';
 
 const spent = [
@@ -25,18 +26,18 @@ const failures: FailureReader = (_status, _headers, { code, message }) => {
   const name = typeof code === 'string' ? code : '';
   const said = typeof message === 'string' ? message : '';
   if (spent.includes(name) || name.endsWith('BillOverdue')) {
-    return { code: 'quota_exceeded' };
+    return { code: 'quotaExceeded' };
   }
   if (busy.includes(name)) return { code: 'overloaded' };
   if (limited.includes(name) || name.startsWith('Throttling')) {
-    return { code: 'rate_limited' };
+    return { code: 'rateLimited' };
   }
   if (filtered.includes(name)) return { code: 'blocked' };
   if (said.includes('Range of input length should be')) {
-    return { code: 'context_too_long' };
+    return { code: 'contextTooLong' };
   }
   if (unknown.includes(name) || said === 'Model not exist.') {
-    return { code: 'unknown_model' };
+    return { code: 'unknownModel' };
   }
   return undefined;
 };
@@ -85,6 +86,7 @@ export function dashscope(
       topK: true,
       breakpoints: 'cache_control',
       lifetime: '5m',
+      fields: dashscopeFields,
       failures,
     }),
     prefix,

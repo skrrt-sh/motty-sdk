@@ -120,7 +120,7 @@ function callOf(raw: Json): Part {
       invalid('A custom tool call needs a name and an input');
     }
     const more = noted(unreadOf(call, 'custom', callFields) ?? {});
-    return { type: 'tool_call', id, name, input, ...more };
+    return { type: 'toolCall', id, name, input, ...more };
   }
   const { name, arguments: source } = dict(fn);
   if (type !== 'function' || typeof name !== 'string') {
@@ -131,8 +131,8 @@ function callOf(raw: Json): Part {
   const input = parsed(written);
   // A bare string is a custom tool's input, never a function's arguments.
   return input === undefined || typeof input === 'string'
-    ? { type: 'tool_call', id, name, raw: written, ...more }
-    : { type: 'tool_call', id, name, input, ...more };
+    ? { type: 'toolCall', id, name, raw: written, ...more }
+    : { type: 'toolCall', id, name, input, ...more };
 }
 
 function partsOf(content: Json | undefined): Part[] {
@@ -167,8 +167,8 @@ function resultOf(id: Json | undefined, content: Json | undefined): Part {
     invalid('A tool message needs a tool_call_id');
   }
   return typeof content === 'string'
-    ? { type: 'tool_result', id, text: content }
-    : { type: 'tool_result', id, parts: partsOf(content) };
+    ? { type: 'toolResult', id, text: content }
+    : { type: 'toolResult', id, parts: partsOf(content) };
 }
 
 export function messageOf(raw: Json): Message {

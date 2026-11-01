@@ -99,7 +99,7 @@ test('an answer is re-read in any order, any number of times', async () => {
     stream([
       { type: 'reasoning', text: 'Counting' },
       { type: 'text', text: '{"count":' },
-      { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+      { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
       { type: 'text', text: '2}' },
       { type: 'finish', reason: 'stop', usage: { input: 3, output: 2 } },
     ]),
@@ -111,7 +111,7 @@ test('an answer is re-read in any order, any number of times', async () => {
   expect(await Array.fromAsync(reply.chunks())).toEqual([
     { type: 'reasoning', text: 'Counting' },
     { type: 'text', text: '{"count":' },
-    { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+    { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
     { type: 'text', text: '2}' },
   ]);
   expect(await reply.text()).toBe('{"count":2}');
@@ -259,7 +259,7 @@ test('a terminal error raises the known class after the chunks before it', async
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           status: 429,
           message: 'Slow down',
           retryAfter: 1500,
@@ -416,10 +416,10 @@ test('an answer rewritten from another ends with that one’s finish event', asy
     stream([
       { type: 'reasoning', text: 'The lock order differs' },
       { type: 'text', text: 'deep reply' },
-      { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+      { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
       {
         type: 'finish',
-        reason: 'tool_calls',
+        reason: 'toolCalls',
         usage: { input: 9, output: 4, reasoning: 3 },
         rawReason: 'tool_use',
         id: 'resp_81',
@@ -434,9 +434,9 @@ test('an answer rewritten from another ends with that one’s finish event', asy
 
   expect(await Array.fromAsync(reply.chunks())).toEqual([
     { type: 'text', text: 'deep reply' },
-    { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+    { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
   ]);
-  expect(await reply.finish()).toBe('tool_calls');
+  expect(await reply.finish()).toBe('toolCalls');
   expect(await reply.usage()).toEqual({ input: 9, output: 4, reasoning: 3 });
   expect(await ending(reply)).toBe(await ending(inner));
 });

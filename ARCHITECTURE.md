@@ -402,7 +402,7 @@ headers), mutable `prompt` sent upstream, `signal`, derived values, `calls` from
 ### Errors
 
 - **Errors are thrown, and are known classes** with a base, a code and a status. Authors add theirs:
-  `class EmptyPrompt extends MottyError.define("empty_prompt", 400) {}`.
+  `class EmptyPrompt extends MottyError.define("emptyPrompt", 400) {}`.
 - **Upstream errors keep their meaning:** `RateLimited`, `QuotaExceeded`, `Overloaded`,
   `ContextTooLong`, `Blocked`, `Unsupported`, `Forbidden`, `InvalidRequest`, `UnknownModel`,
   `UpstreamFailed`, and `UpstreamRefused` for an upstream that rejected the host's own key or
@@ -627,6 +627,11 @@ How whatever runs a motty, `serve` or the Hub, calls it. Both sides are written 
   a change to the request, the events or what the host supplies would break a host. A host reads
   the number first, at load, and refuses a number it does not know. Rejected: the SDK's major
   version. Before 1.0 it is always zero, and later it would go up for changes that affect no host.
+- **Version 2 is the move of the contract's own words to camelCase.** Part kinds, chunk kinds,
+  finish reasons and error codes all cross between a bundle and its host, so a bundle built on
+  one side of the move would speak what the other cannot read, and an event it could not read
+  would fail the request. Having a host refuse it at load says why at once. Nothing else in the
+  contract moved, and no shim reads the old words.
 - **The decoded request and the events are the contract, and the codecs stay with the host.**
   Rejected: a bundle that is an HTTP handler with the codecs inside. It is larger, and a codec fix
   would need every author to rebuild.
@@ -1183,6 +1188,23 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   at once, bare milliseconds in the limits and the edge, an `Ms` suffix in the adapters, the
   errors and `timeout`, and seconds in `store`. Rejected: a suffix on every name, which says
   the same thing in each of them once there is one unit.
+- **Every name and every value an author writes or reads is in camelCase, and snake_case exists
+  only where a provider's wire needs it,** which `gates/test/case.test.ts` holds over the public
+  declarations, with a reason for each word it allows. A part is a `toolCall`, an answer ends in
+  `toolCalls` and a failure is `rateLimited`. `options.provider` and `options.hints` keep an
+  upstream's own names, as the way out of what the SDK knows. Rejected: leaving the values alone
+  because a wire uses the same words, which gave an author two cases to remember and tied the
+  vocabulary of a motty to one API's.
+- **A wire keeps its words, in both directions, and only a codec says them.** A decoder reads
+  `finish_reason: 'tool_calls'` and hands on `toolCalls`, and an encoder writes it back, so what a
+  caller and an upstream read did not move by a byte. A failure's code goes through one table,
+  which the compiler holds to every code the SDK knows, into what the two OpenAI APIs say, and an
+  author's own code goes as the author wrote it. A refusal names a tool's part as `tool_call` or
+  `tool_result` since a caller reads it. The table is in `@mottyjs/serve`, so none of it reaches
+  a motty's bundle. A dialect's `thought`, `asks`, `output`, `breakpoints` and `lifetime` stay
+  wire words, as each picks the field or the value that goes out, and so do the values of the
+  option map. A value a host reads in a warning or in a report follows the SDK's case. Rejected:
+  wire names as the SDK's own, and a conversion at each place a word is written.
 - **`settings` overrides the motty's defaults,** any subset, typed. Rejected: mapping environment
   variables onto settings by name: flat strings onto typed groups, and a second way to set a value.
 - **The overrides are typed by the motty they are given with:** any of the groups its settings
@@ -1435,24 +1457,57 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **Under the shared key, a field only the other API has is not sent.** As an option it fails
   the call with `Unsupported`, naming the field, so a `fallback` moves on; as a hint it is left
   out and reported. One that says nothing, a null, an empty list or an empty object, fails no
-  call and is not sent. A field both have, or neither is known to have, is sent as said, and a
-  refusal is the upstream's own error, so a list gone stale never drops a field. Each OpenAI
-  codec names the fields it refuses, from OpenAI's reference, and none it writes itself. A
+  call and is not sent. A field both have, or neither is known to have, passes this rule, so
+  this list gone stale never drops a field, and a refusal is the upstream's own error. The only
+  other list a field meets is its dialect's, told below. Each OpenAI codec names the fields it refuses, from OpenAI's reference, and none it writes itself. A
   field under an API's own key is the author addressing that API, sent unchecked; a caller's
   unknown fields are still decoded under the key of the API it spoke. Cause: every comparable
   SDK that shares one key drops such a field silently.
-- **What a Responses caller sends only to observe its request is a hint:** `metadata`,
-  `client_metadata` and the safety identifier among others, left out by another family. Cause:
-  Codex sends `client_metadata` on every request, and as provider data it made an Anthropic
-  upstream refuse the first one.
-- **The cache key is held under the shared `openai` key, whichever OpenAI API sent it.** The
-  Responses API is sent it, Chat Completions only as below, and another family leaves it out.
-  Cause: a key held as a hint of the API that sent it was lost between the two, so a caller of one
-  API routed to the other paid its prompt again.
-- **A Chat Completions upstream is sent the key only where its dialect says `cacheKey`.** Elsewhere
+- **What a Responses caller sends only to observe its request is a hint:** `client_metadata` and
+  `include` among others, which any other API leaves out. Cause: Codex sends
+  `client_metadata` on every request, and as provider data it made an Anthropic upstream refuse the
+  first one.
+- **What a caller of either OpenAI API says of an option is decoded into that option, whichever
+  API sent it.** That is `metadata`, `serviceTier`, `safetyIdentifier`, `cacheKey`, `cacheOptions`
+  and `cacheRetention`, `verbosity` from `text` on the Responses API, and `store` and `prediction`
+  from Chat Completions. The Responses API takes a `store` of false and refuses any other, so that
+  stays out of the option, and a `prediction` or a `seed` from its caller stays its own provider
+  data. A value no option can hold, such as a null, stays a hint of the API that sent it, so it is
+  sent as it came and the upstream judges it. What only the Responses API has, such as
+  `client_metadata`, `include` and a reasoning summary, stays under its own key. Cause: a key held
+  as a hint of the API that sent it was lost between the two, so a caller of one API routed to the
+  other paid its prompt again, and the other fields reached no chat upstream with nobody told.
+  Then one statement had a home per API, and an author had to write `hints.openai.service_tier`
+  even for Groq. Rejected: a hint under a shared `openai` key, which held the same statement as
+  what an author wrote elsewhere and made the two clash by key order.
+- **The Responses API takes each option under its own name.** `verbosity` goes in `text`, and
+  `prediction` and `seed` have no field and are told left out. `store` stays false, whoever says
+  otherwise, and a request that does is told, since no state is held for a caller and none is kept
+  upstream. Anthropic Messages has no list, so of these it sends none and tells each
+  by name, but for `cacheKey`, whose marker is what it asks, and is told of nothing. A tier is not
+  sent to it though it has a field of that name, since values are not translated and one said for
+  another API would make a call fail for a hint. An Anthropic caller's own `metadata` and
+  `service_tier` stay its hints and go back as they came.
+- **A typed option wins a clash against a hint and against `provider`, as every typed field does.**
+  A hint of a field an option covers is still sent, under the same table, by its raw name.
+- **A Chat Completions upstream is sent the key only where its dialect's table holds it.** Elsewhere
   it is left out and reported, and the marker it implied stays. Most upstreams that cache need no
-  key, and one may refuse a field it does not know. `local` takes the word from the host, as only
+  key, and one may refuse a field it does not know. `local` takes its table from the host, as only
   the host knows its server. Rejected: sending it to every dialect, a call that may fail for a hint.
+- **A field that only helps goes only where it is documented, and a field that changes the answer
+  always goes.** Each provider has one table, read from its reference, of the options that only
+  help, such as `metadata`, `seed`, `user` and `cacheKey`, where an entry says what the option goes
+  out as, and a field the docs are silent on is sent only where a provider states it ignores what
+  it does not know. One step in the encoder applies it to typed options and hints alike, so an
+  author states an option once and it is sent, sent under the provider's name, or left out with a
+  warning that names the option and never quotes its value. One map holds each option's name on
+  OpenAI's API, and the same step reads a hint's raw name through it. A field that changes the answer, such as `stop`, `response_format` or
+  `parallel_tool_calls`, is on no list and is sent regardless, since a refusal lets a `fallback` move on where a silent drop would
+  give a wrong answer. What an author names in `options.provider` or on a connection goes as said,
+  and a dialect with no list takes them all, as OpenAI does. The cost is that a field a provider
+  adds is dropped until its list is updated. Rejected: forwarding every field to every provider,
+  where a refusal of a field that only helps fails the call for nothing; a flag on the dialect for
+  each field, which took two flags and a wrapper to cover five of the fifteen.
 - **Across families the common set is translated:** messages, tools and tool choice, structured
   output, reasoning effort, stop, max tokens, sampling, finish reason, usage.
 - **Nothing that changes the meaning is dropped.** It fails that call with `Unsupported`, so
@@ -1570,10 +1625,11 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   400 to `prompt_cache_breakpoint`, so a hint failed the call, and they cache by themselves.
   Rejected: writing it always, which is that; never, which lost explicit caching through a router
   that honours it.
-- **A caller of either OpenAI API that keys its cache and marks none asks for a marker on the
-  last message.** The decoder puts the neutral marker there, so an upstream that caches only
-  where it is told, as Anthropic does, is told, and the author sees the marker and may move or
-  remove it. One marker is within Anthropic's limit of four. A request that sends the Responses
+- **Whoever keys a cache and marks none asks for a marker on the last message, a caller of either
+  OpenAI API or an author through `cacheKey`.** A decoder puts the neutral marker there, so a motty
+  sees it and may move it, and each encoder puts one where a key came with none, so an upstream that
+  caches only where it is told, as Anthropic does, is told. A motty that takes the marker away takes
+  the key with it, or the encoder asks again. One marker is within Anthropic's limit of four. A request that sends the Responses
   API the key is cached by it, so a marker left out of it is not reported. The marker says it was
   implied by a key, so an upstream that takes no marker, caching by itself, is sent the request
   as if there were none, with nothing reported. Cause: Codex sends
@@ -1674,7 +1730,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   its catalog Codex declares its MCP and subagent tools only through the search, so with the
   search left out no MCP tool and no subagent could be reached. Rejected: leaving the search
   out as a tool only another API runs, which live reached no MCP tool.
-- **A `tool_call` chunk may say that its call has ended, and a Responses caller is written the
+- **A `toolCall` chunk may say that its call has ended, and a Responses caller is written the
   call done then, otherwise when the reply ends.** A reader says so only where the upstream
   showed the call whole, so an item marked incomplete, or the last block of an Anthropic
   reply, which a length limit may have cut, ends with the reply. Cause: Codex records calls

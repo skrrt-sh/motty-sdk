@@ -3,6 +3,7 @@ import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
 import { moonshotCuts } from './cuts.ts';
+import { moonshotFields } from './fields.ts';
 import { moonshotTakes } from './takes.ts';
 
 const long =
@@ -12,22 +13,22 @@ const long =
 const failures: FailureReader = (_status, _headers, { type, message }) => {
   switch (type) {
     case 'exceeded_current_quota_error':
-      return { code: 'quota_exceeded' };
+      return { code: 'quotaExceeded' };
     case 'engine_overloaded_error':
       return { code: 'overloaded' };
     case 'rate_limit_reached_error':
-      return { code: 'rate_limited' };
+      return { code: 'rateLimited' };
     case 'content_filter':
       return { code: 'blocked' };
     case 'resource_not_found_error':
-      return { code: 'unknown_model' };
+      return { code: 'unknownModel' };
     case 'permission_denied_error':
     case 'invalid_authentication_error':
     case 'incorrect_api_key_error':
-      return { code: 'upstream_refused' };
+      return { code: 'upstreamRefused' };
     default:
       return typeof message === 'string' && long.test(message)
-        ? { code: 'context_too_long' }
+        ? { code: 'contextTooLong' }
         : undefined;
   }
 };
@@ -35,7 +36,7 @@ const failures: FailureReader = (_status, _headers, { type, message }) => {
 const kimi: Parameters<typeof chatCompletionsIn>[0] = {
   name: 'moonshot',
   thought: 'reasoning_content',
-  cacheKey: true,
+  fields: moonshotFields,
   failures,
   cuts: moonshotCuts,
 };

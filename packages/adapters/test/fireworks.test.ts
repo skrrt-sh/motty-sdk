@@ -367,7 +367,7 @@ test.each([
       {
         type: 'error',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           message: "The upstream refused the host's credentials or account",
           upstream: true,
           provider: { fireworks: { message: error.message } },

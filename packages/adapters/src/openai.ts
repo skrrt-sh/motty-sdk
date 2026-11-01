@@ -55,7 +55,6 @@ export function openai(
         ? responsesIn({ ...marks, cuts: openaiCuts })
         : chatCompletionsIn({
             name: 'openai.chat',
-            cacheKey: true,
             ...marks,
             cuts: openaiCuts,
           }),

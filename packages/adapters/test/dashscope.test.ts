@@ -294,7 +294,7 @@ test.each([
         'Access denied, please make sure your account is in good standing.',
       type: 'Arrearage',
     },
-    kind: 'quota_exceeded',
+    kind: 'quotaExceeded',
   },
   {
     status: 429,
@@ -303,7 +303,7 @@ test.each([
       message: 'The prepaid bill is overdue.',
       type: 'PrepaidBillOverdue',
     },
-    kind: 'quota_exceeded',
+    kind: 'quotaExceeded',
   },
   {
     status: 429,
@@ -313,7 +313,7 @@ test.each([
         'You exceeded your current quota, please check your plan and billing details.',
       type: 'insufficient_quota',
     },
-    kind: 'rate_limited',
+    kind: 'rateLimited',
   },
   {
     status: 429,
@@ -341,7 +341,7 @@ test.each([
       message: 'Range of input length should be [1, 129024]',
       type: 'invalid_request_error',
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     status: 400,
@@ -350,7 +350,7 @@ test.each([
       message: 'Model not exist.',
       type: 'InvalidParameter',
     },
-    kind: 'unknown_model',
+    kind: 'unknownModel',
   },
   {
     status: 400,
@@ -359,7 +359,7 @@ test.each([
       message: 'The tool_choice parameter must be "auto" or "none".',
       type: 'invalid_request_error',
     },
-    kind: 'invalid_request',
+    kind: 'invalidRequest',
   },
 ])(
   '$error.code told as $status is $kind, in the upstream`s words, by its reference',

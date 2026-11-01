@@ -17,11 +17,11 @@ export function formless(
       return imageItem('', chunk) === undefined
         ? answer('file', 'a file the model made that is not an inline image')
         : undefined;
-    case 'tool_result':
-      return answer('tool_result', 'the result of a tool the upstream ran');
-    case 'tool_call':
+    case 'toolResult':
+      return answer('toolResult', 'the result of a tool the upstream ran');
+    case 'toolCall':
       return chunk.hosted === true
-        ? answer('tool_call', 'a call to a tool the upstream ran')
+        ? answer('toolCall', 'a call to a tool the upstream ran')
         : undefined;
     // Another family's goes where this API's own is encrypted, when asked.
     case 'reasoning':

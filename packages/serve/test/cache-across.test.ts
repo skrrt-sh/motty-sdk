@@ -178,7 +178,6 @@ test.each([
     const { body, leftOut } = chatCompletionsIn({
       name: 'router',
       breakpoints,
-      cacheKey: true,
     }).encode('model-x', request);
 
     expect(body).toMatchObject({
@@ -227,7 +226,7 @@ test('to a Responses upstream that takes markers, the key`s marker sits on the c
   expect(leftOut).toEqual([]);
 });
 
-test('to a Chat Completions upstream not said to take the key, a hint of it under either name is left out and told, the marker stays, and an option goes as said', () => {
+test('to a Chat Completions upstream whose list does not hold the key, a hint of it under either name is left out and told, the marker stays, and an option goes as said', () => {
   const { request } = responses.decode(
     { model: 'relay', input: 'Fix it.', prompt_cache_key: 'session-1' },
     new Headers(),
@@ -235,11 +234,12 @@ test('to a Chat Completions upstream not said to take the key, a hint of it unde
   const { encode } = chatCompletionsIn({
     name: 'acme',
     breakpoints: 'cache_control',
+    fields: {},
   });
   const told = [
     {
-      setting: 'openai.prompt_cache_key',
-      detail: 'acme has no field for prompt_cache_key',
+      setting: 'cacheKey',
+      detail: 'acme has no field for cacheKey',
     },
   ];
   const addressed = encode('model-x', {
@@ -327,7 +327,6 @@ test('a Chat Completions caller`s key alone puts a marker on the last part sent 
   const { body, leftOut } = chatCompletionsIn({
     name: 'router',
     breakpoints: 'cache_control',
-    cacheKey: true,
   }).encode('anthropic/model-x', request);
 
   expect(body).toMatchObject({
@@ -403,6 +402,78 @@ test('to an upstream that takes no marker, the one a Chat Completions caller`s k
   expect(answered.body).toEqual({
     ...dict(responses.encode('model-x', unkeyed.request).body),
     prompt_cache_key: 'session-1',
+  });
+  expect(chat.leftOut).toEqual([]);
+  expect(answered.leftOut).toEqual([]);
+});
+
+test.each([
+  {
+    name: 'a router over Chat Completions',
+    encoded: chatCompletionsIn({ name: 'acme', breakpoints: 'cache_control' }),
+    sent: 'cache_control',
+  },
+  {
+    name: 'a router over the Responses API',
+    encoded: responsesIn({ breakpoints: true }),
+    sent: 'prompt_cache_breakpoint',
+  },
+  { name: 'Anthropic Messages', encoded: messages, sent: 'cache_control' },
+])(
+  'an author who states a cache key asks for the marker a caller`s key asks for, unless one is placed, on $name',
+  ({ encoded, sent }) => {
+    const keyed = encoded.encode('model-x', {
+      messages: [
+        { role: 'user', text: 'First.' },
+        { role: 'assistant', text: 'Yes.' },
+        { role: 'user', text: 'Second.' },
+      ],
+      options: { cacheKey: 'session-1' },
+    });
+    const placed = encoded.encode('model-x', {
+      messages: [
+        { role: 'user', text: 'First.', cache: {} },
+        { role: 'assistant', text: 'Yes.' },
+        { role: 'user', text: 'Second.' },
+      ],
+      options: { cacheKey: 'session-1' },
+    });
+    const bare = encoded.encode('model-x', {
+      messages: [{ role: 'user', text: 'First.' }],
+    });
+    const text = (body: unknown) => JSON.stringify(body);
+    const markers = (body: unknown) => text(body).split(sent).length - 1;
+
+    expect(markers(keyed.body)).toBe(1);
+    expect(text(keyed.body).indexOf('Second.')).toBeLessThan(
+      text(keyed.body).indexOf(sent),
+    );
+    expect(markers(placed.body)).toBe(1);
+    expect(text(placed.body).indexOf(sent)).toBeLessThan(
+      text(placed.body).indexOf('Second.'),
+    );
+    expect(markers(bare.body)).toBe(0);
+    expect(keyed.leftOut).toEqual([]);
+  },
+);
+
+test('an author`s key on an upstream that takes no marker sends none and tells of none', () => {
+  const chat = chatCompletionsIn({ name: 'openai.chat' }).encode('model-x', {
+    messages: [{ role: 'user', text: 'Fix it.' }],
+    options: { cacheKey: 'session-1' },
+  });
+  const answered = responses.encode('model-x', {
+    messages: [{ role: 'user', text: 'Fix it.' }],
+    options: { cacheKey: 'session-1' },
+  });
+
+  expect(chat.body).toMatchObject({
+    prompt_cache_key: 'session-1',
+    messages: [{ role: 'user', content: 'Fix it.' }],
+  });
+  expect(answered.body).toMatchObject({
+    prompt_cache_key: 'session-1',
+    input: [{ role: 'user', content: 'Fix it.' }],
   });
   expect(chat.leftOut).toEqual([]);
   expect(answered.leftOut).toEqual([]);

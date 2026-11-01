@@ -3,12 +3,13 @@ import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
 import { deepseekCuts } from './cuts.ts';
+import { deepseekFields } from './fields.ts';
 
 // Named by status whatever the error calls itself: a spent balance, and a
 // parameter this API refuses.
 const failures: FailureReader = (status) => {
-  if (status === 402) return { code: 'quota_exceeded' };
-  if (status === 422) return { code: 'invalid_request' };
+  if (status === 402) return { code: 'quotaExceeded' };
+  if (status === 422) return { code: 'invalidRequest' };
   return undefined;
 };
 
@@ -54,7 +55,7 @@ export function deepseek(
       output: 'json_object',
       failures,
       cuts: deepseekCuts,
-      limit: 'max_tokens',
+      fields: deepseekFields,
       files: 'pictures',
       sound: 'none',
       shown: true,

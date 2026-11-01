@@ -19,7 +19,7 @@ export function called(
     spaced: Spaced;
     clients: ReadonlySet<string>;
   },
-  event: Chunk & { type: 'tool_call' },
+  event: Chunk & { type: 'toolCall' },
 ): Sent[] {
   const sent: Sent[] = [];
   let call = calls.get(event.id);

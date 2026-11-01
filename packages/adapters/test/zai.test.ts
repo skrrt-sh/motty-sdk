@@ -339,7 +339,7 @@ test.each([
       code: '1113',
       message: 'Insufficient balance or no resource package. Please recharge.',
     },
-    kind: 'quota_exceeded',
+    kind: 'quotaExceeded',
   },
   {
     status: 429,
@@ -357,12 +357,12 @@ test.each([
       message:
         'Your current subscription plan does not yet include access to glm-5.3',
     },
-    kind: 'unknown_model',
+    kind: 'unknownModel',
   },
   {
     status: 400,
     error: { code: '1261', message: 'Prompt too long' },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     status: 400,
@@ -417,7 +417,7 @@ test.each([
       message:
         'This API Key is limited to enterprise coding package scenarios.',
     },
-    kind: 'upstream_refused',
+    kind: 'upstreamRefused',
   },
 ])(
   'code $error.code told as $status is the host`s to mend, and its words are kept for the host, by its reference',

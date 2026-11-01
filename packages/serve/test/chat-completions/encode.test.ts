@@ -25,6 +25,7 @@ test('a prompt is sent as a streaming request that asks for usage', () => {
 test('sampling, stops and the token limit are sent under the API`s names', () => {
   const { body } = encode('gpt-x', {
     messages: [],
+    tools: [{ type: 'function', name: 'weather', input: { type: 'object' } }],
     options: {
       temperature: 0.2,
       topP: 0.9,
@@ -395,7 +396,11 @@ test.each([
     for (const dialect of [
       { name: 'openai.chat' },
       { name: 'openrouter', asks: 'reasoning' },
-      { name: 'deepseek', asks: 'thinking', limit: 'max_tokens' },
+      {
+        name: 'deepseek',
+        asks: 'thinking',
+        fields: { maxTokens: 'max_tokens' },
+      },
     ] as const) {
       const bare = encode(
         'small',
@@ -430,7 +435,11 @@ test.each([[{}]])(
           messages: [{ role: 'user', text: 'Hi' }],
           options: reasoning === undefined ? {} : { reasoning },
         },
-        { name: 'deepseek', asks: 'thinking', limit: 'max_tokens' },
+        {
+          name: 'deepseek',
+          asks: 'thinking',
+          fields: { maxTokens: 'max_tokens' },
+        },
         { thinking: { type: 'disabled' }, reasoning_effort: 'low' },
       ).body,
     ).toMatchObject({
@@ -450,7 +459,7 @@ test('a limit replaces the connection`s under either name, and a request with no
   const named = encode(
     'small',
     { messages: [{ role: 'user', text: 'Hi' }], options: { maxTokens: 64 } },
-    { name: 'deepseek', limit: 'max_tokens' },
+    { name: 'deepseek', fields: { maxTokens: 'max_tokens' } },
     { max_completion_tokens: 8192 },
   );
   const silent = encode(
@@ -966,12 +975,12 @@ test('where the lifetime is the request`s, an hour asked on a tool result is ask
       messages: [
         {
           role: 'assistant',
-          parts: [{ type: 'tool_call', id: 'c1', name: 'now', input: {} }],
+          parts: [{ type: 'toolCall', id: 'c1', name: 'now', input: {} }],
         },
         {
           role: 'tool',
           parts: [
-            { type: 'tool_result', id: 'c1', text: '4C', cache: { ttl: '1h' } },
+            { type: 'toolResult', id: 'c1', text: '4C', cache: { ttl: '1h' } },
           ],
         },
       ],
@@ -1023,4 +1032,14 @@ test('a tool`s marker goes on the tool to a router, with what it said beside it,
     },
   ]);
   expect(plain.leftOut.map(({ setting }) => setting)).toEqual(['tool.cache']);
+});
+
+test('an order about parallel tool calls means nothing with no tool, and OpenAI refuses it there', () => {
+  const { body, leftOut } = encode('gpt-x', {
+    messages: [],
+    options: { parallelToolCalls: false },
+  });
+
+  expect(body).not.toHaveProperty('parallel_tool_calls');
+  expect(leftOut).toEqual([]);
 });

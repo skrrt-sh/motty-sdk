@@ -3,6 +3,7 @@ import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
 import { groqCuts } from './cuts.ts';
+import { groqFields } from './fields.ts';
 
 // A tier out of capacity has a status and a type of its own, and a request
 // too large is told as 413 under a rate limit's code.
@@ -10,7 +11,7 @@ const failures: FailureReader = (status, _headers, { type }) => {
   if (status === 498 || type === 'capacity_exceeded') {
     return { code: 'overloaded' };
   }
-  return status === 413 ? { code: 'invalid_request' } : undefined;
+  return status === 413 ? { code: 'invalidRequest' } : undefined;
 };
 
 /** Connects to Groq over Chat Completions. */
@@ -46,6 +47,7 @@ export function groq(
     codec: chatCompletionsIn({
       name: 'groq',
       tagged: true,
+      fields: groqFields,
       failures,
       cuts: groqCuts,
     }),

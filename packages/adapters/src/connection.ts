@@ -45,7 +45,7 @@ export function broken(
     return { code: 'aborted', status: 499, message: 'The call was stopped' };
   }
   return {
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     status: 502,
     message: 'The connection to the upstream failed',
     retryable: true,
@@ -60,7 +60,7 @@ export function broken(
 export function moved(status: number): ErrorFacts {
   const redirect = [301, 302, 303, 307, 308].includes(status);
   return {
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     status: 502,
     message: redirect
       ? `The upstream answered ${status}, a redirect, which is not followed`

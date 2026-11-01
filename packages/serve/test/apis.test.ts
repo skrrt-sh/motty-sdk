@@ -313,7 +313,7 @@ test.each([
             yield {
               type: 'error',
               error: {
-                code: 'invalid_request',
+                code: 'invalidRequest',
                 status: 400,
                 message: 'Expected temperature to be at most 2, received 9',
                 provider: { 'openai.chat': { status: 400, code: 400 } },
@@ -330,7 +330,7 @@ test.each([
     expect(reply.status).toBe(400);
     expect(await reply.json()).toEqual(body);
     expect((await reported.promise).error).toEqual({
-      code: 'invalid_request',
+      code: 'invalidRequest',
       status: 400,
       message: 'Expected temperature to be at most 2, received 9',
       retryable: false,
@@ -371,7 +371,7 @@ test.each([
           call: async function* () {
             yield {
               type: 'error',
-              error: { code: 'upstream_refused', message: 'User not found.' },
+              error: { code: 'upstreamRefused', message: 'User not found.' },
             };
           },
         },
@@ -384,7 +384,7 @@ test.each([
     expect(reply.status).toBe(502);
     expect(await reply.json()).toEqual(body);
     expect((await reported.promise).error).toEqual({
-      code: 'upstream_refused',
+      code: 'upstreamRefused',
       status: 502,
       message: 'User not found.',
       retryable: false,
@@ -546,7 +546,7 @@ test('arguments nested too deep inside their text are kept as the text they came
 
   expect(reply.status).toBe(200);
   expect(models.sent(gpt)[0]?.messages[1]).toMatchObject({
-    parts: [{ type: 'tool_call', id: 'call_1', name: 'f', raw: written }],
+    parts: [{ type: 'toolCall', id: 'call_1', name: 'f', raw: written }],
   });
 });
 
@@ -880,7 +880,7 @@ test.each([
   'a wait of %p ms is told in whole seconds, and one that is no time is not told',
   (retryAfter, told) => {
     const reply = refused(messages, {
-      code: 'rate_limited',
+      code: 'rateLimited',
       message: 'Limit reached',
       retryAfter,
     });

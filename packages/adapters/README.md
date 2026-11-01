@@ -191,9 +191,21 @@ model("acme/some-model").complete(prompt);
 ```
 
 The key is required and goes to that address as a bearer token. A server the host runs itself that
-wants no key is for `local`, which sends a caller's `prompt_cache_key` only when given
-`cacheKey: true`. What the adapter knows of OpenAI's own models does not apply at another
-address, so an option is sent as stated and the server may refuse it.
+wants no key is for `local`. What the adapter knows of OpenAI's own models does not apply at
+another address, so an option is sent as stated and the server may refuse it.
+
+Each provider's adapter holds one list, read from that provider's reference, of the options that
+only help, such as `metadata`, `seed` and `cacheKey`. An author states one on the call, as in
+`options: { serviceTier: "flex" }`, whatever the provider. An option on the list is sent, under the
+provider's name for it where that differs, and any other is left out with a warning on the call that
+names the option. An option the reference is silent on is on the list only where the provider states
+it ignores what it does not know, as OpenRouter does. A value goes as written, so a tier is the
+provider's own word. A field that changes the answer, such as `stop`, `response_format` or
+`parallel_tool_calls`, always goes, and so does what an author names in `options.provider` or on a
+connection, in the upstream's own names. `openai` has no list and sends them all. `local` has a
+default list of what such servers share, and its `fields` option replaces it, as in
+`fields: { ...localFields, maxTokens: "max_tokens" }`. A list with no `streamOptions` asks for no
+usage.
 
 How far each model provider's adapter is proven differs. `openai`, `anthropic`, `openrouter` and
 `typesafe` are proven against the live API, by tests that make real calls and run under

@@ -46,19 +46,19 @@ test('tool call fragments are assembled, and the content is null', () => {
   expect(
     collected(
       [
-        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+        { type: 'toolCall', id: 'call_a', name: 'weather', arguments: '' },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_b',
           name: 'shell',
           arguments: 'ls',
           provider: { 'openai.chat': { type: 'custom' } },
         },
-        { type: 'tool_call', id: 'call_a', arguments: '{"city":' },
-        { type: 'tool_call', id: 'call_b', arguments: ' -la' },
-        { type: 'tool_call', id: 'call_a', arguments: '"Oslo"}' },
+        { type: 'toolCall', id: 'call_a', arguments: '{"city":' },
+        { type: 'toolCall', id: 'call_b', arguments: ' -la' },
+        { type: 'toolCall', id: 'call_a', arguments: '"Oslo"}' },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       { id: 'req_1', model: 'coder', muted: false },
     ),
   ).toMatchObject({
@@ -372,7 +372,7 @@ test('what a tool call came with is collected into the call, where it sat', () =
     collected(
       [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_a',
           name: 'weather',
           arguments: '{"city":',
@@ -384,7 +384,7 @@ test('what a tool call came with is collected into the call, where it sat', () =
           },
         },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_b',
           name: 'shell',
           arguments: 'ls',
@@ -392,9 +392,9 @@ test('what a tool call came with is collected into the call, where it sat', () =
             'openai.chat': { type: 'custom', custom: { signature: 'c2ln' } },
           },
         },
-        { type: 'tool_call', id: 'call_a', arguments: '"Oslo"}' },
+        { type: 'toolCall', id: 'call_a', arguments: '"Oslo"}' },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       { id: 'req_1', model: 'coder', muted: false },
     ),
   ).toMatchObject({
@@ -437,20 +437,20 @@ test.each([
       collected(
         [
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'call_a',
             name: 'shell',
             arguments: 'l',
             provider: { 'openai.chat': first },
           },
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'call_a',
             arguments: 's',
             provider: { 'openai.chat': second },
           },
         ],
-        { type: 'finish', reason: 'tool_calls' },
+        { type: 'finish', reason: 'toolCalls' },
         { id: 'req_1', model: 'coder', muted: false },
       ),
     ).toHaveProperty('choices.0.message.tool_calls', [
@@ -464,7 +464,7 @@ test('what a later fragment not marked as its custom call holds inside is collec
     collected(
       [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_a',
           name: 'shell',
           arguments: 'l',
@@ -473,7 +473,7 @@ test('what a later fragment not marked as its custom call holds inside is collec
           },
         },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_a',
           arguments: 's',
           provider: {
@@ -481,7 +481,7 @@ test('what a later fragment not marked as its custom call holds inside is collec
           },
         },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       { id: 'req_1', model: 'coder', muted: false },
     ),
   ).toHaveProperty('choices.0.message.tool_calls', [
@@ -497,11 +497,11 @@ test('what a later fragment not marked as its custom call holds inside is collec
 test('a call of many fragments that each carry a field of their own is collected whole', () => {
   const whole = collected(
     [
-      { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+      { type: 'toolCall', id: 'call_a', name: 'weather', arguments: '' },
       ...Array.from(
         { length: 40_000 },
         (_, at): Chunk => ({
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_a',
           arguments: 'x',
           provider: {
@@ -510,7 +510,7 @@ test('a call of many fragments that each carry a field of their own is collected
         }),
       ),
     ],
-    { type: 'finish', reason: 'tool_calls' },
+    { type: 'finish', reason: 'toolCalls' },
     { id: 'req_1', model: 'coder', muted: false },
   );
 
@@ -529,16 +529,16 @@ test('a function call with no arguments is collected as an empty object, and a c
   expect(
     collected(
       [
-        { type: 'tool_call', id: 'call_a', name: 'now', arguments: '' },
+        { type: 'toolCall', id: 'call_a', name: 'now', arguments: '' },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_b',
           name: 'shell',
           arguments: '',
           provider: { 'openai.chat': { type: 'custom' } },
         },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       { id: 'req_1', model: 'coder', muted: false },
     ),
   ).toMatchObject({

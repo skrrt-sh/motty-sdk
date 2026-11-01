@@ -76,7 +76,7 @@ function blockOf(
     return undefined;
   }
   const meant =
-    part.type === 'tool_call' && part.hosted !== true
+    part.type === 'toolCall' && part.hosted !== true
       ? mine(part.provider)
       : own(part.provider, `${a(part.type)} part`);
   const { cache_control: kept, ...extra } = {
@@ -86,7 +86,7 @@ function blockOf(
   const cache = cacheTo(part.cache, kept);
   // What the upstream of another API ran has no block here; this API's own
   // comes with the fields it wrote.
-  if (part.type === 'tool_call' || part.type === 'tool_result') {
+  if (part.type === 'toolCall' || part.type === 'toolResult') {
     left.without('hosted', part.hosted && Object.keys(meant).length === 0);
   }
   switch (part.type) {
@@ -122,7 +122,7 @@ function blockOf(
     case 'audio':
       left.without('audio', part);
       return undefined;
-    case 'tool_call': {
+    case 'toolCall': {
       // The two OpenAI APIs may say a call with no arguments as no text.
       if (part.input === undefined && part.raw !== '') {
         unsupported(
@@ -146,7 +146,7 @@ function blockOf(
         ...cache,
       };
     }
-    case 'tool_result': {
+    case 'toolResult': {
       // A result of a tool this API's upstream ran says its own kind.
       const { type = 'tool_result' } = meant;
       return {

@@ -86,7 +86,7 @@ test('a chat call for a name no adapter serves ends as one unknown-model error e
     {
       type: 'error',
       error: {
-        code: 'unknown_model',
+        code: 'unknownModel',
         status: 404,
         message: 'No model named acme/missing',
       },
@@ -118,7 +118,7 @@ test('a chat call passes over an adapter that serves the name with a decision ca
         signal,
       ),
     ),
-  ).toMatchObject([{ type: 'error', error: { code: 'unknown_model' } }]);
+  ).toMatchObject([{ type: 'error', error: { code: 'unknownModel' } }]);
 });
 
 test('a decision call goes to the first adapter that serves the name with a decision call, input and result unchanged', async () => {
@@ -195,10 +195,10 @@ function asked(headers: { [name: string]: string } = {}) {
 }
 
 test('a motty that speaks another contract version is refused when the host is made', () => {
-  const contract = { ...contractOf(echo()), version: 2 };
+  const contract = { ...contractOf(echo()), version: 1 };
 
   expect(() => hosting({ [mark]: contract }, {})).toThrow(
-    'The motty speaks contract version 2, this host 1',
+    'The motty speaks contract version 1, this host 2',
   );
 });
 
@@ -626,7 +626,7 @@ test('a call that ended with no usage is left as it is, and no price is asked', 
     await Array.fromAsync(
       host.models('acme/missing', { messages: [] }, host.signal),
     ),
-  ).toMatchObject([{ type: 'error', error: { code: 'unknown_model' } }]);
+  ).toMatchObject([{ type: 'error', error: { code: 'unknownModel' } }]);
   expect(priced).toEqual([]);
 });
 
@@ -935,7 +935,7 @@ test('a stream nobody reads is ended by the time limit: its record says timed ou
 
   expect(await reported.promise).toMatchObject({
     outcome: 'aborted',
-    error: { code: 'timed_out', status: 504 },
+    error: { code: 'timedOut', status: 504 },
   });
   expect(host.signal.reason).toMatchObject({ name: 'TimeoutError' });
   expect(listening()).toBe(0);

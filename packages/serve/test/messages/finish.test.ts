@@ -15,9 +15,9 @@ test('every stop reason has a finish reason, and comes back as itself', () => {
     ['stop_sequence', 'stop'],
     ['max_tokens', 'length'],
     ['model_context_window_exceeded', 'length'],
-    ['tool_use', 'tool_calls'],
+    ['tool_use', 'toolCalls'],
     ['pause_turn', 'pause'],
-    ['refusal', 'content_filter'],
+    ['refusal', 'contentFilter'],
   ] as const) {
     expect(reasonOf(stop)).toBe(reason);
     expect(stopOf({ type: 'finish', reason, rawReason: stop })).toBe(stop);
@@ -30,9 +30,9 @@ test('a finish of another family is written by its neutral reason', () => {
   for (const [reason, stop] of [
     ['stop', 'end_turn'],
     ['length', 'max_tokens'],
-    ['tool_calls', 'tool_use'],
+    ['toolCalls', 'tool_use'],
     ['pause', 'pause_turn'],
-    ['content_filter', 'refusal'],
+    ['contentFilter', 'refusal'],
     ['other', 'end_turn'],
   ] as const) {
     expect(stopOf({ type: 'finish', reason })).toBe(stop);

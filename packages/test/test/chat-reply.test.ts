@@ -25,7 +25,7 @@ test('chunks are sent as they are, then a finish', async () => {
   const models = fake(
     on(small, [
       { type: 'reasoning', text: 'The lock order differs' },
-      { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+      { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
       { type: 'text', text: 'deep reply' },
     ]),
   );
@@ -40,7 +40,7 @@ test('chunks are sent as they are, then a finish', async () => {
 
   expect(events).toEqual([
     { type: 'reasoning', text: 'The lock order differs' },
-    { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+    { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
     { type: 'text', text: 'deep reply' },
     { type: 'finish', reason: 'stop' },
   ]);
@@ -49,8 +49,8 @@ test('chunks are sent as they are, then a finish', async () => {
 test('chunks that end with a finish state the finish reason and the usage', async () => {
   const models = fake(
     on(small, [
-      { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
-      { type: 'finish', reason: 'tool_calls', usage: { input: 7, output: 3 } },
+      { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
+      { type: 'finish', reason: 'toolCalls', usage: { input: 7, output: 3 } },
     ]),
   );
 
@@ -63,8 +63,8 @@ test('chunks that end with a finish state the finish reason and the usage', asyn
   );
 
   expect(events).toEqual([
-    { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
-    { type: 'finish', reason: 'tool_calls', usage: { input: 7, output: 3 } },
+    { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
+    { type: 'finish', reason: 'toolCalls', usage: { input: 7, output: 3 } },
   ]);
 });
 

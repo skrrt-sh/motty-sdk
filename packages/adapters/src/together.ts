@@ -2,19 +2,20 @@ import type { ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
+import { togetherFields } from './fields.ts';
 
 // Together tells a prompt that does not fit the model's context as 403, in
 // an error of its own. A 403 with none is the network's before it.
 const failures: FailureReader = (status, _headers, { message }) =>
   status === 403 && typeof message === 'string'
-    ? { code: 'context_too_long' }
+    ? { code: 'contextTooLong' }
     : undefined;
 
 const shared: Parameters<typeof chatCompletionsIn>[0] = {
   name: 'together',
   efforts: ['low', 'medium', 'high'],
   topK: true,
-  limit: 'max_tokens',
+  fields: togetherFields,
   // A natural stop is told apart from a stop sequence, and some models
   // count cached tokens with no details around them.
   endings: { eos: 'stop' },

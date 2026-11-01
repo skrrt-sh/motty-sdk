@@ -202,33 +202,33 @@ test('input JSON deltas are fragments of the tool call they belong to', async ()
   );
   expect(chunks.slice(0, -1)).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
       name: 'get_weather',
       arguments: '',
       block: 0,
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
       arguments: '{"location":',
       block: 0,
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
       arguments: ' "San Francisco, CA"}',
       block: 0,
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
       arguments: '',
       ended: true,
       block: 0,
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_014hJH82Qum7Td6UV8gDXThB',
       name: 'web_search',
       arguments: '',
@@ -237,7 +237,7 @@ test('input JSON deltas are fragments of the tool call they belong to', async ()
       provider: { anthropic: { type: 'server_tool_use' } },
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_014hJH82Qum7Td6UV8gDXThB',
       arguments: '{"query": "weather"}',
       block: 1,
@@ -245,13 +245,13 @@ test('input JSON deltas are fragments of the tool call they belong to', async ()
   ]);
   const joined = chunks
     .flatMap((chunk) =>
-      chunk.type === 'tool_call' && chunk.block === 0 ? [chunk.arguments] : [],
+      chunk.type === 'toolCall' && chunk.block === 0 ? [chunk.arguments] : [],
     )
     .join('');
   expect(JSON.parse(joined)).toEqual({ location: 'San Francisco, CA' });
   expect(chunks.at(-1)).toMatchObject({
     type: 'finish',
-    reason: 'tool_calls',
+    reason: 'toolCalls',
     rawReason: 'tool_use',
   });
 });
@@ -260,7 +260,7 @@ test.each([
   [
     'tool_use',
     {},
-    [{ type: 'tool_call', id: 'toolu_01', arguments: '', ended: true }],
+    [{ type: 'toolCall', id: 'toolu_01', arguments: '', ended: true }],
   ],
   ['server_tool_use', { hosted: true }, []],
 ])(
@@ -292,9 +292,9 @@ test.each([
       { type: 'message_stop' },
     );
     expect(chunks.slice(0, -1)).toMatchObject([
-      { type: 'tool_call', id: 'toolu_01', name: 'get_time', ...hosted },
-      { type: 'tool_call', id: 'toolu_01', arguments: '', block: 0 },
-      { type: 'tool_call', id: 'toolu_01', arguments: '{}', block: 0 },
+      { type: 'toolCall', id: 'toolu_01', name: 'get_time', ...hosted },
+      { type: 'toolCall', id: 'toolu_01', arguments: '', block: 0 },
+      { type: 'toolCall', id: 'toolu_01', arguments: '{}', block: 0 },
       ...whole,
     ]);
     expect(chunks).toHaveLength(4 + whole.length);
@@ -319,14 +319,14 @@ test('a call that is the last block of a reply cut at its limit is not said to h
   );
   expect(chunks.slice(0, -1)).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01',
       name: 'write',
       arguments: '',
       block: 0,
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01',
       arguments: '{"text":"half',
       block: 0,
@@ -442,7 +442,7 @@ test('a frame that cannot be read fails the stream once', async () => {
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream sent an event that cannot be read',
         retryable: true,
         upstream: true,
@@ -454,7 +454,7 @@ test('a frame that cannot be read fails the stream once', async () => {
     yield { data: '[DONE]' };
   }
   expect(await Array.fromAsync(events(text()))).toMatchObject([
-    { type: 'error', error: { code: 'upstream_failed' } },
+    { type: 'error', error: { code: 'upstreamFailed' } },
   ]);
 });
 
@@ -477,7 +477,7 @@ test('a stream cut before its stop reason fails; one cut after finishes', async 
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream closed the stream before it finished',
         retryable: true,
       },
@@ -486,7 +486,7 @@ test('a stream cut before its stop reason fails; one cut after finishes', async 
   expect(await read()).toMatchObject([{ type: 'error' }]);
   expect(
     await read({ type: 'message_delta', delta: {}, usage: {} }),
-  ).toMatchObject([{ type: 'error', error: { code: 'upstream_failed' } }]);
+  ).toMatchObject([{ type: 'error', error: { code: 'upstreamFailed' } }]);
   expect(
     await read({
       type: 'message_delta',
@@ -535,7 +535,7 @@ test('an ending said under a key named as the prototype is no ending', async () 
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream closed the stream before it finished',
         retryable: true,
         upstream: true,
@@ -877,7 +877,7 @@ test.each([
   [
     'the stream is cut',
     { type: 'ping' },
-    { code: 'upstream_failed', message: expect.stringContaining('closed') },
+    { code: 'upstreamFailed', message: expect.stringContaining('closed') },
   ],
   [
     'the upstream fails',
@@ -990,8 +990,8 @@ test('a block told whole that never ends is told before the block that starts af
     ),
   ).toMatchObject([
     { type: 'provider', block: 0 },
-    { type: 'tool_call', id: 'toolu_01', name: 'f', block: 1 },
-    { type: 'tool_call', id: 'toolu_01', arguments: '{}', block: 1 },
+    { type: 'toolCall', id: 'toolu_01', name: 'f', block: 1 },
+    { type: 'toolCall', id: 'toolu_01', arguments: '{}', block: 1 },
     { type: 'error' },
   ]);
 });
@@ -1047,7 +1047,7 @@ test('a tool_use block keeps every field not read here, an empty one and one nam
     },
   });
   expect(call).toEqual({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'toolu_01',
     name: 'f',
     arguments: '',
@@ -1072,8 +1072,8 @@ test('input said after its block ended is not the call`s', async () => {
       },
     ),
   ).toMatchObject([
-    { type: 'tool_call', id: 'toolu_01', arguments: '' },
-    { type: 'tool_call', id: 'toolu_01', arguments: '{}' },
+    { type: 'toolCall', id: 'toolu_01', arguments: '' },
+    { type: 'toolCall', id: 'toolu_01', arguments: '{}' },
     { type: 'error' },
   ]);
 });

@@ -337,7 +337,7 @@ test.each([
       param: null,
       code: null,
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     status: 404,
@@ -347,7 +347,7 @@ test.each([
       param: null,
       code: null,
     },
-    kind: 'unknown_model',
+    kind: 'unknownModel',
   },
 ])(
   'a failure told as $status is $kind, in the upstream`s words, by its reference',
@@ -406,7 +406,7 @@ test.each([
       {
         type: 'error',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           message: "The upstream refused the host's credentials or account",
           provider: { together: { status: 403 } },
           upstream: true,

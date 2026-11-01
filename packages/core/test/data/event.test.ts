@@ -9,8 +9,8 @@ import {
 
 test.each([
   [{ type: 'text', text: '', block: 0, provider: { openai: { index: 0 } } }],
-  [{ type: 'tool_call', id: 'call_1', arguments: '{"q":' }],
-  [{ type: 'tool_result', id: 'call_1', output: null }],
+  [{ type: 'toolCall', id: 'call_1', arguments: '{"q":' }],
+  [{ type: 'toolResult', id: 'call_1', output: null }],
   [{ type: 'file', data: 'iVBORw0=', mediaType: 'image/png' }],
   [{ type: 'file', url: 'https://example.com/a.png' }],
   [{ type: 'file', id: 'file_1', mediaType: 'image/png' }],
@@ -31,16 +31,16 @@ test.each([
   [{ type: 'text', text: 'Hello', block: '0' }],
   [{ type: 'text', text: 'Hello', provider: 'openai' }],
   [{ type: 'text', text: 'Hello', provider: [] }],
-  [{ type: 'tool_call', id: 1, arguments: '{}' }],
-  [{ type: 'tool_call', id: 'call_1', arguments: { q: 'motty' } }],
-  [{ type: 'tool_call', id: 'call_1', arguments: '', name: 7 }],
-  [{ type: 'tool_call', id: 'call_1', arguments: '', hosted: 'yes' }],
-  [{ type: 'tool_call', id: 'call_1', arguments: '', ended: 'yes' }],
-  [{ type: 'tool_result', output: 'found' }],
-  [{ type: 'tool_result', id: 'call_1', output: () => 'found' }],
-  [{ type: 'tool_result', id: 'call_1', output: Number.POSITIVE_INFINITY }],
-  [{ type: 'tool_result', id: 'call_1', output: 'found', failed: 1 }],
-  [{ type: 'tool_result', id: 'call_1', output: 'found', hosted: 'no' }],
+  [{ type: 'toolCall', id: 1, arguments: '{}' }],
+  [{ type: 'toolCall', id: 'call_1', arguments: { q: 'motty' } }],
+  [{ type: 'toolCall', id: 'call_1', arguments: '', name: 7 }],
+  [{ type: 'toolCall', id: 'call_1', arguments: '', hosted: 'yes' }],
+  [{ type: 'toolCall', id: 'call_1', arguments: '', ended: 'yes' }],
+  [{ type: 'toolResult', output: 'found' }],
+  [{ type: 'toolResult', id: 'call_1', output: () => 'found' }],
+  [{ type: 'toolResult', id: 'call_1', output: Number.POSITIVE_INFINITY }],
+  [{ type: 'toolResult', id: 'call_1', output: 'found', failed: 1 }],
+  [{ type: 'toolResult', id: 'call_1', output: 'found', hosted: 'no' }],
   [{ type: 'file' }],
   [{ type: 'file', data: 'iVBORw0=' }],
   [{ type: 'file', data: new Uint8Array(4), mediaType: 'image/png' }],
@@ -63,7 +63,7 @@ test('progress cannot be forged as an event', () => {
 
 test('provider data, tool output and warnings pass unchecked', () => {
   const chunk = {
-    type: 'tool_result',
+    type: 'toolResult',
     id: 'call_1',
     output: { at: new Date(0) },
     provider: { openai: { parse: () => 'logprobs' } },
@@ -78,7 +78,7 @@ test('provider data, tool output and warnings pass unchecked', () => {
 test('a finish enters as the terminal event it is', () => {
   const event = {
     type: 'finish',
-    reason: 'tool_calls',
+    reason: 'toolCalls',
     usage: { input: 12, output: 0, cached: 4, cacheWrite: 2, reasoning: 1 },
     rawReason: 'tool_use',
     id: 'msg_1',
@@ -130,7 +130,7 @@ test('a failure whose host says anything but false of it is marked as from outsi
   expect(
     eventOf({
       type: 'error',
-      error: { code: 'rate_limited', message: 'busy', upstream: 'false' },
+      error: { code: 'rateLimited', message: 'busy', upstream: 'false' },
     }),
   ).toHaveProperty('error.upstream', true);
 });

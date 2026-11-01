@@ -130,7 +130,7 @@ flowchart TD
   start([ticket]) --> first["fallback: luna, haiku<br/>output: the Ticket schema"]
   first --> valid{"reply matches<br/>the schema?"}
   valid -- yes --> answer([Answer])
-  valid -- "no: invalid_output" --> second["fallback: haiku, sonnet"]
+  valid -- "no: invalidOutput" --> second["fallback: haiku, sonnet"]
   second --> again{"matches?"}
   again -- yes --> answer
   again -- no --> failed([Request fails])

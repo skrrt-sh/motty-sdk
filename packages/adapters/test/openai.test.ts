@@ -222,7 +222,7 @@ test('a Chat Completions upstream`s failure is cut the same, in a body and insid
     expect(events.at(-1)).toMatchObject({
       type: 'error',
       error: {
-        code: 'rate_limited',
+        code: 'rateLimited',
         message:
           'Rate limit reached for gpt-4o on requests per min (RPM): Limit 500, Used 500, Requested 1.',
         provider: { 'openai.chat': { message: error.message } },

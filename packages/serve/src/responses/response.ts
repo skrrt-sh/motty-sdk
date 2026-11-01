@@ -85,7 +85,7 @@ function started({ body }: Asked, id: string): Dict {
 // its own word is written where the neutral reason names none.
 function cutBy({ reason, provider }: Finish): string | undefined {
   if (reason === 'length') return 'max_output_tokens';
-  if (reason === 'content_filter') return 'content_filter';
+  if (reason === 'contentFilter') return 'content_filter';
   if (reason !== 'other') return undefined;
   return text(field(field(held(provider), 'incomplete_details'), 'reason'));
 }

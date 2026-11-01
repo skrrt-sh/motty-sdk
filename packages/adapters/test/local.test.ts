@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { adapted } from '@mottyjs/core/host';
-import { local } from '../src/local.ts';
+import { local, localFields } from '../src/local.ts';
 
 test('with no key a call carries no credential, and a server said to tag its reasoning has it read from between think tags cut across chunks, with a tool call and usage, by its reference', async () => {
   const seen: { path: string; key: string | null }[] = [];
@@ -46,12 +46,12 @@ data: [DONE]
     { type: 'reasoning', text: 'I need the weather tool.' },
     { type: 'text', text: 'Let me check.' },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_function_7k2',
       name: 'get_weather',
       arguments: '{"city": "Hangzhou"}',
     },
-    { type: 'finish', reason: 'tool_calls', usage: { input: 58, output: 40 } },
+    { type: 'finish', reason: 'toolCalls', usage: { input: 58, output: 40 } },
   ]);
   expect(events.at(-1)).not.toHaveProperty('warnings');
 });
@@ -78,7 +78,6 @@ data: [DONE]
       tagged: true,
       asks: 'chat_template_kwargs',
       efforts: [],
-      limit: 'max_tokens',
     }),
   ]);
 
@@ -184,7 +183,7 @@ data: [DONE]
       tagged: true,
       asks: 'chat_template_kwargs',
       efforts: [],
-      limit: 'max_tokens',
+      fields: { ...localFields, maxTokens: 'max_tokens' },
     }),
   ]);
 

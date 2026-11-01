@@ -183,7 +183,7 @@ test('reasoning text goes back on the assistant turn in the field the dialect na
               { type: 'reasoning', text: 'I need ' },
               { type: 'reasoning', text: 'the tool.' },
               {
-                type: 'tool_call',
+                type: 'toolCall',
                 id: 'call_1',
                 name: 'weather',
                 input: { city: 'Paris' },
@@ -192,7 +192,7 @@ test('reasoning text goes back on the assistant turn in the field the dialect na
           },
           {
             role: 'tool',
-            parts: [{ type: 'tool_result', id: 'call_1', text: 'Sunny' }],
+            parts: [{ type: 'toolResult', id: 'call_1', text: 'Sunny' }],
           },
         ],
       },

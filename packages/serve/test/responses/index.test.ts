@@ -1352,19 +1352,19 @@ test.each([
   async (_, { streamed }) => {
     async function* run(ended: Chunk[]): RunStream {
       yield {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_1',
         name: 'weather',
         arguments: '{}',
       };
       yield* ended;
       yield { type: 'text', text: 'Done.' };
-      yield { type: 'finish', reason: 'tool_calls' };
+      yield { type: 'finish', reason: 'toolCalls' };
     }
 
     const frames = await Array.fromAsync(
       streamed(
-        run([{ type: 'tool_call', id: 'call_1', arguments: '', ended: true }]),
+        run([{ type: 'toolCall', id: 'call_1', arguments: '', ended: true }]),
         'r1',
       ),
     );

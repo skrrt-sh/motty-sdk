@@ -274,7 +274,7 @@ test('a call scripted to fail as an unknown model is a failure like any other, a
   expect(calls).toMatchObject([
     {
       model: 'acme/small',
-      code: 'unknown_model',
+      code: 'unknownModel',
       message: 'The model was retired',
     },
     { model: 'acme/large' },
@@ -298,7 +298,7 @@ test('a real adapter that reports an unknown model does not fail a run the motty
             yield {
               type: 'error',
               error: {
-                code: 'unknown_model',
+                code: 'unknownModel',
                 status: 404,
                 message: 'The model does not exist',
                 upstream: true,

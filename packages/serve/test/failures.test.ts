@@ -169,7 +169,7 @@ test('an upstream that knows no such model is not told as a host with no adapter
             yield {
               type: 'error',
               error: {
-                code: 'unknown_model',
+                code: 'unknownModel',
                 status: 404,
                 upstream: true,
                 message: 'The model gpt does not exist',
@@ -398,7 +398,7 @@ test('an upstream that refuses what the adapter sent is written, as the host may
             yield {
               type: 'error',
               error: {
-                code: 'invalid_request',
+                code: 'invalidRequest',
                 status: 400,
                 message: "property 'prompt_cache_key' is unsupported",
               },

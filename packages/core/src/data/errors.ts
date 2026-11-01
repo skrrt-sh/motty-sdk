@@ -126,14 +126,14 @@ export class MottyError extends Error {
 /**
  * An upstream's rate limit was reached. Status 429, and `retry` tries again.
  */
-export class RateLimited extends MottyError.define('rate_limited', 429, {
+export class RateLimited extends MottyError.define('rateLimited', 429, {
   retryable: true,
 }) {}
 /**
  * A balance, budget or quota is spent, which a wait does not mend. Status 429,
  * and `retry` does not try again.
  */
-export class QuotaExceeded extends MottyError.define('quota_exceeded', 429) {}
+export class QuotaExceeded extends MottyError.define('quotaExceeded', 429) {}
 /**
  * An upstream is too busy, or the server is shutting down. Status 503, and
  * `retry` tries again.
@@ -142,10 +142,7 @@ export class Overloaded extends MottyError.define('overloaded', 503, {
   retryable: true,
 }) {}
 /** The prompt does not fit the model's context. Status 400. */
-export class ContextTooLong extends MottyError.define(
-  'context_too_long',
-  400,
-) {}
+export class ContextTooLong extends MottyError.define('contextTooLong', 400) {}
 /** A content filter or policy refused the request. Status 400. */
 export class Blocked extends MottyError.define('blocked', 400) {}
 /**
@@ -155,12 +152,12 @@ export class Unsupported extends MottyError.define('unsupported', 400) {}
 /** The caller may not do what was asked. Status 403. */
 export class Forbidden extends MottyError.define('forbidden', 403) {}
 /** The request itself is wrong. Status 400. */
-export class InvalidRequest extends MottyError.define('invalid_request', 400) {}
+export class InvalidRequest extends MottyError.define('invalidRequest', 400) {}
 /**
  * An upstream failed or could not be reached. Status 502, and `retry` tries
  * again unless the failure says it would not help.
  */
-export class UpstreamFailed extends MottyError.define('upstream_failed', 502, {
+export class UpstreamFailed extends MottyError.define('upstreamFailed', 502, {
   retryable: true,
 }) {}
 /**
@@ -168,16 +165,16 @@ export class UpstreamFailed extends MottyError.define('upstream_failed', 502, {
  * does not mend. Status 502.
  */
 export class UpstreamRefused extends MottyError.define(
-  'upstream_refused',
+  'upstreamRefused',
   502,
 ) {}
 /**
  * No adapter of the host serves the model name, or the upstream does not know
  * it. Status 404.
  */
-export class UnknownModel extends MottyError.define('unknown_model', 404) {}
+export class UnknownModel extends MottyError.define('unknownModel', 404) {}
 /** A time limit passed. Status 504, and `retry` tries again. */
-export class TimedOut extends MottyError.define('timed_out', 504, {
+export class TimedOut extends MottyError.define('timedOut', 504, {
   retryable: true,
 }) {}
 /**
@@ -197,41 +194,41 @@ export class Unauthenticated extends MottyError.define(
  * The answer is not JSON or does not match the schema, which `answer.json()`
  * raises. Status 502.
  */
-export class InvalidOutput extends MottyError.define('invalid_output', 502) {}
+export class InvalidOutput extends MottyError.define('invalidOutput', 502) {}
 /**
  * The request needs more model calls than `limits.calls` allows. Status 400,
  * and `retry` never tries again.
  */
-export class LimitReached extends MottyError.define('limit_reached', 400) {}
+export class LimitReached extends MottyError.define('limitReached', 400) {}
 /** A reroute named an entry that already ran for this request. Status 500. */
-export class RouteLoop extends MottyError.define('route_loop', 500) {}
+export class RouteLoop extends MottyError.define('routeLoop', 500) {}
 /**
  * A chooser or a reroute named an entry the table does not have. Status 500.
  */
-export class UnknownRoute extends MottyError.define('unknown_route', 500) {}
+export class UnknownRoute extends MottyError.define('unknownRoute', 500) {}
 
 type Raised = new (message: string, options?: RaiseOptions) => MottyError;
 
 const known = {
   internal: MottyError,
-  rate_limited: RateLimited,
-  quota_exceeded: QuotaExceeded,
+  rateLimited: RateLimited,
+  quotaExceeded: QuotaExceeded,
   overloaded: Overloaded,
-  context_too_long: ContextTooLong,
+  contextTooLong: ContextTooLong,
   blocked: Blocked,
   unsupported: Unsupported,
   forbidden: Forbidden,
-  invalid_request: InvalidRequest,
-  upstream_failed: UpstreamFailed,
-  upstream_refused: UpstreamRefused,
-  unknown_model: UnknownModel,
-  timed_out: TimedOut,
+  invalidRequest: InvalidRequest,
+  upstreamFailed: UpstreamFailed,
+  upstreamRefused: UpstreamRefused,
+  unknownModel: UnknownModel,
+  timedOut: TimedOut,
   aborted: Aborted,
   unauthenticated: Unauthenticated,
-  invalid_output: InvalidOutput,
-  limit_reached: LimitReached,
-  route_loop: RouteLoop,
-  unknown_route: UnknownRoute,
+  invalidOutput: InvalidOutput,
+  limitReached: LimitReached,
+  routeLoop: RouteLoop,
+  unknownRoute: UnknownRoute,
 } satisfies Record<string, Raised>;
 
 // All a caller is told of a throw that was not meant for them.

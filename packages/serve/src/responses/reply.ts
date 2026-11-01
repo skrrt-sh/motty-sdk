@@ -123,7 +123,7 @@ export function reply(asked: Asked, id: string) {
         return said(writing, event);
       case 'citation':
         return cited(writing, event);
-      case 'tool_call': {
+      case 'toolCall': {
         if (event.hosted === true) return [];
         // An item that is done cannot be opened again on this wire, and its
         // arguments were written whole, so more of them fails the reply.

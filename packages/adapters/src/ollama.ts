@@ -1,6 +1,7 @@
 import type { ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn } from '@mottyjs/serve';
 import { type Connection, chat } from './chat.ts';
+import { ollamaFields } from './fields.ts';
 
 /**
  * Connects to an Ollama server on the host's own machine, which asks for no
@@ -34,7 +35,7 @@ export function ollama(
     codec: chatCompletionsIn({
       name: 'ollama',
       thought: 'reasoning',
-      limit: 'max_tokens',
+      fields: ollamaFields,
     }),
     prefix,
     address,

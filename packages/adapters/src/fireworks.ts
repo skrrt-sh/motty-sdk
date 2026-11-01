@@ -2,16 +2,17 @@ import type { ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
+import { fireworksFields } from './fields.ts';
 
 // Fireworks tells a suspended account as 412.
 const failures: FailureReader = (status) =>
-  status === 412 ? { code: 'upstream_refused' } : undefined;
+  status === 412 ? { code: 'upstreamRefused' } : undefined;
 
 const shared: Parameters<typeof chatCompletionsIn>[0] = {
   name: 'fireworks',
   thought: 'reasoning_content',
   topK: true,
-  cacheKey: true,
+  fields: fireworksFields,
   failures,
 };
 

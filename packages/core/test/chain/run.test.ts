@@ -96,7 +96,7 @@ test('the contract carries the version and the description', () => {
       .handle(() => answer('Hi')),
   );
 
-  expect(version).toBe(1);
+  expect(version).toBe(2);
   expect(description).toEqual({ sdk, name: 'coder', plugins: ['tenant'] });
 });
 
@@ -583,7 +583,7 @@ test('a server failure handled by no boundary goes out with its code, its status
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         status: 502,
         message: 'Every model is down',
         retryable: true,
@@ -913,7 +913,7 @@ test('LimitReached nobody recovered goes out with the usage so far', async () =>
     {
       type: 'error',
       error: {
-        code: 'limit_reached',
+        code: 'limitReached',
         status: 400,
         message:
           'The request needs more model calls than the 1 this host allows',
@@ -1646,7 +1646,7 @@ test('the error the host gave as the reason of its stop is the one raised: the b
     value: {
       type: 'error',
       error: {
-        code: 'timed_out',
+        code: 'timedOut',
         status: 504,
         message: 'The host gives a request two minutes',
         retryable: true,
@@ -1658,7 +1658,7 @@ test('the error the host gave as the reason of its stop is the one raised: the b
   expect(await over.promise).toMatchObject({
     outcome: 'aborted',
     error: {
-      code: 'timed_out',
+      code: 'timedOut',
       message: 'The host gives a request two minutes',
     },
   });

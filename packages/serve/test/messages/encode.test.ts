@@ -124,7 +124,7 @@ test('an instruction between turns is sent where the API takes one', () => {
         { role: 'assistant', text: 'Hello' },
         {
           role: 'tool',
-          parts: [{ type: 'tool_result', id: 'toolu_01', text: '1' }],
+          parts: [{ type: 'toolResult', id: 'toolu_01', text: '1' }],
         },
         { role: 'system', text: 'Be terse.' },
         {
@@ -161,14 +161,12 @@ test('an instruction that stands before user turns waits past them', () => {
         { role: 'user', text: 'More' },
         {
           role: 'assistant',
-          parts: [
-            { type: 'tool_call', id: 'toolu_01', name: 'get', input: {} },
-          ],
+          parts: [{ type: 'toolCall', id: 'toolu_01', name: 'get', input: {} }],
         },
         { role: 'system', text: 'Be terse.' },
         {
           role: 'tool',
-          parts: [{ type: 'tool_result', id: 'toolu_01', text: '1' }],
+          parts: [{ type: 'toolResult', id: 'toolu_01', text: '1' }],
         },
         { role: 'system', text: 'Be terse.' },
         { role: 'user', text: 'Go' },
@@ -333,18 +331,18 @@ test('a turn of results is gathered with its own marker and failure flag, and on
         {
           role: 'tool',
           cache: { ttl: '1h' },
-          parts: [{ type: 'tool_result', id: 'call_a', text: '4C' }],
+          parts: [{ type: 'toolResult', id: 'call_a', text: '4C' }],
         },
         {
           role: 'tool',
           parts: [
-            { type: 'tool_result', id: 'call_b', text: 'boom', failed: true },
+            { type: 'toolResult', id: 'call_b', text: 'boom', failed: true },
           ],
         },
         {
           role: 'tool',
           hints: { anthropic: { note: 'kept' } },
-          parts: [{ type: 'tool_result', id: 'call_c', text: '9C' }],
+          parts: [{ type: 'toolResult', id: 'call_c', text: '9C' }],
         },
       ],
     }).body,

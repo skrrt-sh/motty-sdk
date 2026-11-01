@@ -81,7 +81,7 @@ function recordError(report: Report, error: ErrorFacts): void {
   if (error.code === 'aborted') return;
   if (
     error.upstream !== true &&
-    error.code !== 'unknown_model' &&
+    error.code !== 'unknownModel' &&
     (error.status ?? 500) < 500
   ) {
     return;
@@ -90,7 +90,7 @@ function recordError(report: Report, error: ErrorFacts): void {
   // In the core's words: an upstream that knows no such model says so in its
   // own, having been reached by an adapter that serves the name.
   if (
-    error.code === 'unknown_model' &&
+    error.code === 'unknownModel' &&
     error.message.startsWith('No model named ')
   ) {
     line(

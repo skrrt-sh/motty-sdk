@@ -114,7 +114,7 @@ test('a reader waiting when the failure arrives gets it after the chunks', async
         { type: 'text', text: 'Partial' },
         {
           type: 'error',
-          error: { code: 'rate_limited', status: 429, message: 'Slow down' },
+          error: { code: 'rateLimited', status: 429, message: 'Slow down' },
         },
       ]),
       'error',

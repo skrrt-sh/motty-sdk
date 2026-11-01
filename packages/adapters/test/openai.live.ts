@@ -474,7 +474,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       error: { type: 'not_found_error' },
     });
     expect(reports).toMatchObject([
-      { outcome: 'failed', error: { code: 'unknown_model', status: 404 } },
+      { outcome: 'failed', error: { code: 'unknownModel', status: 404 } },
     ]);
   });
 
@@ -716,7 +716,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           status: 502,
           provider: {
             'openai.responses': { status: 401, code: 'invalid_api_key' },
@@ -727,7 +727,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           provider: {
             'openai.responses': { status: 401, code: 'invalid_api_key' },
           },
@@ -804,7 +804,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           status: 502,
           provider: { 'openai.chat': { status: 401, code: 'invalid_api_key' } },
           upstream: true,
@@ -813,7 +813,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           provider: { 'openai.chat': { status: 401, code: 'invalid_api_key' } },
         },
       },
@@ -992,7 +992,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     expect(reports).toMatchObject([
       {
         outcome: 'failed',
-        error: { code: 'invalid_request', status: 400, upstream: true },
+        error: { code: 'invalidRequest', status: 400, upstream: true },
       },
     ]);
   });
@@ -1049,7 +1049,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     expect(reports).toMatchObject([
       {
         outcome: 'failed',
-        error: { code: 'invalid_request', status: 400, upstream: true },
+        error: { code: 'invalidRequest', status: 400, upstream: true },
       },
     ]);
   });
@@ -1435,7 +1435,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'unknown_model',
+          code: 'unknownModel',
           message: expect.stringContaining('does not exist'),
           provider: {
             'openai.responses': { status: 404, code: 'model_not_found' },
@@ -1487,7 +1487,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'context_too_long',
+          code: 'contextTooLong',
           message: expect.stringMatching(
             /context (?:window|length)|exceed the configured limit/,
           ),
@@ -1651,7 +1651,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           retryable: false,
           provider: { 'openai.responses': { status: 404 } },
         },
@@ -2064,7 +2064,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'unknown_model',
+          code: 'unknownModel',
           message: expect.stringContaining('does not exist'),
           provider: { 'openai.chat': { status: 404, code: 'model_not_found' } },
         },
@@ -2114,7 +2114,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'context_too_long',
+          code: 'contextTooLong',
           message: expect.stringMatching(
             /context (?:window|length)|exceed the configured limit/,
           ),
@@ -2223,7 +2223,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           retryable: false,
           provider: { 'openai.chat': { status: 404 } },
         },
@@ -2270,7 +2270,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'invalid_request',
+          code: 'invalidRequest',
           status: 400,
           message: expect.stringContaining('at most 128000 completion tokens'),
           provider: { 'openai.chat': { status: 400, code: 'invalid_value' } },

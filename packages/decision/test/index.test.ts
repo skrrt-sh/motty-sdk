@@ -31,7 +31,7 @@ function ask(): ChatRequest {
 async function* unserved(): EventStream {
   yield {
     type: 'error',
-    error: { code: 'unknown_model', status: 404, message: 'No model' },
+    error: { code: 'unknownModel', status: 404, message: 'No model' },
   };
 }
 
@@ -160,7 +160,7 @@ test('a host with no decision call fails only that call, with UnknownModel, and 
   expect(record.calls).toEqual([
     {
       model: 'typesafe/jev',
-      code: 'unknown_model',
+      code: 'unknownModel',
       message:
         'The host serves no decision model, so none is named typesafe/jev',
       time: { total: expect.any(Number) },

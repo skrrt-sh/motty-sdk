@@ -24,7 +24,7 @@ function ask(): ChatRequest {
 async function* unserved(): EventStream {
   yield {
     type: 'error',
-    error: { code: 'unknown_model', status: 404, message: 'No model' },
+    error: { code: 'unknownModel', status: 404, message: 'No model' },
   };
 }
 

@@ -10,11 +10,11 @@ export function reasonOf(stop: Json | undefined): FinishReason {
     case 'model_context_window_exceeded':
       return 'length';
     case 'tool_use':
-      return 'tool_calls';
+      return 'toolCalls';
     case 'pause_turn':
       return 'pause';
     case 'refusal':
-      return 'content_filter';
+      return 'contentFilter';
     default:
       return 'other';
   }
@@ -29,11 +29,11 @@ export function stopOf({ reason, rawReason }: Finish): string {
   switch (reason) {
     case 'length':
       return 'max_tokens';
-    case 'tool_calls':
+    case 'toolCalls':
       return 'tool_use';
     case 'pause':
       return 'pause_turn';
-    case 'content_filter':
+    case 'contentFilter':
       return 'refusal';
     default:
       return 'end_turn';

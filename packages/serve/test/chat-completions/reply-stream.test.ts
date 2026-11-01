@@ -114,11 +114,11 @@ test('progress and reasoning are sent under both names clients read', async () =
 test('tool call fragments are sent by index, id and name on the first', async () => {
   const sent = await frames(
     run(
-      { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
-      { type: 'tool_call', id: 'call_a', arguments: '{"city":' },
-      { type: 'tool_call', id: 'call_b', name: 'now', arguments: '{}' },
-      { type: 'tool_call', id: 'call_a', arguments: '"Oslo"}' },
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'toolCall', id: 'call_a', name: 'weather', arguments: '' },
+      { type: 'toolCall', id: 'call_a', arguments: '{"city":' },
+      { type: 'toolCall', id: 'call_b', name: 'now', arguments: '{}' },
+      { type: 'toolCall', id: 'call_a', arguments: '"Oslo"}' },
+      { type: 'finish', reason: 'toolCalls' },
     ),
   );
 
@@ -183,15 +183,15 @@ test('a function call with no input is sent an empty object before the reason', 
   expect(
     await frames(
       run(
-        { type: 'tool_call', id: 'call_a', name: 'now', arguments: '' },
+        { type: 'toolCall', id: 'call_a', name: 'now', arguments: '' },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_b',
           name: 'shell',
           arguments: '',
           provider: { 'openai.chat': { type: 'custom' } },
         },
-        { type: 'finish', reason: 'tool_calls' },
+        { type: 'finish', reason: 'toolCalls' },
       ),
     ),
   ).toMatchObject([
@@ -529,7 +529,7 @@ test('what a tool call came with is sent on the fragment that holds it, where it
   const [first, second] = await frames(
     run(
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_a',
         name: 'weather',
         arguments: '',
@@ -540,8 +540,8 @@ test('what a tool call came with is sent on the fragment that holds it, where it
           },
         },
       },
-      { type: 'tool_call', id: 'call_a', arguments: '{}' },
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'toolCall', id: 'call_a', arguments: '{}' },
+      { type: 'finish', reason: 'toolCalls' },
     ),
   );
 
@@ -576,14 +576,14 @@ test.each([[{ function: { name: 'stray' } }]])(
   async (carried) => {
     const [, second] = await frames(
       run(
-        { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
+        { type: 'toolCall', id: 'call_a', name: 'weather', arguments: '' },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_a',
           arguments: '{}',
           provider: { 'openai.chat': carried },
         },
-        { type: 'finish', reason: 'tool_calls' },
+        { type: 'finish', reason: 'toolCalls' },
       ),
     );
 
@@ -609,13 +609,13 @@ test.each([
     const [first] = await frames(
       run(
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_a',
           name: 'shell',
           arguments: 'ls',
           provider: { 'openai.chat': carried },
         },
-        { type: 'finish', reason: 'tool_calls' },
+        { type: 'finish', reason: 'toolCalls' },
       ),
     );
 

@@ -55,9 +55,9 @@ function picked(answer: Json) {
 // A server of this API names no failure by code, so two are read by their
 // words: a model it does not know, and a state past the length it reads.
 function named(status: number, sentence: string): KnownCode | undefined {
-  if (/^\s*unknown model/i.test(sentence)) return 'unknown_model';
+  if (/^\s*unknown model/i.test(sentence)) return 'unknownModel';
   return status === 413 && /state too large/i.test(sentence)
-    ? 'context_too_long'
+    ? 'contextTooLong'
     : undefined;
 }
 
@@ -86,7 +86,7 @@ function failure(
   return {
     ...upstreamFailure(
       {
-        code: lost ? 'upstream_failed' : code,
+        code: lost ? 'upstreamFailed' : code,
         message: lost
           ? "The decision upstream has no decisions at the adapter's address, which is likely wrong"
           : (words ?? `The decision upstream answered ${status}`),
@@ -172,7 +172,7 @@ export function typesafe(options: {
     decide: async (model, input, signal) => {
       if (typeof input !== 'object' || input === null || Array.isArray(input)) {
         throw fromFacts({
-          code: 'invalid_request',
+          code: 'invalidRequest',
           status: 400,
           message: 'A decision takes a state and questions',
         });
@@ -198,7 +198,7 @@ export function typesafe(options: {
         throw fromFacts(
           limit.aborted && !signal.aborted
             ? {
-                code: 'timed_out',
+                code: 'timedOut',
                 status: 504,
                 message: `The decision upstream gave no answer in ${timeout} ms`,
                 retryable: true,
@@ -220,7 +220,7 @@ export function typesafe(options: {
         answer = parsed(body);
       } catch {
         throw fromFacts({
-          code: 'invalid_output',
+          code: 'invalidOutput',
           status: 502,
           message: 'The decision upstream answered with what is not JSON',
           upstream: true,
@@ -230,7 +230,7 @@ export function typesafe(options: {
       if (routing === undefined) return answer;
       // The name is the motty's own and holds no secret of the host's.
       throw fromFacts({
-        code: 'unknown_model',
+        code: 'unknownModel',
         message: `The decision upstream does not know the model '${model.slice(prefix.length)}' and answered with one its router chose`,
         provider: { [family]: stated(routing, clean) },
         upstream: true,

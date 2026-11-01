@@ -27,7 +27,7 @@ test('any other failure is the upstream, worth another try', () => {
       (text) => text,
     ),
   ).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     status: 502,
     message: 'The connection to the upstream failed',
     retryable: true,
@@ -271,14 +271,14 @@ test.each(['', 'acme/eu'])(
 test('a redirect is told as one that is not followed, and a 3xx that points nowhere to follow by its status, with no other try', () => {
   expect([moved(308), moved(305)]).toEqual([
     {
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       status: 502,
       message: 'The upstream answered 308, a redirect, which is not followed',
       retryable: false,
       upstream: true,
     },
     {
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       status: 502,
       message: 'The upstream answered 305',
       retryable: false,

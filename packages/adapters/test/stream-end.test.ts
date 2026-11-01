@@ -265,6 +265,6 @@ test('a failure told in a body of its own keeps the connection for the next call
     codes.push(last?.type === 'error' ? last.error.code : undefined);
   }
 
-  expect(codes).toEqual(['rate_limited', 'rate_limited', 'rate_limited']);
+  expect(codes).toEqual(['rateLimited', 'rateLimited', 'rateLimited']);
   expect(connections).toBe(1);
 });

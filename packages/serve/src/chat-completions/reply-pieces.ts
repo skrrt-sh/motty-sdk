@@ -111,7 +111,7 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
         return said('content', event);
       case 'refusal':
         return said('refusal', event);
-      case 'tool_call': {
+      case 'toolCall': {
         // A tool the upstream ran itself is nothing this caller may answer.
         if (event.hosted === true) return undefined;
         const known = calls.get(event.id);
@@ -182,7 +182,7 @@ export function pieces(muted: boolean, customs?: ReadonlySet<string>) {
         return image === undefined ? undefined : { kind: 'image', image };
       }
       // It has no form on this wire, so the reply ends before it.
-      case 'tool_result':
+      case 'toolResult':
         return undefined;
       default:
         return event satisfies never;

@@ -4,6 +4,7 @@ import type { Takes } from '@mottyjs/serve/codec';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
 import { openrouterCuts } from './cuts.ts';
+import { openrouterFields } from './fields.ts';
 import { anthropicTakes, openaiTakes } from './takes.ts';
 
 // A router drops what a model does not take and says nothing, so each model
@@ -54,7 +55,7 @@ const failures: FailureReader = (status, _headers, error) => {
     (reason === 'in_flight_budget_exhausted' ||
       source === 'openrouter_in_flight_budget')
   ) {
-    return { code: 'rate_limited', retryable: true };
+    return { code: 'rateLimited', retryable: true };
   }
   // A budget is spent as 402, or as 403 for one set on a key, a guardrail
   // or a workspace, which no wait of a request meets.
@@ -63,7 +64,7 @@ const failures: FailureReader = (status, _headers, error) => {
     typeof source === 'string' &&
     spent.includes(source)
   ) {
-    return { code: 'quota_exceeded' };
+    return { code: 'quotaExceeded' };
   }
   if (sent === 403 && (reasons !== undefined || patterns !== undefined)) {
     return { code: 'blocked' };
@@ -75,34 +76,34 @@ const failures: FailureReader = (status, _headers, error) => {
     case 'context_length_exceeded':
     case 'token_limit_exceeded':
     case 'max_tokens_exceeded':
-      return { code: 'context_too_long' };
+      return { code: 'contextTooLong' };
     case 'not_found':
-      return { code: 'unknown_model' };
+      return { code: 'unknownModel' };
     case 'provider_overloaded':
       return { code: 'overloaded' };
     case 'provider_unavailable':
-      return { code: 'upstream_failed' };
+      return { code: 'upstreamFailed' };
     case 'timeout':
-      return { code: 'timed_out' };
+      return { code: 'timedOut' };
   }
   // A wrong address names no model, and no retry mends it.
   if (sent === 404 && said === 'Not Found') {
-    return { code: 'upstream_failed', retryable: false };
+    return { code: 'upstreamFailed', retryable: false };
   }
   // The model is known here: what the host allows shut out every provider
   // of it, or what the request asks did.
   if (sent === 404 && said.startsWith('No endpoints found matching your')) {
-    return { code: 'upstream_refused' };
+    return { code: 'upstreamRefused' };
   }
   if (sent === 404 && said.startsWith('No endpoints found that can handle')) {
     return { code: 'unsupported' };
   }
   if (sent !== 400) return undefined;
   if (said.includes('maximum context length is')) {
-    return { code: 'context_too_long' };
+    return { code: 'contextTooLong' };
   }
   if (said.includes('is not a valid model ID')) {
-    return { code: 'unknown_model' };
+    return { code: 'unknownModel' };
   }
   return said.startsWith('Reasoning is mandatory for this endpoint')
     ? { code: 'unsupported' }
@@ -159,7 +160,7 @@ export function openrouter(
       native: true,
       topK: true,
       breakpoints: 'cache_control',
-      cacheKey: true,
+      fields: openrouterFields,
       carried: ['x-anthropic-beta'],
       failures,
       cuts: openrouterCuts,

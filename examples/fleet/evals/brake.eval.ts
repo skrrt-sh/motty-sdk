@@ -34,14 +34,14 @@ describe.skipIf(!ANTHROPIC_KEY)("a subagent closed by the real small model", () 
               {
                 role: "assistant",
                 parts: [
-                  { type: "tool_call", id: "call_1", name: "Read", input: { path: "orders.ts" } },
+                  { type: "toolCall", id: "call_1", name: "Read", input: { path: "orders.ts" } },
                 ],
               },
               {
                 role: "tool",
                 parts: [
                   {
-                    type: "tool_result",
+                    type: "toolResult",
                     id: "call_1",
                     text: 'export const list = () => db.all("orders");',
                   },
@@ -62,7 +62,7 @@ describe.skipIf(!ANTHROPIC_KEY)("a subagent closed by the real small model", () 
         const chunks = await Array.fromAsync(answer.chunks());
         return {
           text: await answer.text(),
-          called: chunks.some(({ type }) => type === "tool_call"),
+          called: chunks.some(({ type }) => type === "toolCall"),
         };
       }),
     );

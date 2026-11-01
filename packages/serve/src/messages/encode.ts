@@ -1,5 +1,6 @@
 import type { Json, Message, Options } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
+import { keyed } from '../wire/cache-key.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { type Dict, dict, given, without } from '../wire/json.ts';
 import { offered } from '../wire/offered.ts';
@@ -169,7 +170,10 @@ function unmoved(
 export function encode(
   ...[model, prompt, defaults = {}, takes]: Parameters<Codec['encode']>
 ): ReturnType<Codec['encode']> {
-  const said = unmoved(prompt.messages, prompt.options ?? {});
+  const said = unmoved(
+    keyed(prompt.messages, prompt.options?.cacheKey),
+    prompt.options ?? {},
+  );
   const turn = said.findIndex((message) => !leads(message));
   const start = turn === -1 ? said.length : turn;
   const left = leaving('messages');

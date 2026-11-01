@@ -89,21 +89,21 @@ test('fragments of a tool call are one tool_use block of input deltas', () => {
   const write = writer(false);
   expect([
     ...write({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01',
       name: 'get_weather',
       arguments: '',
     }),
-    ...write({ type: 'tool_call', id: 'toolu_01', arguments: '{"location":' }),
-    ...write({ type: 'tool_call', id: 'toolu_01', arguments: ' "Paris"}' }),
+    ...write({ type: 'toolCall', id: 'toolu_01', arguments: '{"location":' }),
+    ...write({ type: 'toolCall', id: 'toolu_01', arguments: ' "Paris"}' }),
     ...write({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_01',
       name: 'web_search',
       arguments: '{}',
       hosted: true,
     }),
-    ...write({ type: 'finish', reason: 'tool_calls' }),
+    ...write({ type: 'finish', reason: 'toolCalls' }),
   ]).toEqual([
     {
       type: 'content_block_start',
@@ -226,7 +226,7 @@ test("a block of this family goes out whole; another family's does not", () => {
   expect([
     ...write({ type: 'provider', provider: { anthropic: redacted } }),
     ...write({ type: 'provider', provider: { 'openai.responses': { a: 1 } } }),
-    ...write({ type: 'tool_result', id: 'ws_1', output: 'x', hosted: true }),
+    ...write({ type: 'toolResult', id: 'ws_1', output: 'x', hosted: true }),
     ...write({ type: 'file', url: 'https://example.com/out.png' }),
     ...write({ type: 'refusal', text: 'I cannot help with that.' }),
   ]).toEqual([
@@ -352,11 +352,11 @@ test('a failure after the stream began ends it with an error event', async () =>
 test('fragments of calls that take turns are one block for each call', () => {
   const write = writer(false);
   expect([
-    ...write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' }),
-    ...write({ type: 'tool_call', id: 'b', name: 'g', arguments: '{"y":' }),
-    ...write({ type: 'tool_call', id: 'a', arguments: '1}' }),
-    ...write({ type: 'tool_call', id: 'b', arguments: '2}' }),
-    ...write({ type: 'finish', reason: 'tool_calls' }),
+    ...write({ type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":' }),
+    ...write({ type: 'toolCall', id: 'b', name: 'g', arguments: '{"y":' }),
+    ...write({ type: 'toolCall', id: 'a', arguments: '1}' }),
+    ...write({ type: 'toolCall', id: 'b', arguments: '2}' }),
+    ...write({ type: 'finish', reason: 'toolCalls' }),
   ]).toEqual([
     {
       type: 'content_block_start',
@@ -397,10 +397,10 @@ test('fragments of calls that take turns are one block for each call', () => {
 test('three calls taking turns wait for the first, then go out in order', () => {
   const write = writer(false);
   const types = [
-    ...write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":1}' }),
-    ...write({ type: 'tool_call', id: 'b', name: 'g', arguments: '{' }),
-    ...write({ type: 'tool_call', id: 'c', name: 'h', arguments: '{}' }),
-    ...write({ type: 'tool_call', id: 'b', arguments: '}' }),
+    ...write({ type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":1}' }),
+    ...write({ type: 'toolCall', id: 'b', name: 'g', arguments: '{' }),
+    ...write({ type: 'toolCall', id: 'c', name: 'h', arguments: '{}' }),
+    ...write({ type: 'toolCall', id: 'b', arguments: '}' }),
     ...write({ type: 'text', text: 'Done.' }),
   ].map(({ type, index, content_block: block }) => [type, index, block]);
   expect(types.filter(([type]) => type === 'content_block_start')).toEqual([
@@ -425,9 +425,9 @@ test('three calls taking turns wait for the first, then go out in order', () => 
 
 test('a call that follows one whose input is whole streams at once', () => {
   const write = writer(false);
-  write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":1}' });
+  write({ type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":1}' });
   expect(
-    write({ type: 'tool_call', id: 'b', name: 'g', arguments: '{"y":' }),
+    write({ type: 'toolCall', id: 'b', name: 'g', arguments: '{"y":' }),
   ).toEqual([
     { type: 'content_block_stop', index: 0 },
     {
@@ -446,9 +446,9 @@ test('a call that follows one whose input is whole streams at once', () => {
 test('text that comes while a call is unfinished waits until its input is whole', () => {
   const write = writer(false);
   expect([
-    ...write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' }),
+    ...write({ type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":' }),
     ...write({ type: 'text', text: 'Wait.' }),
-    ...write({ type: 'tool_call', id: 'a', arguments: '1}' }),
+    ...write({ type: 'toolCall', id: 'a', arguments: '1}' }),
   ]).toEqual([
     {
       type: 'content_block_start',
@@ -482,12 +482,12 @@ test('text that comes while a call is unfinished waits until its input is whole'
 test('text between the fragments of parallel calls goes out after both are whole', () => {
   const write = writer(false);
   expect([
-    ...write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"city":' }),
-    ...write({ type: 'tool_call', id: 'b', name: 'g', arguments: '{"tz":' }),
+    ...write({ type: 'toolCall', id: 'a', name: 'f', arguments: '{"city":' }),
+    ...write({ type: 'toolCall', id: 'b', name: 'g', arguments: '{"tz":' }),
     ...write({ type: 'text', text: 'Checking both.' }),
-    ...write({ type: 'tool_call', id: 'a', arguments: '"Paris"}' }),
-    ...write({ type: 'tool_call', id: 'b', arguments: '"CET"}' }),
-    ...write({ type: 'finish', reason: 'tool_calls' }),
+    ...write({ type: 'toolCall', id: 'a', arguments: '"Paris"}' }),
+    ...write({ type: 'toolCall', id: 'b', arguments: '"CET"}' }),
+    ...write({ type: 'finish', reason: 'toolCalls' }),
   ]).toEqual([
     {
       type: 'content_block_start',
@@ -538,10 +538,10 @@ test('text between the fragments of parallel calls goes out after both are whole
 
 test('a call its upstream ended stops holding text back though its input never parsed', () => {
   const write = writer(false);
-  write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' });
+  write({ type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":' });
   write({ type: 'text', text: 'Wait.' });
   expect(
-    write({ type: 'tool_call', id: 'a', arguments: '', ended: true }),
+    write({ type: 'toolCall', id: 'a', arguments: '', ended: true }),
   ).toMatchObject([
     { type: 'content_block_stop', index: 0 },
     { type: 'content_block_start', index: 1 },
@@ -551,10 +551,10 @@ test('a call its upstream ended stops holding text back though its input never p
 
 test('what waits on a call that never finishes is written at the end, after it', () => {
   const write = writer(false);
-  write({ type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' });
+  write({ type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":' });
   write({ type: 'text', text: 'Wait.' });
   expect(
-    write({ type: 'finish', reason: 'tool_calls' }).map(({ type }) => type),
+    write({ type: 'finish', reason: 'toolCalls' }).map(({ type }) => type),
   ).toEqual([
     'content_block_stop',
     'content_block_start',
@@ -578,7 +578,7 @@ test('a tool call of this family is written with the fields its upstream gave it
   const write = writer(false);
   expect([
     ...write({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
       name: 'get_weather',
       arguments: '',
@@ -588,13 +588,13 @@ test('a tool call of this family is written with the fields its upstream gave it
       },
     }),
     ...write({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
       arguments: '{"location": "Paris"}',
       block: 0,
     }),
     ...write({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_014hJH82Qum7Td6UV8gDXThB',
       name: 'web_search',
       arguments: '{"query": "weather"}',
@@ -651,7 +651,7 @@ test('a tool call of this family is written with the fields its upstream gave it
 test("a tool call with another family's data is written as it always was", () => {
   expect(
     writer(false)({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       name: 'get_weather',
       arguments: '{"location": "Paris"}',
@@ -682,7 +682,7 @@ test("a tool call with another family's data is written as it always was", () =>
 test("a tool call's own id, name and kind are never replaced by what rides with it", () => {
   expect(
     writer(false)({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01',
       name: 'get_weather',
       arguments: '',

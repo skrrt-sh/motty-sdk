@@ -82,7 +82,7 @@ test('a caller is told the own message of an error that is their mistake', () =>
       ),
     ),
   ).toStrictEqual({
-    code: 'rate_limited',
+    code: 'rateLimited',
     status: 429,
     message: 'Slow down, acme',
     retryable: true,
@@ -257,7 +257,7 @@ test('a cause of the wrong type in facts is read as absent', () => {
 
 test.each([
   ['AbortError', 'aborted', 499, 'The work was stopped', false],
-  ['TimeoutError', 'timed_out', 504, 'The work timed out', true],
+  ['TimeoutError', 'timedOut', 504, 'The work timed out', true],
 ])(
   'a platform %s gives the %s facts',
   (name, code, status, message, retryable) => {
@@ -280,7 +280,7 @@ test('facts with a known code raise that class', () => {
 test('facts make a known class not retryable', () => {
   expect(
     fromFacts({
-      code: 'rate_limited',
+      code: 'rateLimited',
       status: 429,
       message: 'no',
       retryable: false,
@@ -290,7 +290,7 @@ test('facts make a known class not retryable', () => {
 
 test('facts with no status take the status of their class', () => {
   expect(
-    ['rate_limited', 'upstream_refused', 'teapot'].map(
+    ['rateLimited', 'upstreamRefused', 'teapot'].map(
       (code) => fromFacts({ code, message: 'no' }).status,
     ),
   ).toEqual([429, 502, 500]);
@@ -299,7 +299,7 @@ test('facts with no status take the status of their class', () => {
 test('facts that crossed a wire as JSON nulls are read as absent', () => {
   const error = fromFacts(
     JSON.parse(
-      '{"code":"rate_limited","message":"no","status":null,"retryable":null,"retryAfter":null,"provider":null}',
+      '{"code":"rateLimited","message":"no","status":null,"retryable":null,"retryAfter":null,"provider":null}',
     ),
   );
   expect([
@@ -316,12 +316,12 @@ test('facts of the wrong type are read as absent', () => {
     toFacts(
       fromFacts(
         JSON.parse(
-          '{"code":"rate_limited","message":"no","status":"429","retryable":"no","retryAfter":"1500","provider":7}',
+          '{"code":"rateLimited","message":"no","status":"429","retryable":"no","retryAfter":"1500","provider":7}',
         ),
       ),
     ),
   ).toStrictEqual({
-    code: 'rate_limited',
+    code: 'rateLimited',
     status: 429,
     message: 'no',
     retryable: true,
@@ -551,7 +551,7 @@ test('a mark in facts that is not true is read as absent', () => {
 test('a caller is told the own message of a server failure that came from outside', () => {
   expect(
     disclosed({
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       status: 500,
       message: 'Expected temperature to be at most 2, received 9',
       retryable: false,
@@ -560,7 +560,7 @@ test('a caller is told the own message of a server failure that came from outsid
       upstream: true,
     }),
   ).toStrictEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     status: 500,
     message: 'Expected temperature to be at most 2, received 9',
     retryable: false,
@@ -571,7 +571,7 @@ test('a caller is told the own message of a server failure that came from outsid
 
 test('the facts for the host keep the own message and provider data of an error from outside', () => {
   const facts: ErrorFacts = {
-    code: 'rate_limited',
+    code: 'rateLimited',
     status: 429,
     message: 'Rate limit for org-SECRET',
     retryable: true,

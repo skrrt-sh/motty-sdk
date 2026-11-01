@@ -336,22 +336,22 @@ test('argument deltas are fragments of one call, and a call ends in tool_calls',
     ),
   ).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       name: 'weather',
       arguments: '',
       block: 1,
     },
-    { type: 'tool_call', id: 'call_1', arguments: '{"city"', block: 1 },
-    { type: 'tool_call', id: 'call_1', arguments: ':"Oslo"}', block: 1 },
+    { type: 'toolCall', id: 'call_1', arguments: '{"city"', block: 1 },
+    { type: 'toolCall', id: 'call_1', arguments: ':"Oslo"}', block: 1 },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       arguments: '',
       ended: true,
       block: 1,
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'completed' },
   ]);
 });
 
@@ -408,7 +408,7 @@ test('an item sent whole, with no deltas before it, is still read in full, a cus
     },
     { type: 'refusal', text: 'No more.', block: 0 },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       name: 'patch',
       arguments: '*** Begin',
@@ -417,14 +417,14 @@ test('an item sent whole, with no deltas before it, is still read in full, a cus
       provider: { 'openai.responses': { type: 'custom_tool_call' } },
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_2',
       name: 'time',
       arguments: '{}',
       ended: true,
       block: 2,
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'completed' },
   ]);
 });
 
@@ -761,7 +761,7 @@ test('an incomplete response finishes with the reason it was cut for', async () 
     },
   });
   expect(await last('content_filter')).toMatchObject({
-    reason: 'content_filter',
+    reason: 'contentFilter',
     rawReason: 'content_filter',
   });
   expect(await last('steered')).toMatchObject({
@@ -834,15 +834,15 @@ test('a piece of a call that comes after its item was done is not read', async (
       ),
     ),
   ).toEqual([
-    { type: 'tool_call', id: 'call_1', name: 'time', arguments: '', block: 0 },
+    { type: 'toolCall', id: 'call_1', name: 'time', arguments: '', block: 0 },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       arguments: '{"x":',
       ended: true,
       block: 0,
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'completed' },
   ]);
 });
 
@@ -873,7 +873,7 @@ test('a failed response is the one error that ends the stream', async () => {
     {
       type: 'error',
       error: {
-        code: 'rate_limited',
+        code: 'rateLimited',
         message: 'Rate limit reached for gpt-5',
         provider: { 'openai.responses': { code: 'rate_limit_exceeded' } },
         upstream: true,
@@ -900,7 +900,7 @@ test('an error event ends the stream, flat or wrapped', async () => {
     {
       type: 'error',
       error: {
-        code: 'context_too_long',
+        code: 'contextTooLong',
         message: 'Your input exceeds the context window',
         provider: {
           'openai.responses': {
@@ -925,7 +925,7 @@ test('an error event ends the stream, flat or wrapped', async () => {
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The server had an error',
         provider: { 'openai.responses': { type: 'server_error' } },
         upstream: true,
@@ -944,7 +944,7 @@ test('a stream that ends with no ending is ended with an error', async () => {
     expect((await Array.fromAsync(events(stream))).at(-1)).toEqual({
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream closed the stream before it finished',
         retryable: true,
         upstream: true,
@@ -971,7 +971,7 @@ test('a frame that cannot be read ends the stream with an error', async () => {
       {
         type: 'error',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           message: 'The upstream sent an event that cannot be read',
           retryable: true,
           upstream: true,
@@ -1117,7 +1117,7 @@ test('a call whose arguments come only with its end says what else its item held
     ),
   ).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_BeCk',
       name: 'spawn_agent',
       arguments: '',
@@ -1125,13 +1125,13 @@ test('a call whose arguments come only with its end says what else its item held
       provider: { 'openai.responses': { namespace: 'multi_agent_v1' } },
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_BeCk',
       arguments: '{"message":"say hi"}',
       ended: true,
       block: 0,
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'completed' },
   ]);
 });
 
@@ -1178,16 +1178,16 @@ test('the end of a call that holds more than its opening told says what it holds
     ),
   ).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       name: 'spawn_agent',
       arguments: '',
       block: 0,
       provider: { 'openai.responses': { caller: 'model' } },
     },
-    { type: 'tool_call', id: 'call_1', arguments: '{}', block: 0 },
+    { type: 'toolCall', id: 'call_1', arguments: '{}', block: 0 },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       arguments: '',
       ended: true,
@@ -1196,7 +1196,7 @@ test('the end of a call that holds more than its opening told says what it holds
         'openai.responses': { caller: 'model', namespace: 'agents' },
       },
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'completed' },
   ]);
 });
 
@@ -1272,22 +1272,22 @@ test('a piece of a call that comes before its item waits for it, and goes out un
     ),
   ).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_REAL',
       name: 'f',
       arguments: '{"a"',
       block: 0,
     },
-    { type: 'tool_call', id: 'call_REAL', arguments: ':1}', block: 0 },
+    { type: 'toolCall', id: 'call_REAL', arguments: ':1}', block: 0 },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_REAL',
       arguments: '',
       ended: true,
       block: 0,
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_2',
       name: 'exec',
       arguments: '1+1',
@@ -1296,21 +1296,21 @@ test('a piece of a call that comes before its item waits for it, and goes out un
       provider: { 'openai.responses': { type: 'custom_tool_call' } },
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_3',
       name: 'time',
       arguments: '{}',
       ended: true,
       block: 2,
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'completed' },
   ]);
 });
 
 test.each([
   [
     'completed',
-    [{ type: 'tool_call', id: 'call_1', arguments: '', ended: true, block: 0 }],
+    [{ type: 'toolCall', id: 'call_1', arguments: '', ended: true, block: 0 }],
   ],
   ['incomplete', []],
 ] as const)(
@@ -1359,7 +1359,7 @@ test.each([
       ),
     ).toEqual([
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_1',
         name: 'spawn_agent',
         arguments: '',
@@ -1371,9 +1371,9 @@ test.each([
           },
         },
       },
-      { type: 'tool_call', id: 'call_1', arguments: '{}', block: 0 },
+      { type: 'toolCall', id: 'call_1', arguments: '{}', block: 0 },
       ...whole,
-      { type: 'finish', reason: 'tool_calls', rawReason: 'completed' },
+      { type: 'finish', reason: 'toolCalls', rawReason: 'completed' },
     ]);
   },
 );

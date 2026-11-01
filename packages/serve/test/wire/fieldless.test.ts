@@ -85,6 +85,38 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
     messages: [{ role: 'user', text: 'Hi' }],
     options: { stop: ['END'] },
   },
+  serviceTier: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { serviceTier: 'flex' },
+  },
+  metadata: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { metadata: { ticket: 'T-1' } },
+  },
+  store: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { store: true },
+  },
+  safetyIdentifier: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { safetyIdentifier: 'person-1' },
+  },
+  cacheOptions: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { cacheOptions: { mode: 'implicit' } },
+  },
+  cacheRetention: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { cacheRetention: '24h' },
+  },
+  prediction: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { prediction: { type: 'content', content: 'Hi' } },
+  },
+  verbosity: {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { verbosity: 'low' },
+  },
   presencePenalty: {
     messages: [{ role: 'user', text: 'Hi' }],
     options: { presencePenalty: 0.5 },
@@ -242,7 +274,7 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
       {
         role: 'tool',
         name: 'look',
-        parts: [{ type: 'tool_result', id: 'call_1', text: 'Sunny' }],
+        parts: [{ type: 'toolResult', id: 'call_1', text: 'Sunny' }],
       },
     ],
   },
@@ -251,7 +283,7 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
       {
         role: 'tool',
         hints: { 'openai.responses': { status: 'completed' } },
-        parts: [{ type: 'tool_result', id: 'call_1', text: 'Sunny' }],
+        parts: [{ type: 'toolResult', id: 'call_1', text: 'Sunny' }],
       },
     ],
   },
@@ -276,7 +308,7 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
         role: 'assistant',
         parts: [
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'srvtoolu_1',
             name: 'web_search',
             input: {},
@@ -297,16 +329,16 @@ const carrying: { [Option in Fieldless]: Prompt<JsonOutput> } = {
   'image.untyped': {
     messages: [{ role: 'user', parts: [{ type: 'image', data: 'iVBORw0=' }] }],
   },
-  'tool_result.failed': {
+  'toolResult.failed': {
     messages: [
       {
         role: 'assistant',
-        parts: [{ type: 'tool_call', id: 'call_1', name: 'look', input: {} }],
+        parts: [{ type: 'toolCall', id: 'call_1', name: 'look', input: {} }],
       },
       {
         role: 'tool',
         parts: [
-          { type: 'tool_result', id: 'call_1', text: 'boom', failed: true },
+          { type: 'toolResult', id: 'call_1', text: 'boom', failed: true },
         ],
       },
     ],
@@ -383,7 +415,7 @@ test('an option that is not given, is turned off or is empty asks for nothing', 
   const left = leaving('responses');
   left.without('topK', undefined);
   left.without('stop', []);
-  left.without('tool_result.failed', false);
+  left.without('toolResult.failed', false);
   left.without('seed', undefined);
   expect(left.leftOut()).toEqual([]);
 });
@@ -407,7 +439,7 @@ test('a seed of zero is still a seed', () => {
 
 test('an option many parts carried is reported once', () => {
   const left = leaving('chat');
-  left.without('tool_result.failed', true);
-  left.without('tool_result.failed', true);
+  left.without('toolResult.failed', true);
+  left.without('toolResult.failed', true);
   expect(left.leftOut()).toHaveLength(1);
 });

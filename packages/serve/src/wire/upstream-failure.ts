@@ -112,10 +112,10 @@ export type Cut = { pattern: RegExp; replacement: string; bare?: true };
 // the shape of an account's, so there a name is cut only by its words.
 function echoed(code: KnownCode): boolean {
   return (
-    code === 'invalid_request' ||
+    code === 'invalidRequest' ||
     code === 'unsupported' ||
-    code === 'context_too_long' ||
-    code === 'unknown_model'
+    code === 'contextTooLong' ||
+    code === 'unknownModel'
   );
 }
 
@@ -217,26 +217,26 @@ function numbered(status: number | undefined, said: boolean): KnownCode {
     // The key is the host's, so the caller did nothing wrong.
     case 401:
     case 403:
-      return 'upstream_refused';
+      return 'upstreamRefused';
     case 402:
-      return 'quota_exceeded';
+      return 'quotaExceeded';
     // An API names the model it does not know; a wrong address names nothing.
     case 404:
-      return said ? 'unknown_model' : 'upstream_failed';
+      return said ? 'unknownModel' : 'upstreamFailed';
     case 408:
     case 504:
     case 524:
-      return 'timed_out';
+      return 'timedOut';
     case 429:
-      return 'rate_limited';
+      return 'rateLimited';
     case 498:
     case 503:
     case 529:
       return 'overloaded';
     default:
       return status !== undefined && status >= 400 && status < 500
-        ? 'invalid_request'
-        : 'upstream_failed';
+        ? 'invalidRequest'
+        : 'upstreamFailed';
   }
 }
 
@@ -314,7 +314,7 @@ export function upstreamFailure(
   const named = own?.code ?? told.code;
   const code = named ?? numbered(sent, Object.keys(error).length > 0);
   const server = sent !== undefined && sent >= 500;
-  const unnamed = named === undefined && code === 'upstream_failed' && !server;
+  const unnamed = named === undefined && code === 'upstreamFailed' && !server;
   // What the upstream says of another try outranks what its kind implies,
   // but no flag brings back a quota that is spent or mends the host's key.
   const flag =
@@ -322,13 +322,13 @@ export function upstreamFailure(
     shouldRetry(headers) ??
     told.retryable ??
     (unnamed ? false : undefined);
-  const lasting = code === 'quota_exceeded' || code === 'upstream_refused';
+  const lasting = code === 'quotaExceeded' || code === 'upstreamRefused';
   const retryable = lasting && flag === true ? undefined : flag;
   const wait = own?.retryAfter ?? retryAfter;
   // The host's key was turned down, which is not the caller's 401 to see.
-  const refused = code === 'upstream_refused';
+  const refused = code === 'upstreamRefused';
   const whole = joined(told.message, told.detail);
-  const spent = code === 'quota_exceeded';
+  const spent = code === 'quotaExceeded';
   // A name is cut from all that was said, so no cap can leave half of one.
   const cut =
     cuts === undefined
@@ -338,7 +338,7 @@ export function upstreamFailure(
           nameless(told.detail, cuts, echoed(code)),
         );
   const linked =
-    (spent || code === 'rate_limited') && cut !== undefined
+    (spent || code === 'rateLimited') && cut !== undefined
       ? (linkless(cut) ??
         (spent
           ? "The upstream's account has no quota left for this request"
@@ -350,7 +350,7 @@ export function upstreamFailure(
   // Only a request the caller got wrong keeps the status that says how; any
   // other kind answers with its own, whatever the upstream chose for it.
   const shown =
-    code === 'invalid_request' && numbered(sent, true) === 'invalid_request';
+    code === 'invalidRequest' && numbered(sent, true) === 'invalidRequest';
   return {
     code,
     ...(shown && sent !== undefined ? { status: sent } : {}),
