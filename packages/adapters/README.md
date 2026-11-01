@@ -76,6 +76,22 @@ The binding and its migration in `wrangler.jsonc`:
 The type of `env.STORAGE` comes from the file `wrangler types` generates, so run it once the entry
 that `main` names exists.
 
+The `nodejs_compat` flag is required, and without it a deploy fails with
+`No such module "node:async_hooks"`.
+
+A first deploy has to bring its secrets along. `mount` runs at global scope, which runs as the
+Worker is uploaded, so a key that does not exist yet stops the deploy with
+`The openai adapter was given no key` and code 10021. Give the secrets with the upload, from a file
+that stays out of the repository:
+
+```sh
+wrangler deploy --secrets-file <file>
+```
+
+An upstream Worker on the same Cloudflare account, reached at its workers.dev address, was seen to
+answer 404 on a real deployment, and turning on the `global_fetch_strictly_public` compatibility
+flag fixed it. Why it answered 404 was not confirmed.
+
 Each key is an object of its own, so keys never wait on each other, and an object whose keys
 have all expired is deleted whole. A compatibility date of 2026-02-24 or later lets that delete
 take the object's alarm with it; an older date leaves the alarm to fire once on an empty object.

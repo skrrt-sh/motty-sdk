@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, setSystemTime, test } from 'bun:test';
 import { model, motty } from '@mottyjs/core';
 import { fake, on } from '@mottyjs/test';
 import { serve } from '../src/index.ts';
@@ -75,6 +75,28 @@ test('the model list is in the shape of Anthropic for its clients', async () => 
     has_more: false,
     first_id: 'coder',
     last_id: 'coder',
+  });
+});
+
+test('a model is dated by the first listing, as a mount on Workers is made with the clock at the epoch', async () => {
+  setSystemTime(new Date(0));
+  const served = coderServed();
+  setSystemTime(new Date('2026-11-02T10:00:00Z'));
+
+  const listed = await served.fetch(new Request('http://motty.test/v1/models'));
+  setSystemTime(new Date('2026-11-02T11:00:00Z'));
+  const read = await served.fetch(
+    new Request('http://motty.test/v1/models/coder', {
+      headers: { 'anthropic-version': '2023-06-01' },
+    }),
+  );
+  setSystemTime();
+
+  expect(await listed.json()).toMatchObject({
+    data: [{ created: Date.parse('2026-11-02T10:00:00Z') / 1000 }],
+  });
+  expect(await read.json()).toMatchObject({
+    created_at: '2026-11-02T10:00:00.000Z',
   });
 });
 

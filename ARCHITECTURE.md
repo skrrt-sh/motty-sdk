@@ -694,7 +694,7 @@ core stays what every motty uses, and a plugin is proven possible by being writt
 - **The host supplies overrides; the motty never fetches them** nor reads the environment. They are
   checked when the host supplies them, which may be per request. A mount is given them once, so it
   refuses at start a bad override or a group the motty does not have, though an async schema's
-  verdict is only written to stderr, as a mount returns at once. Rejected: values compiled into the
+  verdict is only written to stderr, as a mount returns at once, and on Workers at the first request. Rejected: values compiled into the
   bundle, a version per retuning, and overrides in `store`, which only a request can write.
 - **Settings are frozen at every depth of plain data,** the defaults once when loaded and an
   override when merged, so a write throws in the motty that makes it. Cause: the defaults were
@@ -715,8 +715,8 @@ core stays what every motty uses, and a plugin is proven possible by being writt
   no check: it throws `Unauthenticated`, 401, when the host knows no caller, else adds `caller`.
 - **`caller.id` is extracted and validated, never read raw.** The motty never sees the key or token.
 - **Without `auth()` a motty is open** to whoever reaches its host, whatever auth adapter the host
-  gave. A mount warns at start of an adapter with no `auth()` to use it, and of `auth()` with no
-  adapter. It does not refuse either, since a host may mean an optional caller or state the caller
+  gave. A mount warns of an adapter with no `auth()` to use it, and of `auth()` with no adapter, at start
+  and on Workers at the first request, as nothing written at global scope is seen there. It does not refuse either, since a host may mean an optional caller or state the caller
   itself.
 - **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttl }`,
   `delete`, and `increment`. It adds a key prefix only: one call is one command, no cache, no
@@ -1134,7 +1134,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   named. The secret must itself be a token a header can carry, and it is compared in a time
   that does not depend on what was sent.
 - **With no `auth` adapter there is nothing to verify against,** so `auth()` rejects the request
-  unless the host stated the caller itself. A mount warns of this at start.
+  unless the host stated the caller itself. A mount warns of this, as it warns of the adapter with no `auth()`.
 - **A host that authenticated the request itself states the caller as an argument, in process.**
   The handler a mount returns takes a third argument to `fetch`, whose `caller` is who is
   asking. The auth adapter is then not asked, and the credential headers are removed as

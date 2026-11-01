@@ -9,6 +9,16 @@ type Send = NonNullable<HostOptions['report']>;
 
 const mask = '[held]';
 
+// What a Worker writes at global scope, where a mount runs, reaches no log, so
+// there it is held for the mount's first request. Elsewhere it goes at once, for
+// an operator to see before any traffic.
+export function heldAtStart(): string[] | undefined {
+  return typeof navigator !== 'undefined' &&
+    navigator.userAgent === 'Cloudflare-Workers'
+    ? []
+    : undefined;
+}
+
 // What reads as a credential whatever it belongs to, a long run of a token's
 // alphabet last: the host's keys are in no list the edge can read.
 const credentials =

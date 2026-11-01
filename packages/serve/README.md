@@ -15,8 +15,10 @@ import { mount, serve } from "@mottyjs/serve";
 
 A motty that requires a caller, and its serve file. The keys are read from the environment and
 stay with the host. The `auth` adapter only proves who a caller is, so a motty without `.use(auth())`
-runs for anyone, whatever the adapter says. A host warns at start of an adapter with no `auth()`,
-and of `auth()` with no adapter, where every caller gets a 401 unless the host states the caller:
+runs for anyone, whatever the adapter says. A host warns of an adapter with no `auth()`, and of
+`auth()` with no adapter, where every caller gets a 401 unless the host states the caller. On Bun
+the warning is written at start. On Workers it is written at the first request to that mount, once,
+since what a Worker writes at global scope reaches no log.
 
 ```ts
 // src/motty.ts
@@ -59,11 +61,14 @@ on Messages.
 With no `report`, the failed records are written to stderr, with credentials masked. That covers a
 failure on the host's side, a 5xx, an upstream's refusal and a name no adapter serves. A 4xx the
 motty itself gave and a caller leaving write nothing. A `report` that throws or rejects is written too, with the failures of the
-record it lost.
+record it lost. Masking learns a secret of no known shape from its value in `process.env`, if that
+value has at least 8 characters, so on Workers it relies on `nodejs_compat` with a compatibility
+date of 2025-04-01 or later, which is what fills `process.env`.
 
 A host also refuses at start a motty with no route or handle, a bad settings override and a settings
 group the motty does not have. An async schema's verdict is only written to stderr, as a mount
-returns at once.
+returns at once, and on Workers one that came during start waits for the first request as the
+warnings do.
 
 In development, start the serve file with `bun --watch src/serve.ts`, the examples'
 `bun run dev`. Bun starts the process again on the same port whenever the motty or a file it
