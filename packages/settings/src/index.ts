@@ -17,6 +17,7 @@ type Values<Given extends Groups> = {
     : never;
 };
 
+/** The values a settings part holds, by group. */
 export type Settings<Part> =
   Part extends Motty<infer Context>
     ? Context extends { readonly settings: infer Held }
@@ -32,8 +33,8 @@ function assertWhole<Given extends Groups>(
   groups: Given,
   held: { readonly [group: string]: unknown },
 ): asserts held is Closed<Values<Given>> {
-  for (const group of Object.keys(groups)) {
-    if (!Object.hasOwn(held, group)) {
+  for (const group in groups) {
+    if (!(group in held)) {
       throw new Error(`The settings group "${group}" has no value`);
     }
   }
@@ -103,15 +104,27 @@ async function overridden(
 // definitions apart and refuses the second where it is used.
 const base = motty({ name: 'settings' });
 
+/**
+ * Defines a motty's settings as a part that puts them on the context, each
+ * group a schema. Every schema must accept `{}`, so that every value has a
+ * default, and validate synchronously, or this throws when the motty loads. A
+ * host may override any subset through its `settings` option.
+ */
 export function settings<Given extends Groups>(groups: Given) {
   const defaults = defaultsOf(groups);
-  return base.derive(async () => {
-    const overrides = hosted().settings;
-    const held =
-      overrides === undefined
-        ? defaults
-        : await overridden(groups, defaults, overrides);
-    assertWhole(groups, held);
-    return { settings: held };
-  });
+  // The groups stand on the hook for a host to find, which checks its
+  // overrides by them once, as it is made.
+  return base.derive(
+    Object.assign(
+      async () => {
+        const overrides = hosted().settings;
+        const held = overrides
+          ? await overridden(groups, defaults, overrides)
+          : defaults;
+        assertWhole(groups, held);
+        return { settings: held };
+      },
+      { groups },
+    ),
+  );
 }

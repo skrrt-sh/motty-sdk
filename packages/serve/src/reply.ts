@@ -8,6 +8,7 @@ import {
 } from '@mottyjs/core/host';
 import type { Codec, Decoded, Formless, LeftOut } from './codec.ts';
 import { formatted } from './sse.ts';
+import { unrecorded } from './stderr.ts';
 import { refusal, shown } from './wire/formless.ts';
 
 type Events = ReturnType<RunStream[typeof Symbol.asyncIterator]>;
@@ -42,8 +43,12 @@ export function refused(
   });
 }
 
+// With no id no report holds what was thrown, and a caller told it sealed is
+// all anyone would hear of it.
 export function failed(codec: Codec, thrown: unknown, id?: string): Response {
-  return refused(codec, disclosed(toFacts(thrown)), id);
+  const facts = toFacts(thrown);
+  if (id === undefined) unrecorded(facts);
+  return refused(codec, disclosed(facts), id);
 }
 
 // The codec writes an honest reply on its own; only the edge can tell the
@@ -104,6 +109,8 @@ export async function whole(
       held.push(event);
     }
   } catch (thrown) {
+    // The record of the request is no record of its reply.
+    unrecorded(toFacts(thrown), id);
     return failed(codec, thrown, id);
   } finally {
     await events.return?.();
@@ -153,7 +160,10 @@ export function streamed(
       }, flow.keepAlive);
     },
     async pull(controller) {
-      const read = await frames.next().catch(() => undefined);
+      const read = await frames.next().catch((thrown: unknown) => {
+        if (open) unrecorded(toFacts(thrown), id);
+        return undefined;
+      });
       if (!open) return;
       if (read === undefined || read.done) {
         close();

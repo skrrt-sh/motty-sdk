@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
+import { answer, motty } from '@mottyjs/core';
 import type { Chunk, StreamEvent } from '@mottyjs/core/host';
-import { chatCompletions, messages, responses } from '../src/index.ts';
+import { chatCompletions, messages, mount, responses } from '../src/index.ts';
 import { events } from '../src/messages/events.ts';
 import { field } from '../src/responses/fields.ts';
 import { parsed } from '../src/wire/json.ts';
@@ -566,3 +567,38 @@ test('what a Claude model went on from before a search found more tools is told 
   });
   expect(leftOut.map(({ setting }) => setting)).toEqual(['reasoning']);
 });
+
+test.each([
+  ['/v1/chat/completions', { model: 'coder', messages: [] }],
+  ['/v1/responses', { model: 'coder', input: 'Hi' }],
+  [
+    '/v1/messages',
+    {
+      model: 'coder',
+      max_tokens: 8,
+      messages: [{ role: 'user', content: 'Hi' }],
+    },
+  ],
+] as const)(
+  'tools that are no list are refused on %s, not dropped',
+  async (path, body) => {
+    const { fetch } = mount(
+      motty({ name: 'coder' }).handle(() => answer('Hi')),
+      () => ({}),
+    );
+    const asked = (tools: unknown) =>
+      fetch(
+        new Request(`http://motty.test${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...body, tools }),
+        }),
+      );
+
+    for (const tools of ['yes', 7, true, { type: 'function' }]) {
+      expect((await asked(tools)).status).toBe(400);
+    }
+    expect((await asked(null)).status).toBe(200);
+    expect((await asked([])).status).toBe(200);
+  },
+);

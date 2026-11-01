@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { inspect } from 'node:util';
 import { answer, model, motty, UnknownModel } from '@mottyjs/core';
 import { type HostOptions, hosted, type Report } from '@mottyjs/core/host';
@@ -23,6 +23,17 @@ import { redis } from '../src/redis.ts';
 import { together } from '../src/together.ts';
 import { typesafe } from '../src/typesafe.ts';
 import { zai } from '../src/zai.ts';
+
+// The auth adapters here go to motties with no auth(), which a mount warns of.
+let stderr: ReturnType<typeof spyOn<Console, 'error'>>;
+
+beforeEach(() => {
+  stderr = spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  stderr.mockRestore();
+});
 
 // Every secret planted below holds the word CANARY, and nothing a motty is
 // handed, a caller is sent or another origin receives may hold that word.

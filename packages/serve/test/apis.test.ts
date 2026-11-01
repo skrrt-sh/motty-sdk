@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import {
   answer,
   MottyError,
@@ -18,6 +18,18 @@ import { fake, on } from '@mottyjs/test';
 import { chatCompletions, messages, responses, serve } from '../src/index.ts';
 import { refused } from '../src/reply.ts';
 import { parsed } from '../src/sse.ts';
+
+// What a host with no report has written to stderr is not what these cases
+// are about, and failures.test.ts reads it.
+let stderr: ReturnType<typeof spyOn<Console, 'error'>>;
+
+beforeEach(() => {
+  stderr = spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  stderr.mockRestore();
+});
 
 const gpt = model('openai/gpt');
 

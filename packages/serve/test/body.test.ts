@@ -82,7 +82,10 @@ test('a body that stops arriving is bounded under a mounted edge with no server'
 
 test('a stated length over the limit is refused before a byte of the body is read, and no caller is looked up', async () => {
   let verified = 0;
-  const served = mount(motty({ name: 'coder' }).use(auth()), () => ({
+  const guarded = motty({ name: 'coder' })
+    .use(auth())
+    .handle(() => answer('Use a mutex.'));
+  const served = mount(guarded, () => ({
     auth: {
       verify: () => {
         verified += 1;
