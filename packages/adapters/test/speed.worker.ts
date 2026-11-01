@@ -36,12 +36,19 @@ export default {
     const calls = Number(query.get('calls') ?? '1');
     const value = { role: 'user', text: 'x'.repeat(512) };
     const storage = cloudflare({ binding: env.STORAGE });
+    const shared = cloudflare({ binding: env.STORAGE, name: () => 'shared' });
+    if (call === 'total') {
+      return Response.json((await storage.get('counted')) ?? 0);
+    }
     const bare = env.BARE.getByName('timed');
     const made = {
       'motty get': () => storage.get('timed'),
       'motty set': () => storage.set('timed', value, { ttl: 60_000 }),
       'motty increment': () =>
         storage.increment?.('counted', 1, { ttl: 60_000 }),
+      'new key': () => storage.set(crypto.randomUUID(), value, { ttl: 60_000 }),
+      'new key, shared': () =>
+        shared.set(crypto.randomUUID(), value, { ttl: 60_000 }),
       'bare get': async () => {
         const text = await bare.read('timed');
         return typeof text === 'string' ? JSON.parse(text) : undefined;

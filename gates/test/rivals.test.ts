@@ -17,11 +17,21 @@ const timed = Object.keys(scenarios).flatMap((scenario) =>
 );
 
 async function measure() {
-  return {
-    time: ahead(await timePerCall(2400, 5)),
-    cold: coldStart(3).ahead,
-    size: (await bundleSize()).ahead,
-  };
+  const time = ahead(await timePerCall(2400, 5));
+  const cold = coldStart(3).ahead;
+  const size = (await bundleSize()).ahead;
+  // The margin in the log, since a pass shows nothing else of it.
+  for (const [name, multiples] of Object.entries({
+    ...time,
+    'cold start': cold,
+    'bundle size': size,
+  })) {
+    const each = Object.entries(multiples).map(
+      ([rival, multiple]) => `${rival} ${multiple.toFixed(2)}`,
+    );
+    console.log(`${name}: ${each.join(', ')}`);
+  }
+  return { time, cold, size };
 }
 
 // Measured once for every test here, the first of which waits for it.
