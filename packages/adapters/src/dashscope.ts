@@ -41,10 +41,24 @@ const failures: FailureReader = (_status, _headers, { code, message }) => {
   return undefined;
 };
 
+/**
+ * Connects to Alibaba's DashScope over Chat Completions. Each region has its
+ * own address and a key works in one, so a key of another region needs
+ * `address`.
+ */
 export function dashscope(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is
+     * `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `dashscope/some-model`, taken off
+     * before the call. The default is `dashscope`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

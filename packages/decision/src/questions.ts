@@ -1,7 +1,10 @@
 import type { ChoiceQuestion, NoulQuestion, ScoreQuestion } from './wire.ts';
 
-// The API refuses a question past its limits on every request, so one is
-// refused here once, when the motty loads.
+/**
+ * Asks which of the options in `criteria` fits, from one to 255 of them. It
+ * throws when the motty loads if the count is out of range, since the API would
+ * refuse it on every request.
+ */
 export function choice<Option extends string>(
   question: Omit<ChoiceQuestion<Option>, 'type'>,
 ): ChoiceQuestion<Option> {
@@ -14,6 +17,11 @@ export function choice<Option extends string>(
   return { type: 'choice', ...question };
 }
 
+/**
+ * Asks for a level on a scale, from one to ten levels in `criteria` ordered
+ * from low to high. The number of a level is its index, and a count out of
+ * range throws when the motty loads.
+ */
 export function score(question: Omit<ScoreQuestion, 'type'>): ScoreQuestion {
   const levels = question.criteria.length;
   if (levels < 1 || levels > 10) {
@@ -24,6 +32,10 @@ export function score(question: Omit<ScoreQuestion, 'type'>): ScoreQuestion {
   return { type: 'score', ...question };
 }
 
+/**
+ * Asks a yes or no question, and the answer holds the probability of yes in
+ * `noul`.
+ */
 export function noul(question: Omit<NoulQuestion, 'type'>): NoulQuestion {
   return { type: 'noul', ...question };
 }

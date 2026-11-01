@@ -101,9 +101,24 @@ async function raced(run: Run): Promise<{ run: Run; upstream: Upstream }> {
   return { run, upstream: await run.pending };
 }
 
+function callsOf(name: string, models: Model[]): Call[] {
+  if (models.length === 0) throw new Error(`${name}() was given no model`);
+  return models.map(callOf);
+}
+
+/**
+ * Tries the models in order and moves on when one fails before its first event,
+ * whatever the failure. A failure mid-stream stays in the answer, and when all
+ * fail it throws the last failure.
+ *
+ * @example
+ * ```ts
+ * const steady = fallback(retry(sonnet, 2), sol);
+ * const reply = await steady.complete(prompt);
+ * ```
+ */
 export function fallback(...models: Model[]): Model {
-  if (models.length === 0) throw new Error('fallback() was given no model');
-  const calls = models.map(callOf);
+  const calls = callsOf('fallback', models);
   return callable(async (prompt, signal) => {
     const leave = leaving(signal);
     let last: unknown;
@@ -126,9 +141,19 @@ export function fallback(...models: Model[]): Model {
   });
 }
 
+/**
+ * Calls all the models at once and answers with the first to give an event,
+ * stopping the others. Every call counts toward `limits.calls` and may be
+ * billed, and when all fail it throws the failure of the earliest model listed.
+ *
+ * @example
+ * ```ts
+ * const quick = race(luna, haiku);
+ * const reply = await quick.complete(prompt);
+ * ```
+ */
 export function race(...models: Model[]): Model {
-  if (models.length === 0) throw new Error('race() was given no model');
-  const calls = models.map(callOf);
+  const calls = callsOf('race', models);
   return callable(async (prompt, signal) => {
     if (signal.aborted) throw stopReason(signal.reason);
     const leave = leaving(signal);

@@ -1,5 +1,7 @@
+/** One event of a server-sent stream. */
 export type ServerSentEvent = { event?: string; data: string };
 
+/** Writes one event as it goes on the wire. */
 export function formatted({ event, data }: ServerSentEvent): string {
   const lines = data.split('\n').map((line) => `data: ${line}`);
   if (event !== undefined) lines.unshift(`event: ${event}`);
@@ -10,8 +12,11 @@ function read(event: string | undefined, data: string): ServerSentEvent {
   return event === undefined ? { data } : { event, data };
 }
 
-// As the standard reads a stream: comments, ids and retry times are dropped,
-// and so is an event the stream ended in the middle of.
+/**
+ * Reads a body into events as the standard reads a stream. Comments, ids and
+ * retry times are dropped, and so is an event the stream ended in the middle
+ * of.
+ */
 export async function* parsed(
   body: AsyncIterable<Uint8Array>,
 ): AsyncGenerator<ServerSentEvent, void, undefined> {
@@ -37,6 +42,13 @@ export async function* parsed(
       end !== -1;
       end = fresh.indexOf('\n', from)
     ) {
+      // The line every event has, read with no string for the line or its name.
+      if (held === '' && fresh.startsWith('data: ', from)) {
+        const value = fresh.slice(from + 6, end);
+        data = data === undefined ? value : `${data}\n${value}`;
+        from = end + 1;
+        continue;
+      }
       const line =
         held === '' ? fresh.slice(from, end) : held + fresh.slice(from, end);
       held = '';

@@ -72,6 +72,30 @@ test('a summary asked for shows reasoning and is put back for this API', () => {
   });
 });
 
+test('a null effort is no effort said, and the summary still decides the mute', () => {
+  expect(
+    decode({ model: 'coder', input: 'Hi', reasoning: { effort: null } }).request
+      .options,
+  ).toEqual({ reasoning: { exclude: true } });
+  expect(
+    decode({
+      model: 'coder',
+      input: 'Hi',
+      reasoning: { effort: null, summary: null },
+    }).request.options,
+  ).toEqual({ reasoning: { exclude: true } });
+  expect(
+    decode({
+      model: 'coder',
+      input: 'Hi',
+      reasoning: { effort: null, summary: 'auto' },
+    }).request.options,
+  ).toEqual({
+    reasoning: {},
+    hints: { 'openai.responses': { reasoning: { summary: 'auto' } } },
+  });
+});
+
 test('an effort that is not known is refused', () => {
   expect(() =>
     decode({ model: 'coder', input: 'Hi', reasoning: { effort: 'extreme' } }),

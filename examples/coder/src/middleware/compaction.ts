@@ -1,6 +1,6 @@
 import { motty, type Message } from "@mottyjs/core";
 import { z } from "zod";
-import { mini } from "../models";
+import { luna } from "../models";
 import { tuning } from "../settings";
 
 const INSTRUCTION = "Summarise this coding session, with the files touched and the decisions made.";
@@ -28,7 +28,7 @@ export const compaction = motty({ name: "compaction" })
     const start = tailStart(messages, keptMessages);
     if (start <= system.length) return;
 
-    const reply = await mini.complete({
+    const reply = await luna.complete({
       messages: [{ role: "system", text: INSTRUCTION }, ...messages.slice(system.length, start)],
       output: Summary,
     });

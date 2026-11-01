@@ -127,26 +127,33 @@ test('the body of a response is parsed, and leaving early cancels it', async () 
 });
 
 test('a line that comes over many chunks is read in time that grows as its length does', async () => {
-  async function taken(size: number) {
+  function reader(size: number) {
     const bytes = new TextEncoder().encode(`data: ${'A'.repeat(size)}\n\n`);
     async function* chunks() {
       for (let at = 0; at < bytes.length; at += 16_384) {
         yield bytes.subarray(at, at + 16_384);
       }
     }
-    let best = Number.POSITIVE_INFINITY;
-    for (let run = 0; run < 3; run++) {
+    return async () => {
       const start = performance.now();
       const [event] = await Array.fromAsync(parsed(chunks()));
-      best = Math.min(best, performance.now() - start);
+      const taken = performance.now() - start;
       expect(event?.data.length).toBe(size);
-    }
-    return best;
+      return taken;
+    };
+  }
+  const short = reader(2_000_000);
+  const long = reader(8_000_000);
+
+  // The two take turns, so that a busy moment or a cold start falls on both.
+  let shortTime = Number.POSITIVE_INFINITY;
+  let longTime = Number.POSITIVE_INFINITY;
+  for (let round = 0; round < 15; round++) {
+    shortTime = Math.min(shortTime, await short());
+    longTime = Math.min(longTime, await long());
   }
 
-  expect(await taken(8_000_000)).toBeLessThan(
-    8 * Math.max(await taken(2_000_000), 1),
-  );
+  expect(longTime).toBeLessThan(8 * Math.max(shortTime, 1));
 });
 
 test('a return that ends a chunk in the middle of a long line is still one line break', async () => {

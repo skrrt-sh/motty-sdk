@@ -261,6 +261,27 @@ describe.skipIf(url === undefined)('against a server', () => {
     expect(held).toBe(40);
   });
 
+  test('increments made at once after the server lost its scripts each count once', async () => {
+    const storage = redis({ url });
+    const other = new RedisClient(url);
+    await storage.increment?.(`${run}:flushed`, 1);
+    await other.send('SCRIPT', ['FLUSH']);
+
+    const totals = await Promise.all(
+      Array.from({ length: 40 }, () =>
+        storage.increment?.(`${run}:flushed`, 1),
+      ),
+    );
+    const held = await storage.get(`${run}:flushed`);
+    await storage.delete(`${run}:flushed`);
+    other.close();
+
+    expect(totals.toSorted((one, two) => (one ?? 0) - (two ?? 0))).toEqual(
+      Array.from({ length: 40 }, (_, at) => at + 2),
+    );
+    expect(held).toBe(41);
+  });
+
   test('the time to live is set by the increment that made the key and left alone by the ones after', async () => {
     const storage = redis({ url });
 

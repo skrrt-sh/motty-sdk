@@ -3,12 +3,12 @@ import { anthropic, familyOf, openai } from "./models";
 
 // The host's own example figures in USD per million tokens, not a price list the SDK ships
 const opus = { input: 4, cached: 0.2, cacheWrite: 5, output: 20 };
-const sol = { input: 2, cached: 0.2, cacheWrite: 2, output: 16 };
+const sol = { input: 2, cached: 0.1, cacheWrite: 2.5, output: 10 };
 const rates = new Map([
   [anthropic.lead.name, opus],
   [anthropic.small.name, { input: 0.1, cached: 0.01, cacheWrite: 0.125, output: 0.5 }],
   [openai.lead.name, sol],
-  [openai.small.name, { input: 0.1, cached: 0.01, cacheWrite: 0.1, output: 0.8 }],
+  [openai.small.name, { input: 0.1, cached: 0.01, cacheWrite: 0.125, output: 0.5 }],
 ]);
 
 // The input count includes the tokens read from a cache and written to one

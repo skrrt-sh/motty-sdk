@@ -8,6 +8,7 @@ import type {
   ToolChoice,
 } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
+import { unkeyed } from '../wire/cache-key.ts';
 import { carrying } from '../wire/carried.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, picked } from '../wire/json.ts';
@@ -138,7 +139,8 @@ export function encode(
   const { parted } = carrying(
     (name) => dialect.carried?.includes(name) === true,
   );
-  const hint = parted(said.hints);
+  const keyless = unkeyed(said.hints, dialect.name, dialect.cacheKey);
+  const hint = parted(keyless.hints);
   const option = parted(said.provider);
   const { rest: hints } = hint;
   const { rest: provider } = option;
@@ -226,6 +228,6 @@ export function encode(
       accept: 'text/event-stream',
     },
     body,
-    leftOut: [...left.leftOut(), ...leftOut],
+    leftOut: [...left.leftOut(), ...leftOut, ...keyless.leftOut],
   };
 }

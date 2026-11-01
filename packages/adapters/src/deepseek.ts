@@ -12,10 +12,22 @@ const failures: FailureReader = (status) => {
   return undefined;
 };
 
+/**
+ * Connects to DeepSeek over Chat Completions. It asks for JSON with no schema,
+ * since the API takes none.
+ */
 export function deepseek(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is `https://api.deepseek.com`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `deepseek/some-model`, taken off
+     * before the call. The default is `deepseek`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

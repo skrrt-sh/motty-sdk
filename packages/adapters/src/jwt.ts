@@ -8,8 +8,11 @@ import {
   jwtVerify,
 } from 'jose';
 
-// Exactly one way to check the signature: the address of a key set, a public
-// key in PEM or a shared secret. Every further check is the host's to name.
+/**
+ * How `jwt` verifies a token, by exactly one of the address of a key set, a
+ * public key in PEM or a shared secret, beside the options of `jose`'s
+ * `jwtVerify`. Every further check is the host's to name.
+ */
 export type JwtOptions = JWTVerifyOptions &
   (
     | { jwks: string | undefined; key?: never; secret?: never }
@@ -70,8 +73,11 @@ function pem(text: string) {
   }
 }
 
-// A token that states no expiry is accepted: whether tokens expire is the
-// issuer's to decide, and one that states an expiry is held to it.
+/**
+ * Verifies a signed token and gives its `sub` as the caller's id. A token that
+ * states no expiry is accepted, a token with no `sub` names nobody, and a key
+ * set that cannot be read throws rather than refuse the caller.
+ */
 export function jwt(options: JwtOptions): AuthAdapter {
   const { jwks, key, secret, ...checks } = options;
   // Past the types, a second way to verify would be ignored without a word.
@@ -107,8 +113,18 @@ function digest(text: string) {
   return createHash('sha256').update(text).digest();
 }
 
+/**
+ * Takes one plain secret and gives the caller a fixed id, for a service that
+ * holds a long-lived credential. The comparison takes the same time whatever
+ * was sent.
+ */
 export function bearer(options: {
+  /**
+   * The token a caller must send. It holds letters, digits and `- . _ ~ + /`
+   * and may end in `=`, and any other throws when the adapter is made.
+   */
   secret: string | undefined;
+  /** The id of the caller who sends the secret. */
   id: string;
 }): AuthAdapter {
   const secret = given('bearer', 'secret', options.secret);

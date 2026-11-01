@@ -391,7 +391,7 @@ test("a model the host has no rate for is charged as the lead model of its famil
       "spent $24.000 of $1.000",
     ].join("\n"),
   );
-  expect(price("openai/gpt-6.1-terra", { input: 1_000_000, output: 1_000_000 })).toBe(18);
+  expect(price("openai/gpt-6.1-terra", { input: 1_000_000, output: 1_000_000 })).toBe(12);
 });
 
 test("a seat's task is the last text the agent sent, without its paths and on one line", async () => {

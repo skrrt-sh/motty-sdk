@@ -38,6 +38,7 @@
   "exclude": [
     "packages/adapters/src/cloudflare.ts",
     "packages/adapters/test/cloudflare.worker.ts",
-    "packages/adapters/test/speed.worker.ts"
+    "packages/adapters/test/speed.worker.ts",
+    "packages/serve/test/env.worker.ts"
   ]
 }

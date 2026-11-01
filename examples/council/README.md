@@ -63,8 +63,8 @@ flowchart TD
 flowchart TD
   start([panel]) --> seats["derive: seats<br/>the first 3 of the panel, each limited to<br/>20 s to a first chunk and 15 s between chunks"]
   seats --> brief["same prompt for every seat<br/>reasoning effort: low"]
-  brief --> claude["haiku, retried once<br/>then gpt-5-nano"]
-  brief --> gpt["gpt-5-nano, retried once<br/>then gpt-oss"]
+  brief --> claude["haiku, retried once<br/>then gpt-6-luna"]
+  brief --> gpt["gpt-6-luna, retried once<br/>then gpt-oss"]
   brief --> open["race: gpt-oss, deepseek flash<br/>then haiku"]
   claude --> live
   gpt --> live
@@ -91,7 +91,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   start([verdict]) --> judge["sonnet, retried once<br/>output: agreed, disputed points<br/>thinking off in Anthropic's own words"]
-  judge -- "failed" --> standin["gpt-5-nano<br/>the same prompt, without Anthropic's words"]
+  judge -- "failed" --> standin["gpt-6-luna<br/>the same prompt, without Anthropic's words"]
   judge --> said
   standin --> said["think: The panel agrees, or what it disagrees on"]
   said --> choose{"agreed, one round only,<br/>or the request is over its limit?"}
@@ -138,9 +138,10 @@ The SDK decides nothing by cost; this motty does, twice, from the usage of its o
   is called, and adds `calls.total.cost` to it after the response. The day is part of the key, so
   no reset has to run.
 - Every call has a cost. OpenRouter reports one; OpenAI and Anthropic report tokens and no price,
-  so the host states a `price` in `src/serve.ts` that turns their tokens into dollars. Its rates
-  are this host's own example figures, not a price list the SDK ships. For a model with no rate
-  it returns nothing, and the cost the upstream reported stands.
+  so the host states a `price` in `src/price.ts` that turns their tokens into dollars, with cached
+  reads and cache writes at their own rates. Its rates are this host's own example figures, not a
+  price list the SDK ships. For a model with no rate it returns nothing, and the cost the upstream
+  reported stands.
 - The cost is added with the store's `increment`, one step of the database, so two requests of
   one caller ending in the same instant both count.
 
@@ -149,4 +150,4 @@ The SDK decides nothing by cost; this motty does, twice, from the usage of its o
 Every limit above is a default in `src/settings.ts`, and the host may override it in
 `src/serve.ts`: the seats and rounds of the panel, the two time limits of a model call, and the two
 spending limits. The retry counts and the quorum of two are fixed in the code. The models are named
-in `src/models.ts`, and the rates they are priced at in `src/serve.ts`.
+in `src/models.ts`, and the rates they are priced at in `src/price.ts`.

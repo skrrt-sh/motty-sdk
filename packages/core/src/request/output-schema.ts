@@ -1,5 +1,6 @@
 import { Unsupported } from '../data/errors.ts';
 import {
+  isObject,
   type Json,
   type JsonOutput,
   type JsonSchema,
@@ -45,8 +46,7 @@ function isJson(value: unknown, proven: Map<object, boolean>): value is Json {
 
 function isJsonSchema(value: unknown): value is JsonSchema {
   return (
-    typeof value === 'object' &&
-    value !== null &&
+    isObject(value) &&
     !Array.isArray(value) &&
     isJson(value, new Map<object, boolean>())
   );
@@ -75,8 +75,7 @@ function isWire(prompt: Prompt): prompt is Prompt<JsonOutput> {
   const output: unknown = prompt.output;
   return (
     output === undefined ||
-    (typeof output === 'object' &&
-      output !== null &&
+    (isObject(output) &&
       !Array.isArray(output) &&
       !('~standard' in output) &&
       !('schema' in output && holdsStandard(output.schema)))
@@ -96,17 +95,12 @@ function standard(output: unknown): StandardSchema {
 
 export function wired(prompt: Prompt): Prompt<JsonOutput> {
   // Thrown plain: a prompt that is no object is a mistake in the author's code.
-  if (typeof prompt !== 'object' || prompt === null) {
+  if (!isObject(prompt)) {
     throw new Error('A prompt must be an object');
   }
   if (isWire(prompt)) return prompt;
   const { output, ...rest } = prompt;
-  if (
-    typeof output === 'object' &&
-    output !== null &&
-    !('~standard' in output) &&
-    'schema' in output
-  ) {
+  if (isObject(output) && !('~standard' in output) && 'schema' in output) {
     const { schema, ...stated } = output;
     return {
       ...rest,

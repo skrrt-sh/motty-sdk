@@ -23,8 +23,11 @@ function paced(name: string): Pick<Taken, 'effort' | 'adaptive'> {
 // A cloud that serves Claude names it after the maker, and after a region.
 const hosted = /^(?:[a-z-]+\.)?anthropic\./;
 
-// A model named after this was written is held to the newest behaviour: no
-// temperature but one, and no top-p but the one the API still lets through.
+/**
+ * What each Claude model takes. A model named after this was written is held to
+ * the newest behaviour, with no temperature but one and no top-p but the one
+ * the API still lets through.
+ */
 export const anthropicTakes: Takes = (model, reasons) => {
   const name = model.replace(hosted, '').replaceAll('.', '-');
   const fixed: Taken = {
@@ -63,8 +66,13 @@ const lenient =
 const named = (names: string) =>
   new RegExp(`^(?:${names})(?:-\\d{4}-\\d\\d-\\d\\d)?(?::|$)`);
 
+// Answered a penalty with a 500 live, which a retry only repeats. Closed like
+// the list above: nobody has seen another name do so.
+const failsOnPenalty = named('gpt-6-luna');
+
 // The effort levels a model has a word for on the Responses API, as each
-// named them in its own refusal. The lists are closed like the one above: a
+// named them in its own refusal, but for gpt-6.1-terra, whose are from its
+// page and not yet asked live. The lists are closed like the one above: a
 // model named after this was written is held to the newest, which has every
 // level and no order not to reason.
 const worded: readonly (readonly [RegExp, readonly Effort[]])[] = [
@@ -79,7 +87,7 @@ const worded: readonly (readonly [RegExp, readonly Effort[]])[] = [
     ['none', 'low', 'medium', 'high', 'xhigh'],
   ],
   [
-    named('gpt-5\\.6-(?:luna|sol|terra)|gpt-6-(?:luna|sol)'),
+    named('gpt-5\\.6-(?:luna|sol|terra)|gpt-6-(?:luna|sol)|gpt-6\\.1-terra'),
     ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
   ],
 ];
@@ -124,20 +132,31 @@ const openaiOn =
     if (searches) return fixed;
     if (always) return sampling;
     const samples = lenient.test(model) ? reasons !== true : reasons === false;
+    if (!samples) return fixed;
     // Chat Completions refuses a top-p of zero from a model that can reason.
-    return samples ? { ...sampling, topP: [0.01, 1] } : fixed;
+    return {
+      ...sampling,
+      topP: [0.01, 1],
+      ...(failsOnPenalty.test(model) && {
+        presencePenalty: false,
+        frequencyPenalty: false,
+      }),
+    };
   };
 
+/** What each OpenAI model takes on the Responses API. */
 export const openaiTakes = openaiOn(false);
+/** What each OpenAI model takes on Chat Completions. */
 export const openaiChatTakes = openaiOn(true);
 
 // The Kimi models that still sample, and the ones whose thinking is a switch.
 const older = /^moonshot-v1/;
 const toggled = /^kimi-k2(?!.*-code)/;
 
-// A model named after this was written is held to the newest behaviour: one
-// temperature, one top-p and no penalty, any other value being an error. The
-// temperature a switched model allows is another once thinking is off.
+/**
+ * What each Kimi model takes. A model named after this was written is held to
+ * the newest behaviour, with one temperature, one top-p and no penalty.
+ */
 export const moonshotTakes: Takes = (model, reasons) => {
   const free: Taken = {
     temperature: [0, 1],
@@ -158,8 +177,10 @@ export const moonshotTakes: Takes = (model, reasons) => {
   };
 };
 
-// GLM's reference has a narrower temperature than OpenAI's, a top-p that is
-// never zero and no penalty.
+/**
+ * GLM's reference has a narrower temperature than OpenAI's, a top-p that is
+ * never zero and no penalty.
+ */
 export const zaiTakes: Takes = () => ({
   temperature: [0, 1],
   topP: [0.01, 1],
@@ -173,8 +194,10 @@ export const zaiTakes: Takes = () => ({
 // The models of other makers served here, which take no top-k.
 const guest = /^(?:deepseek|kimi|moonshot|minimax)/i;
 
-// Qwen takes a temperature below two and a top-p above zero, so each range
-// ends at the nearest value a caller would write.
+/**
+ * Qwen takes a temperature below two and a top-p above zero, so each range ends
+ * at the nearest value a caller would write.
+ */
 export const dashscopeTakes: Takes = (model) => ({
   temperature: [0, 1.99],
   topP: [0.01, 1],
@@ -185,8 +208,10 @@ export const dashscopeTakes: Takes = (model) => ({
   effort: true,
 });
 
-// Mistral's reference has a temperature up to 1.5, a top-p that is never
-// zero and no top-k.
+/**
+ * Mistral's reference has a temperature up to 1.5, a top-p that is never zero
+ * and no top-k.
+ */
 export const mistralTakes: Takes = () => ({
   temperature: [0, 1.5],
   topP: [0.01, 1],
@@ -197,7 +222,7 @@ export const mistralTakes: Takes = () => ({
   effort: true,
 });
 
-// MiniMax's reference has OpenAI's ranges and no penalty.
+/** MiniMax's reference has OpenAI's ranges and no penalty. */
 export const minimaxTakes: Takes = () => ({
   temperature: [0, 2],
   topP: [0, 1],

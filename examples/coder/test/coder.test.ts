@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Overloaded, type Message } from "@mottyjs/core";
 import { fake, memory, on, run } from "@mottyjs/test";
 import { EmptyPrompt } from "../src/middleware/empty-prompt";
-import { gpt, haiku, jev, mini, opus, sonnet } from "../src/models";
+import { haiku, jev, luna, opus, sol, sonnet } from "../src/models";
 import { structured } from "../src/modules/structured";
 import { tiers } from "../src/modules/tiers";
 import coder from "../src/motty";
@@ -10,7 +10,7 @@ import coder from "../src/motty";
 describe("tiers", () => {
   test("a short question without tools goes to the quick tier", async () => {
     const models = fake(
-      on(mini, "quick reply"),
+      on(luna, "quick reply"),
       on(haiku, "quick reply"),
     );
 
@@ -74,7 +74,7 @@ describe("tiers", () => {
 
   test("the quick tier reroutes to standard when both small models are down", async () => {
     const models = fake(
-      on(mini, new Overloaded("busy")),
+      on(luna, new Overloaded("busy")),
       on(haiku, new Overloaded("busy")),
       on(sonnet, "standard reply"),
     );
@@ -94,7 +94,7 @@ describe("tiers", () => {
       on(sonnet, "plan"),
       on(sonnet, "standard reply"),
       on(opus, new Overloaded("busy")),
-      on(gpt, new Overloaded("busy")),
+      on(sol, new Overloaded("busy")),
     );
 
     const { route, answer } = await run(
@@ -193,7 +193,7 @@ describe("tiers", () => {
 
 describe("structured", () => {
   test("JSON a small model can fill is asked of the small model", async () => {
-    const models = fake(on(jev, { small: 0.9 }), on(mini, { files: ["parser.ts"] }));
+    const models = fake(on(jev, { small: 0.9 }), on(luna, { files: ["parser.ts"] }));
 
     const { route, answer } = await run(
       structured,
@@ -220,7 +220,7 @@ describe("structured", () => {
   test("a small reply that is not JSON is answered again by the strong model", async () => {
     const models = fake(
       on(jev, { small: 0.9 }),
-      on(mini, "Here are the files"),
+      on(luna, "Here are the files"),
       on(sonnet, { files: ["parser.ts"] }),
     );
 
@@ -247,7 +247,7 @@ describe("structured", () => {
   });
 
   test("the decision model reads the question sent as parts beside the schema", async () => {
-    const models = fake(on(jev, { small: 0.9 }), on(mini, { files: ["parser.ts"] }));
+    const models = fake(on(jev, { small: 0.9 }), on(luna, { files: ["parser.ts"] }));
 
     await run(
       structured,
@@ -268,7 +268,7 @@ describe("request kind", () => {
   test("a request for JSON skips the tiers", async () => {
     const models = fake(
       on(jev, { software: 0.97, small: 0.9 }),
-      on(mini, { files: ["parser.ts"] }),
+      on(luna, { files: ["parser.ts"] }),
     );
 
     const { path } = await run(
@@ -308,7 +308,7 @@ describe("gates", () => {
   test("requests pass when the decision model is down", async () => {
     const models = fake(
       on(jev, new Overloaded("busy")),
-      on(mini, "quick reply"),
+      on(luna, "quick reply"),
       on(haiku, "quick reply"),
     );
 
@@ -325,8 +325,8 @@ describe("gates", () => {
 describe("prompt and answer", () => {
   test("a long thread is sent upstream as a summary and its last turns", async () => {
     const models = fake(
-      on(mini, { summary: "Fixed the parser", files: ["parser.ts"], decisions: ["keep the AST"] }),
-      on(mini, "quick reply"),
+      on(luna, { summary: "Fixed the parser", files: ["parser.ts"], decisions: ["keep the AST"] }),
+      on(luna, "quick reply"),
       on(haiku, "quick reply"),
     );
     const messages = Array.from(

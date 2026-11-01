@@ -13,10 +13,18 @@ type Serving = {
   begin: ReturnType<typeof flights>['begin'];
 };
 
-// What a host with a server of its own says of one request.
+/**
+ * What a host with a server of its own says of one request, the third argument
+ * of `fetch`.
+ */
 export type FromHost = {
+  /** The host's own id for the request, in place of one made here. */
   id?: string;
+  /** Who is asking, as the host knows it, so the auth adapter is not asked. */
   caller?: Caller;
+  /**
+   * Is given the delivery of each record, as a Workers context's own method is.
+   */
   waitUntil?: (work: Promise<unknown>) => void;
 };
 

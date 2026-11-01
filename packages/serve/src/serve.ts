@@ -1,4 +1,5 @@
 import {
+  type Motty,
   Overloaded,
   Unauthenticated,
   UnknownModel,
@@ -14,20 +15,31 @@ import {
   type Overrides,
 } from '@mottyjs/core/host';
 import { chat, type FromHost, toldBy } from './chat.ts';
+import { checked } from './checked.ts';
 import type { Codec } from './codec.ts';
 import { flights } from './flights.ts';
 import { messages } from './messages/index.ts';
 import { modelList, modelOf } from './models.ts';
 import { failed } from './reply.ts';
 import { formatOf, routed } from './routes.ts';
+import { reporting } from './stderr.ts';
 
-// All in milliseconds: how long a stream may be silent, how long a shutdown
-// waits for the requests in flight, and how long a body has to arrive.
-export type Edge = { keepAlive?: number; drain?: number; receive?: number };
+/** The times of the edge, the third argument of `serve` and `mount`. */
+export type Edge = {
+  /** How long a stream may be silent, in ms. The default is 15000. */
+  keepAlive?: number;
+  /**
+   * How long a shutdown waits for the requests in flight before it stops them,
+   * in ms. The default is 25000.
+   */
+  drain?: number;
+  /** How long a request body has to arrive, in ms. The default is 60000. */
+  receive?: number;
+};
 
 // A callback's result is not checked for names its type lacks, so a group
 // the motty does not declare is refused by name here. Overrides held as any
-// map name no group and are let through.
+// map name no group: they are let through, and refused when mounted.
 type Undeclared<Given, Declared> = (
   string extends keyof Given
     ? never
@@ -40,11 +52,24 @@ type Undeclared<Given, Declared> = (
       }
   : never;
 
+// Only the one property that says so is compared, and not the whole chain. A
+// motty held without its context has no methods, and has lost what could say.
+type Answering<Served> = 'use' extends keyof Served
+  ? Served extends Motty<unknown, [] | [string, ...string[]]>
+    ? unknown
+    : 'A motty served needs a route or a handle'
+  : unknown;
+
+type Plain = Record<string, string | undefined>;
+
 // The environment as the runtime's own types declare it, so that names a host
 // declares there stay known; a consumer with no such types gets plain strings.
+// So does one whose types declare the process as any, as the Workers types do.
 type Env = typeof globalThis extends { process: { env: infer Declared } }
-  ? Declared
-  : Record<string, string | undefined>;
+  ? unknown extends Declared
+    ? Plain
+    : Declared
+  : Plain;
 
 type Options<Served, Given> = (
   env: Env,
@@ -68,20 +93,34 @@ function shuttingDown(): Overloaded {
   return new Overloaded('The server is shutting down');
 }
 
-// The edge alone, for a host with a server of its own: nothing here touches
-// the process or a listener.
+/**
+ * Serves a motty as a model over the Chat Completions, Responses and Messages
+ * APIs, for a host with a server of its own on Bun or Workers. It gives `fetch`
+ * and `close`, touches no process or listener, and throws at once on a limit or
+ * a settings override that is not valid. `options` is a function of the
+ * environment.
+ */
 export function mount<
   Served extends Marked,
   const Given extends Overrides<Served>,
->(motty: Served, options: Options<Served, Given>, edge: Edge = {}) {
+>(
+  motty: Served,
+  options: Options<Served, Given> & Answering<Served>,
+  edge: Edge = {},
+) {
   const { run, description } = motty[mark];
   const { name } = description;
   const started = new Date();
   const { begin, landed, stopAll } = flights();
   // A Worker without `nodejs_compat` has no environment to read.
   const given = options(typeof process === 'undefined' ? {} : process.env);
-  // Made first: it refuses a limit that is no number, the body's among them.
-  const admit = hosting(motty, given);
+  // Made first: it refuses a limit that is no number, the body's among them,
+  // and a motty of a contract whose chain could not be read.
+  const admit = hosting<Served>(motty, {
+    ...given,
+    report: reporting(given.report),
+  });
+  checked(motty[mark], given);
   const drain = bound('drain', edge.drain) ?? 25_000;
   const serving = {
     admit,
@@ -218,12 +257,26 @@ export function mount<
 // compiler reads names no type of Bun's.
 type Listening = { stop(closeActiveConnections?: boolean): Promise<void> };
 
-// For a serve file, whose default export Bun starts: the edge and the
-// process. Only a request shows the listener there is to stop.
+/**
+ * Serves a motty from a serve file, whose default export Bun starts. It is
+ * `mount` plus the process, so once a request has come it also closes on
+ * SIGTERM and SIGINT, draining what is in flight.
+ *
+ * @example
+ * ```ts
+ * export default serve(relay, ({ OPENAI_KEY }) => ({
+ *   models: [openai({ key: OPENAI_KEY })],
+ * }));
+ * ```
+ */
 export function serve<
   Served extends Marked,
   const Given extends Overrides<Served>,
->(motty: Served, options: Options<Served, Given>, edge: Edge = {}) {
+>(
+  motty: Served,
+  options: Options<Served, Given> & Answering<Served>,
+  edge: Edge = {},
+) {
   const mounted = mount<Served, Given>(motty, options, edge);
   let listening: Listening | undefined;
 

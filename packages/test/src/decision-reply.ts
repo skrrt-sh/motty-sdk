@@ -10,6 +10,10 @@ import { type ChatReply, isList } from './chat-reply.ts';
 import { copied } from './copied.ts';
 import { Unscripted } from './unscripted.ts';
 
+/**
+ * A scripted reply to a decision, by question id. It is a number, or
+ * probabilities by option for a choice, or an error.
+ */
 export type DecisionReply =
   | MottyError
   | {

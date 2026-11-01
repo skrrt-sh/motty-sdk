@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { motty } from '../src/chain/motty.ts';
 import { contractOf } from '../src/chain/run.ts';
 import { type EventStream, mark } from '../src/contract.ts';
@@ -803,6 +803,199 @@ test("the stop follows the caller's own signal, and is fired with the host's rea
   expect(left.host.signal.aborted).toBe(true);
   expect(stopped.host.signal.reason).toBe(reason);
   expect(untouched.host.signal.aborted).toBe(false);
+});
+
+// How many of the listeners added since are still there. A listener may be
+// removed twice: what counts is that it went.
+function listeners(signal: AbortSignal) {
+  const added = spyOn(signal, 'addEventListener');
+  const removed = spyOn(signal, 'removeEventListener');
+  return () =>
+    added.mock.calls.filter(
+      ([, listener]) =>
+        !removed.mock.calls.some(([, gone]) => gone === listener),
+    ).length;
+}
+
+test('a request that has ended leaves no time limit running', async () => {
+  const served = echo();
+  const reported = Promise.withResolvers<Report>();
+  const { request, host } = await hosting(served, {
+    limits: { duration: 10 },
+    report: reported.resolve,
+  })(asked());
+
+  await Array.fromAsync(contractOf(served).run(request, host));
+  await reported.promise;
+  await Bun.sleep(30);
+
+  expect(host.signal.aborted).toBe(false);
+});
+
+test('a duration longer than a timer can hold does not fire at once', async () => {
+  const { host, stop } = await hosting(echo(), {
+    limits: { duration: 2 ** 40 },
+  })(asked());
+
+  expect(host.signal.aborted).toBe(false);
+  await Bun.sleep(10);
+
+  expect(host.signal.aborted).toBe(false);
+  stop();
+});
+
+test("a request that has ended is no longer told of the host's long-lived signal, and leaves no listener on it", async () => {
+  const shutdown = new AbortController();
+  const listening = listeners(shutdown.signal);
+  const served = echo();
+  const reported = Promise.withResolvers<Report>();
+  const { request, host } = await hosting(served, {
+    report: reported.resolve,
+  })({ ...asked(), signal: shutdown.signal });
+
+  await Array.fromAsync(contractOf(served).run(request, host));
+  await reported.promise;
+  shutdown.abort();
+
+  expect(host.signal.aborted).toBe(false);
+  expect(listening()).toBe(0);
+});
+
+test('a request still running hears the long-lived signal, with its reason, and one that is over does not', async () => {
+  const shutdown = new AbortController();
+  const served = echo();
+  const admit = hosting(served, {});
+  const over = Promise.withResolvers<void>();
+  const ended = await admit({
+    ...asked(),
+    signal: shutdown.signal,
+    over: () => over.resolve(),
+  });
+  const running = await admit({ ...asked(), signal: shutdown.signal });
+  await Array.fromAsync(contractOf(served).run(ended.request, ended.host));
+  await over.promise;
+  contractOf(served).run(running.request, running.host);
+  const reason = new Overloaded('The server is shutting down');
+
+  shutdown.abort(reason);
+
+  expect(running.host.signal.reason).toBe(reason);
+  expect(ended.host.signal.aborted).toBe(false);
+});
+
+test('a host that admits and never runs starts no timer and adds no listener', async () => {
+  const shutdown = new AbortController();
+  const added = spyOn(shutdown.signal, 'addEventListener');
+  const timers = spyOn(globalThis, 'setTimeout');
+
+  const { host } = await hosting(echo(), {
+    limits: { duration: 3_600_000 },
+  })({ ...asked(), signal: shutdown.signal });
+
+  expect(host.caller).toBeUndefined();
+  expect(added).not.toHaveBeenCalled();
+  expect(timers).not.toHaveBeenCalled();
+  timers.mockRestore();
+});
+
+test('a request stopped before it runs starts as stopped, and leaves no timer or listener', async () => {
+  const shutdown = new AbortController();
+  const listening = listeners(shutdown.signal);
+  const served = echo();
+  const { request, host, stop } = await hosting(served, {
+    limits: { duration: 10 },
+  })({ ...asked(), signal: shutdown.signal });
+  const reason = new Overloaded('The server is shutting down');
+
+  stop(reason);
+  await Bun.sleep(30);
+
+  expect(host.signal.reason).toBe(reason);
+  expect(listening()).toBe(0);
+  expect(await Array.fromAsync(contractOf(served).run(request, host))).toEqual([
+    {
+      type: 'error',
+      error: expect.objectContaining({ code: 'overloaded' }),
+      usage: {},
+    },
+  ]);
+});
+
+test('a stream nobody reads is ended by the time limit: its record says timed out, and no listener is left', async () => {
+  const shutdown = new AbortController();
+  const listening = listeners(shutdown.signal);
+  const served = motty({ name: 'coder' }).handle(() => answer('Use a mutex.'));
+  const reported = Promise.withResolvers<Report>();
+  const { request, host } = await hosting(served, {
+    limits: { duration: 10 },
+    report: reported.resolve,
+  })({ ...asked(), signal: shutdown.signal });
+
+  contractOf(served).run(request, host);
+
+  expect(await reported.promise).toMatchObject({
+    outcome: 'aborted',
+    error: { code: 'timed_out', status: 504 },
+  });
+  expect(host.signal.reason).toMatchObject({ name: 'TimeoutError' });
+  expect(listening()).toBe(0);
+});
+
+test('a stream closed part way leaves no time limit and no listener', async () => {
+  const shutdown = new AbortController();
+  const listening = listeners(shutdown.signal);
+  const served = motty({ name: 'coder' }).handle(() => answer('Use a mutex.'));
+  const reported = Promise.withResolvers<Report>();
+  const { request, host } = await hosting(served, {
+    limits: { duration: 10 },
+    report: reported.resolve,
+  })({ ...asked(), signal: shutdown.signal });
+  const stream = contractOf(served).run(request, host)[Symbol.asyncIterator]();
+
+  await stream.next();
+  await stream.return?.();
+  await reported.promise;
+  await Bun.sleep(30);
+
+  expect(host.signal.aborted).toBe(false);
+  expect(listening()).toBe(0);
+});
+
+test('a bare stop reads as a caller who left, in the record and in the call it cut', async () => {
+  const served = motty({ name: 'coder' }).handle(({ prompt }) =>
+    model('acme/small').complete(prompt),
+  );
+  const called = Promise.withResolvers<void>();
+  const reported = Promise.withResolvers<Report>();
+  const { request, host, stop } = await hosting(served, {
+    models: [
+      {
+        serves: () => true,
+        call: async function* (_model, _prompt, signal) {
+          called.resolve();
+          await new Promise((gone) => {
+            signal.addEventListener('abort', gone);
+          });
+          yield { type: 'finish', reason: 'stop' };
+        },
+      },
+    ],
+    report: reported.resolve,
+  })(asked());
+  const events = Array.fromAsync(contractOf(served).run(request, host));
+
+  await called.promise;
+  stop();
+
+  expect(host.signal.reason).toMatchObject({ name: 'AbortError' });
+  expect(await events).toMatchObject([
+    { type: 'error', error: { code: 'aborted', status: 499 } },
+  ]);
+  expect(await reported.promise).toMatchObject({
+    outcome: 'aborted',
+    error: { code: 'aborted', message: 'The work was stopped' },
+    calls: [{ code: 'aborted', message: 'The work was stopped' }],
+  });
 });
 
 test('each request gets its own id, and the report is the record with that id and the overrides in effect', async () => {

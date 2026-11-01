@@ -1,10 +1,10 @@
 import { fallback, race, retry, type Answer, type Prompt } from "@mottyjs/core";
-import { gpt, haiku, mini, sonnet } from "../../models";
+import { haiku, luna, sol, sonnet } from "../../models";
 
 export function quick(prompt: Prompt): Promise<Answer> {
-  return race(mini, haiku).complete(prompt);
+  return race(luna, haiku).complete(prompt);
 }
 
 export function standard(prompt: Prompt): Promise<Answer> {
-  return fallback(retry(sonnet, 2), gpt).complete(prompt);
+  return fallback(retry(sonnet, 2), sol).complete(prompt);
 }

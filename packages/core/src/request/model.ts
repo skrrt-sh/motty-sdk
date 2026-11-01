@@ -26,14 +26,24 @@ import { current, mayGoUnawaited, openCall } from './context.ts';
 import { wired } from './output-schema.ts';
 import { close, onAbort, reader, readOut, reasonOf } from './wait.ts';
 
+/**
+ * Anything that can be called with a prompt, as `model()` and the combinators
+ * give.
+ */
 export type Model = {
+  /**
+   * Calls the model inside the running request. It resolves on the first event,
+   * so a failure before any event rejects and a later one stays in the answer.
+   */
   complete: <Schema extends OutputSchema = OutputSchema>(
     prompt: Prompt<Schema>,
   ) => Promise<Answer<Parsed<Schema>>>;
 };
 
-// What a combinator returns has no single name, so only a model made by
-// name carries one.
+/**
+ * What a combinator returns has no single name, so only a model made by name
+ * carries one.
+ */
 export type NamedModel = Model & { readonly name: string };
 
 // Resolves on the first event, so whoever switches models can still switch;
@@ -141,6 +151,18 @@ function usageAndCode(last: Terminal) {
   };
 }
 
+/**
+ * Names a model of the host, as its adapter's prefix, a slash and the
+ * provider's own name. It holds no key and may be made at load, while
+ * `complete` works only inside a request, counts toward `limits.calls`, and
+ * fails with `UnknownModel` when no adapter serves the name.
+ *
+ * @example
+ * ```ts
+ * const sol = model('openai/gpt-6.1-sol');
+ * const reply = await sol.complete(prompt);
+ * ```
+ */
 export function model(name: string): NamedModel {
   const made = callable(
     (prompt, signal) =>

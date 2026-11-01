@@ -11,7 +11,7 @@ import {
   type Terminal,
   type Usage,
 } from '../data/event.ts';
-import { type Answer, ending, sentWith } from '../request/answer.ts';
+import { type Answer, arrival, ending, sentWith } from '../request/answer.ts';
 import {
   endPhase,
   phaseStopper,
@@ -25,7 +25,7 @@ type Sent = StreamEvent | Progress;
 
 type SentRead = IteratorResult<Sent, undefined>;
 
-type Phase = { at: 'open' } | { at: 'stopped' } | { at: 'ended' };
+type Phase = 'open' | 'stopped' | 'ended';
 
 // The whole error, for the host: the caller is told it without its stack
 // and cause, and one who left is told nothing.
@@ -45,9 +45,10 @@ export function delivery(state: RequestState): Delivery {
   });
   const offered: { event: Sent; taken: (reached: boolean) => void }[] = [];
   const asking: ((read: SentRead) => void)[] = [];
-  let phase: Phase = { at: 'open' };
+  let phase: Phase = 'open';
   let pumping: Promise<void> | undefined;
   let reason: ErrorFacts | undefined;
+  let sending: (() => void) | undefined;
 
   function failure(error: ErrorFacts): Terminal {
     return {
@@ -68,40 +69,40 @@ export function delivery(state: RequestState): Delivery {
   }
 
   function drop(): void {
-    if (offered.length === 0) return;
     for (const offer of offered.splice(0)) offer.taken(false);
   }
 
   function endStream(): void {
-    phase = { at: 'ended' };
+    phase = 'ended';
     drop();
-    if (asking.length === 0) return;
     for (const give of asking.splice(0)) give(readOut);
   }
 
   function onStop(): void {
-    switch (phase.at) {
+    switch (phase) {
       case 'open': {
         const give = asking.shift();
         if (give === undefined) {
           drop();
-          phase = { at: 'stopped' };
+          phase = 'stopped';
         } else {
           give(stopRead());
           endStream();
         }
-        return;
+        break;
       }
       case 'stopped':
       case 'ended':
-        return;
+        break;
       default:
         phase satisfies never;
     }
+    sending?.();
   }
 
-  function delivered(event: Sent): Promise<boolean> {
-    switch (phase.at) {
+  // True when a reader took the event, so that nothing waits a turn for it.
+  function delivered(event: Sent): boolean | Promise<boolean> {
+    switch (phase) {
       case 'open': {
         const give = asking.shift();
         if (give === undefined) {
@@ -111,18 +112,18 @@ export function delivery(state: RequestState): Delivery {
         }
         give({ done: false, value: event });
         if (isTerminal(event)) endStream();
-        return Promise.resolve(true);
+        return true;
       }
       case 'stopped':
       case 'ended':
-        return Promise.resolve(false);
+        return false;
       default:
         return phase satisfies never;
     }
   }
 
   function next(): Promise<SentRead> {
-    switch (phase.at) {
+    switch (phase) {
       case 'open': {
         const offer = offered.shift();
         if (offer === undefined) {
@@ -146,7 +147,7 @@ export function delivery(state: RequestState): Delivery {
   }
 
   function left(): Promise<SentRead> {
-    switch (phase.at) {
+    switch (phase) {
       case 'open':
       case 'stopped':
         endStream();
@@ -170,6 +171,43 @@ export function delivery(state: RequestState): Delivery {
   async function closed(): Promise<void> {
     stage.close();
     await pumping;
+  }
+
+  // Whether every chunk was sent, each as it arrives. How the answer ended is
+  // read from its ending. By hand and not its replay: that generator and its
+  // turns cost about 50 nanoseconds a chunk.
+  function sentWhole(answer: Answer): Promise<boolean> {
+    const { buffer, state, onArrival } = arrival(answer);
+    return new Promise((resolve) => {
+      let read = 0;
+      const send = () => {
+        if (offered.length > 0) return;
+        for (
+          let chunk = buffer[read];
+          chunk !== undefined;
+          chunk = buffer[read]
+        ) {
+          read += 1;
+          const taken = delivered(chunk);
+          if (taken !== true) {
+            Promise.resolve(taken).then((went) =>
+              went ? send() : over(false),
+            );
+            return;
+          }
+        }
+        if (state().at !== 'arriving') over(true);
+        else if (phase !== 'open') over(false);
+      };
+      const unfollow = onArrival(send);
+      const over = (whole: boolean) => {
+        unfollow();
+        sending = undefined;
+        resolve(whole);
+      };
+      sending = send;
+      send();
+    });
   }
 
   // The phase ends ahead of the terminal event, so the usage a caller is told
@@ -204,9 +242,7 @@ export function delivery(state: RequestState): Delivery {
     answered: async (answer) => {
       await closed();
       try {
-        for await (const chunk of answer.chunks()) {
-          if (!(await delivered(chunk))) return last();
-        }
+        if (!(await sentWhole(answer))) return last();
         const finish = await ending(answer);
         return last((usage) => sentWith(finish, usage));
       } catch (thrown) {

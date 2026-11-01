@@ -49,6 +49,18 @@ async function paused(ms: number, left: Promise<unknown>): Promise<void> {
   clearTimeout(timer);
 }
 
+/**
+ * Calls the model up to `times` more times when it fails before its first event
+ * with a retryable `MottyError`, so a failure mid-stream is not retried. It
+ * waits 500 ms, doubling up to 30000, or what the upstream's `retryAfter` asks,
+ * and gives up if that is longer than 30000. Every try counts toward
+ * `limits.calls`.
+ *
+ * @example
+ * ```ts
+ * const steady = retry(model('anthropic/claude-sonnet-5-5'), 2);
+ * ```
+ */
 export function retry(model: Model, times: number): Model {
   if (!Number.isInteger(times) || times < 0) {
     throw new Error(`retry() needs a whole number of retries, not ${times}`);

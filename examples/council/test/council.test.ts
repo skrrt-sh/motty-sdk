@@ -7,15 +7,16 @@ import {
   UpstreamFailed,
 } from "@mottyjs/core";
 import { fake, memory, on, run } from "@mottyjs/test";
-import { flash, haiku, nano, oss, sonnet } from "../src/models";
+import { flash, haiku, luna, oss, sonnet } from "../src/models";
 import { panel } from "../src/modules/panel";
 import council from "../src/motty";
+import { price } from "../src/price";
 
 describe("verdict", () => {
   test("a panel that agrees is merged by the chair at once", async () => {
     const models = fake(
       on(haiku, "Canberra"),
-      on(nano, "It is Canberra"),
+      on(luna, "It is Canberra"),
       on(oss, "Canberra, I think"),
       on(flash, "Canberra, I think"),
       on(sonnet, { agreed: true, disputed: [] }),
@@ -40,7 +41,7 @@ describe("verdict", () => {
     const models = fake(
       on(haiku, "Sydney"),
       on(haiku, "Canberra, on reflection"),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Melbourne"),
       on(flash, "Melbourne"),
       on(sonnet, { agreed: false, disputed: ["Which city is the capital"] }),
@@ -67,7 +68,7 @@ describe("verdict", () => {
   test("one round is all a host that sets one gets", async () => {
     const models = fake(
       on(haiku, "Sydney"),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Melbourne"),
       on(flash, "Melbourne"),
       on(sonnet, { agreed: false, disputed: ["Which city is the capital"] }),
@@ -88,8 +89,8 @@ describe("verdict", () => {
     const models = fake(
       on(haiku, "Sydney"),
       on(haiku, new Forbidden("no access")),
-      on(nano, "Canberra"),
-      on(nano, new Forbidden("no access")),
+      on(luna, "Canberra"),
+      on(luna, new Forbidden("no access")),
       on(oss, "Melbourne"),
       on(oss, new Forbidden("no access")),
       on(flash, "Melbourne"),
@@ -113,7 +114,7 @@ describe("panel", () => {
   test("a panelist that fails is left out", async () => {
     const models = fake(
       on(haiku, new Forbidden("no access")),
-      on(nano, new Forbidden("no access")),
+      on(luna, new Forbidden("no access")),
       on(oss, "Canberra"),
       on(flash, "Canberra"),
     );
@@ -130,7 +131,7 @@ describe("panel", () => {
   test("fewer than two panelists fail the request as an upstream failure", async () => {
     const models = fake(
       on(haiku, new Forbidden("no access")),
-      on(nano, new Forbidden("no access")),
+      on(luna, new Forbidden("no access")),
       on(oss, new Forbidden("no access")),
       on(flash, "Canberra"),
     );
@@ -146,7 +147,7 @@ describe("panel", () => {
   });
 
   test("a host may seat two panelists", async () => {
-    const models = fake(on(haiku, "Canberra"), on(nano, "Canberra"));
+    const models = fake(on(haiku, "Canberra"), on(luna, "Canberra"));
 
     await run(
       panel.handle(({ opinions }) => answer(opinions.join(" | "))),
@@ -162,7 +163,7 @@ describe("seats", () => {
   test("a seat falls back to another provider's model", async () => {
     const models = fake(
       on(haiku, new Forbidden("no access")),
-      on(nano, "From OpenAI"),
+      on(luna, "From OpenAI"),
       on(oss, "From OpenRouter"),
       on(flash, "From OpenRouter"),
     );
@@ -179,8 +180,8 @@ describe("seats", () => {
   test("the chair and the judge each fall back to another provider", async () => {
     const models = fake(
       on(haiku, "Canberra"),
-      on(nano, "Canberra"),
-      on(nano, { agreed: true, disputed: [] }),
+      on(luna, "Canberra"),
+      on(luna, { agreed: true, disputed: [] }),
       on(oss, "Canberra"),
       on(flash, "Canberra"),
       on(flash, "The capital is Canberra."),
@@ -194,7 +195,7 @@ describe("seats", () => {
     );
 
     expect(await answer.text()).toBe("The capital is Canberra.");
-    expect(models.sent(nano)[1]?.options).toEqual({
+    expect(models.sent(luna)[1]?.options).toEqual({
       provider: { anthropic: { thinking: { type: "between_tools" } }, openai: {} },
     });
   });
@@ -202,7 +203,7 @@ describe("seats", () => {
   test("panelists reason a little, the chair a lot, and the judge not at all", async () => {
     const models = fake(
       on(haiku, "Canberra"),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Canberra"),
       on(flash, "Canberra"),
       on(sonnet, { agreed: true, disputed: [] }),
@@ -228,7 +229,7 @@ describe("time limits", () => {
         await Bun.sleep(100);
         return "Too late";
       }),
-      on(nano, "From OpenAI"),
+      on(luna, "From OpenAI"),
       on(oss, "From OpenRouter"),
       on(flash, "From OpenRouter"),
     );
@@ -251,7 +252,7 @@ describe("progress", () => {
   test("the caller reads every panelist and the verdict before the answer", async () => {
     const models = fake(
       on(haiku, "Sydney"),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Melbourne"),
       on(flash, "Melbourne"),
       on(sonnet, { agreed: false, disputed: ["Which city is the capital"] }),
@@ -271,13 +272,20 @@ describe("progress", () => {
 });
 
 describe("spend", () => {
+  test("tokens read from a cache and written to one are priced at their own rates and not again as input", () => {
+    expect(
+      price(sonnet.name, { input: 1_000_000, cached: 500_000, cacheWrite: 250_000, output: 100_000 }),
+    ).toBe(2.175);
+    expect(price(oss.name, { input: 1_000_000 })).toBeUndefined();
+  });
+
   test("a request already over its limit answers without a second round", async () => {
     const models = fake(
       on(haiku, [
         { type: "text", text: "Sydney" },
         { type: "finish", reason: "stop", usage: { input: 40, output: 20 } },
       ]),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Melbourne"),
       on(flash, "Melbourne"),
       on(sonnet, { agreed: false, disputed: ["Which city is the capital"] }),
@@ -305,7 +313,7 @@ describe("spend", () => {
         { type: "text", text: "Canberra" },
         { type: "finish", reason: "stop", usage: { input: 1000, output: 500 } },
       ]),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Canberra"),
       on(flash, "Canberra"),
       on(sonnet, ({ output }) =>
@@ -344,7 +352,7 @@ describe("spend", () => {
         { type: "text", text: "Canberra" },
         { type: "finish", reason: "stop", usage: { output: 25 } },
       ]),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Canberra"),
       on(flash, "Canberra"),
       on(sonnet, ({ output }) =>
@@ -377,7 +385,7 @@ describe("spend", () => {
         { type: "text", text: "Canberra" },
         { type: "finish", reason: "stop", usage: { output: 300 } },
       ]),
-      on(nano, "Canberra"),
+      on(luna, "Canberra"),
       on(oss, "Canberra"),
       on(flash, "Canberra"),
       on(sonnet, { agreed: true, disputed: [] }),
@@ -403,7 +411,7 @@ describe("spend", () => {
   test("a request that failed still adds what it spent", async () => {
     const models = fake(
       on(haiku, new Forbidden("no access")),
-      on(nano, new Forbidden("no access")),
+      on(luna, new Forbidden("no access")),
       on(oss, new Forbidden("no access")),
       on(flash, [
         { type: "text", text: "Canberra" },

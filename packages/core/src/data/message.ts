@@ -1,9 +1,12 @@
 type Scalar = string | number | boolean | null;
 
+/** A JSON value. */
 export type Json = Scalar | Json[] | { [key: string]: Json };
 
-// JSON as it is passed in: read and never changed, so what is given may be
-// read-only. Whoever is handed JSON to keep gets the form above.
+/**
+ * JSON as it is passed in: read and never changed, so what is given may be
+ * read-only. Whoever is handed JSON to keep gets the form above.
+ */
 export type ReadonlyJson =
   | Scalar
   | readonly ReadonlyJson[]
@@ -11,21 +14,30 @@ export type ReadonlyJson =
 
 export type JsonSchema = { [keyword: string]: ReadonlyJson };
 
-// Keyed by whoever can read the value back: a wire family, or something narrower
-// when a value is not portable inside one. A key of another family is
-// dropped when it sits in `hints`.
+/**
+ * Keyed by whoever can read the value back: a wire family, or something
+ * narrower when a value is not portable inside one. A key of another family is
+ * dropped when it sits in `hints`.
+ */
 export type ProviderData = { [key: string]: ReadonlyJson };
 
-// `implied` is a marker a cache key asked for, not one the caller placed:
-// an upstream that takes none caches by itself and misses nothing.
+/**
+ * A cache marker on a message, a part or a tool. `implied` is a marker a cache
+ * key asked for and not one the caller placed, since an upstream that takes
+ * none caches by itself and misses nothing.
+ */
 export type Cache = { ttl?: '5m' | '1h'; implied?: true };
 
-// `data` is base64.
+/**
+ * An image, a file or sound, given by address, by base64 `data` or by an
+ * uploaded `id`.
+ */
 export type Media =
   | { url: string; data?: never; id?: never; mediaType?: string }
   | { data: string; url?: never; id?: never; mediaType?: string }
   | { id: string; url?: never; data?: never; mediaType?: string };
 
+/** What a message says, as plain `text` or as a list of `parts`. */
 export type Content =
   | { text: string; parts?: never }
   | { text?: never; parts: readonly Part[] };
@@ -52,6 +64,7 @@ type KnownPart =
   | { type: 'citation'; title?: string; url?: string; text?: string }
   | { type: 'refusal'; text: string };
 
+/** A piece of a message. */
 export type Part =
   | (KnownPart & {
       cache?: Cache;
@@ -62,6 +75,7 @@ export type Part =
 
 export type Role = 'system' | 'developer' | 'user' | 'assistant' | 'tool';
 
+/** One turn of a conversation. */
 export type Message = {
   role: Role;
   name?: string;
@@ -70,6 +84,10 @@ export type Message = {
   hints?: ProviderData;
 } & Content;
 
+/**
+ * A tool the model may call. It is a function with a JSON Schema input, a
+ * custom tool with free-form input, or a provider's own.
+ */
 export type Tool =
   | {
       type: 'function';
@@ -97,6 +115,7 @@ export type Tool =
       hints?: ProviderData;
     };
 
+/** How the model may use its tools. */
 export type ToolChoice =
   | 'auto'
   | 'none'
@@ -105,12 +124,17 @@ export type ToolChoice =
   | { allowed: readonly [string, ...string[]]; mode: 'auto' | 'required' }
   | { provider: ProviderData };
 
+/**
+ * The neutral options of a model call, which each upstream receives in its own
+ * names.
+ */
 export type Options = {
   toolChoice?: ToolChoice;
   parallelToolCalls?: boolean;
   reasoning?: {
     effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     budgetTokens?: number;
+    /** Keeps the reasoning out of the reply. */
     exclude?: boolean;
   };
   stop?: readonly string[];
@@ -128,7 +152,15 @@ export type Options = {
    * and credentials, cookies and connection headers are never sent.
    */
   headers?: { readonly [name: string]: string | null | undefined };
+  /**
+   * Fields in the upstream's own names, keyed by wire API or vendor. A call
+   * fails if this has fields only for another API, so a fallback can move on.
+   */
   provider?: ProviderData;
+  /**
+   * The same as `provider`, except that what this upstream cannot carry is
+   * dropped and the call goes on.
+   */
   hints?: ProviderData;
 };
 
@@ -143,6 +175,7 @@ type StandardResult<Output> =
       }>;
     };
 
+/** Any validator of the Standard Schema spec, such as a zod schema. */
 export type StandardSchema<Input = unknown, Output = Input> = {
   readonly '~standard': {
     readonly version: 1;
@@ -163,7 +196,10 @@ export type StandardSchema<Input = unknown, Output = Input> = {
   };
 };
 
-// With no `schema` it asks for any JSON object.
+/**
+ * Asks for a JSON answer that fits `schema`. With no `schema` it asks for any
+ * JSON object.
+ */
 export type JsonOutput = {
   schema?: JsonSchema;
   name?: string;
@@ -171,16 +207,24 @@ export type JsonOutput = {
   strict?: boolean;
 };
 
-// An author states the name and the strictness beside a schema of a library.
+/**
+ * A JSON answer asked for by a validator or a JSON Schema. An author states the
+ * name and the strictness beside a validator.
+ */
 export type OutputSchema =
   | StandardSchema
   | JsonOutput
   | (Omit<JsonOutput, 'schema'> & { schema: StandardSchema });
 
+/** What a model call takes. */
 export type Prompt<Output extends OutputSchema = OutputSchema> = {
   messages: readonly Message[];
   tools?: readonly Tool[];
   options?: Options;
+  /**
+   * Asks for JSON. Given a validator, `answer.json()` returns what it parsed,
+   * typed by it.
+   */
   output?: Output;
 };
 
@@ -192,18 +236,22 @@ export type Open<Data> = [Json] extends [Data]
     ? { -readonly [Key in keyof Data]: Open<Data[Key]> }
     : Data;
 
-// What a context holds, for a hook to change in place: its own lists and its
-// options are open. A message in it is any a prompt takes, the caller's too,
-// so the lists inside a message are replaced.
+/**
+ * What a context holds, for a hook to change in place: its own lists and its
+ * options are open. A message in it is any a prompt takes, the caller's too, so
+ * the lists inside a message are replaced.
+ */
 export type Draft = Omit<Prompt, 'messages' | 'tools' | 'options'> & {
   messages: Message[];
   tools?: Tool[];
   options?: Open<Options>;
 };
 
-// The same data read-only at every depth, stopping where opening it stops.
-// A function and a branded scalar are kept as they are: mapped, the one could
-// no longer be called and the other would be an object.
+/**
+ * The same data read-only at every depth, stopping where opening it stops. A
+ * function and a branded scalar are kept as they are: mapped, the one could no
+ * longer be called and the other would be an object.
+ */
 export type Closed<Data> = [Json] extends [Data]
   ? Data
   : Data extends Scalar | ((...given: never) => unknown)
@@ -212,7 +260,10 @@ export type Closed<Data> = [Json] extends [Data]
       ? { readonly [Key in keyof Data]: Closed<Data[Key]> }
       : Data;
 
-// The host makes it per request and the motty is not given a copy.
+/**
+ * The request a motty is given, read-only. The host makes it per request and
+ * the motty is not given a copy.
+ */
 export type ChatRequest = Closed<{
   id: string;
   model: string;
@@ -222,9 +273,18 @@ export type ChatRequest = Closed<{
   output?: JsonOutput;
 }> & { readonly headers: Headers };
 
-// A coding agent puts its own notes in text parts ahead of the user's words, so a message
-// says its last text part. Only the fields read are typed: checking a request's read-only
-// message against `Message` cost the type-check far more than the function itself.
+// Only the fields read are typed: checking a request's read-only message
+// against `Message` cost the type-check far more than the function itself.
+/**
+ * Gives what a message says, which is its `text` or else its last text part,
+ * since a coding agent puts its own notes in the parts ahead of the user's
+ * words. It gives an empty string for a message with neither.
+ *
+ * @example
+ * ```ts
+ * const question = said(request.messages.at(-1));
+ * ```
+ */
 export function said(
   message:
     | {
@@ -240,10 +300,12 @@ export function said(
   );
 }
 
+export function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
 // A function holds keys as an object does: some validator libraries make
 // their schemas callable.
 export function keyed(value: unknown): value is object {
-  return (
-    (typeof value === 'object' && value !== null) || typeof value === 'function'
-  );
+  return isObject(value) || typeof value === 'function';
 }

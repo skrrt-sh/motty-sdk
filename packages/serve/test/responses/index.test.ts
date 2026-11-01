@@ -748,6 +748,19 @@ test('what the adapter cuts is cut from a failed response and from both failures
   ]);
 });
 
+test('a null effort reaches the upstream as no effort', () => {
+  const sent = (reasoning: Json) => {
+    const { model: _, ...prompt } = responses.decode(
+      { model: 'coder', input: 'Hi', reasoning },
+      new Headers(),
+    ).request;
+    return field(responses.encode('gpt-5', prompt).body, 'reasoning');
+  };
+
+  expect(sent({ effort: null })).toBeUndefined();
+  expect(sent({ effort: null, summary: 'auto' })).toEqual({ summary: 'auto' });
+});
+
 test('a function sent with no strictness reaches either OpenAI API with none', () => {
   const tool = {
     type: 'function',

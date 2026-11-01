@@ -167,6 +167,9 @@ export function decode(body: Json): Decoded {
   if (!Array.isArray(messages)) {
     invalid('The body needs a list of messages');
   }
+  if (!absent(tools) && !Array.isArray(tools)) {
+    invalid('tools must be a list');
+  }
   if ((numberOf(n, 'n') ?? 1) !== 1) {
     unsupported('Only one choice is served: n must be 1');
   }

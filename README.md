@@ -73,20 +73,21 @@ models to answer, and any other to a strong model, retried twice, with a second 
 // src/motty.ts
 import { fallback, model, motty, race, retry } from "@mottyjs/core";
 
-export const mini = model("openai/gpt-5-mini");
-export const gpt = model("openai/gpt-5");
-export const haiku = model("anthropic/claude-haiku");
-export const sonnet = model("anthropic/claude-sonnet");
+export const luna = model("openai/gpt-6-luna");
+export const sol = model("openai/gpt-6.1-sol");
+export const haiku = model("anthropic/claude-haiku-5-5");
+export const sonnet = model("anthropic/claude-sonnet-5-5");
 
 export default motty({ name: "coder" })
   .route(({ request }) => (request.tools.length === 0 ? "quick" : "standard"), {
-    quick: ({ prompt }) => race(mini, haiku).complete(prompt),
-    standard: ({ prompt }) => fallback(retry(sonnet, 2), gpt).complete(prompt),
+    quick: ({ prompt }) => race(luna, haiku).complete(prompt),
+    standard: ({ prompt }) => fallback(retry(sonnet, 2), sol).complete(prompt),
   });
 ```
 
 A serve file makes it a server. The provider keys are read from the environment and stay with the
-host:
+host. Both `OPENAI_KEY` and `ANTHROPIC_KEY` must be set, since an adapter with no key stops the
+host at start:
 
 ```ts
 // src/serve.ts
@@ -95,22 +96,29 @@ import { anthropic } from "@mottyjs/adapters/anthropic";
 import { openai } from "@mottyjs/adapters/openai";
 import coder from "./motty";
 
-export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY }) => ({
-  models: [
-    openai({ key: OPENAI_KEY }),
-    anthropic({ key: ANTHROPIC_KEY }),
-  ],
-  limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
-  report: (record) => console.log(JSON.stringify(record)),
-}));
+export default {
+  ...serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY }) => ({
+    models: [
+      openai({ key: OPENAI_KEY }),
+      anthropic({ key: ANTHROPIC_KEY }),
+    ],
+    limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
+    report: (record) => console.log(JSON.stringify(record)),
+  })),
+  hostname: "127.0.0.1",
+};
 ```
 
-`bun run src/serve.ts` starts it. Every time in the SDK is in milliseconds and every size in
-bytes. A client of any of the three APIs then points its base URL at the server and calls it as
-it would a model:
+`bun run src/serve.ts` starts it on port 3000, and `PORT=8080 bun run src/serve.ts` on another.
+This motty asks for no caller and the host's keys pay for whoever reaches it, so it listens on this
+machine alone. To expose it, add `.use(auth())` from `@mottyjs/auth` to the motty and an `auth`
+adapter to the host, then drop `hostname`.
+
+Every time in the SDK is in milliseconds and every size in bytes. A client of any of the three APIs
+points its base URL at the server and calls it as it would a model:
 
 ```sh
-curl http://localhost:3000/v1/chat/completions \
+curl http://127.0.0.1:3000/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{"model": "coder", "messages": [{"role": "user", "content": "What does git stash do?"}]}'
 ```
@@ -121,11 +129,11 @@ A test scripts the models and runs the whole request without the wire:
 // test/coder.test.ts
 import { expect, test } from "bun:test";
 import { fake, on, run } from "@mottyjs/test";
-import coder, { haiku, mini } from "../src/motty";
+import coder, { haiku, luna } from "../src/motty";
 
 test("a short question without tools goes to the quick tier", async () => {
   const models = fake(
-    on(mini, "quick reply"),
+    on(luna, "quick reply"),
     on(haiku, "quick reply"),
   );
 
@@ -163,10 +171,11 @@ and go as low as a provider's own options on one call, or your own adapter, auth
 - **Nothing above it changes.** A caller changes the URL and the model name and keeps its format.
 - **Nothing below it changes.** A motty calls the providers you already use through adapters,
   and you can write your own.
-- **It can be your gateway.** The host gives it auth, a limit on calls, time and body size per
-  request, a price and a report of every request. Rate limits, budgets and the choice of model
-  are code you write and test, not config. `mount` gives the same as a `fetch` handler inside
-  your own HTTP server.
+- **It can be your gateway.** The host gives it an auth adapter, a limit on calls, time and body
+  size per request, a price and a report of every request. An adapter only proves who a caller is,
+  and it is `.use(auth())` in the motty that refuses one it cannot identify. Rate limits, budgets
+  and the choice of model are code you write and test, not config. `mount` gives the same as a
+  `fetch` handler inside your own HTTP server.
 - **Your keys stay with the host.** A motty is one file, built apart from whatever runs it. The
   caller's token is removed before it runs, and upstream calls use the keys the host supplies.
   The same file runs self-hosted and on the Hub, a service that hosts motties.
@@ -221,23 +230,24 @@ one, Motty is ahead.
 
 | | Motty | AI SDK | Mastra | LangChain | TanStack AI |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Text, 20 chunks | 40.4 µs | 1.35× | 6.18× | 0.49× | 2.83× |
-| Stream, 20 chunks | 40.6 µs | 7.58× | 9.21× | 2.70× | 2.80× |
-| Stream, 200 chunks | 230 µs | 8.31× | 6.25× | 3.49× | 3.40× |
-| Structured output stream, 20 chunks | 50.2 µs | 8.91× | 11.09× | 3.22× | 2.73× |
-| Served over HTTP, 200 chunks | 474 µs | 4.27× | 3.38× | 2.88× | 2.23× |
-| Cold start, import to first streamed answer | 21.1 ms | 1.96× | 8.77× | 3.18× | 2.40× |
-| Minified program size | 249 KB | 2.49× | 22.75× | 4.64× | 2.87× |
+| Text, 20 chunks | 27.6 µs | 1.73× | 7.94× | 0.71× | 4.17× |
+| Stream, 20 chunks | 27.8 µs | 10.03× | 12.87× | 3.65× | 4.13× |
+| Stream, 200 chunks | 138 µs | 11.82× | 10.73× | 5.22× | 5.71× |
+| Structured output stream, 20 chunks | 37.7 µs | 10.79× | 14.32× | 4.02× | 3.64× |
+| Served over HTTP, 200 chunks | 358 µs | 5.07× | 4.72× | 3.61× | 3.14× |
+| Cold start, import to first streamed answer | 29.7 ms | 1.43× | 6.26× | 2.26× | 1.83× |
+| Minified program size | 265 KB | 2.57× | 23.32× | 4.43× | 3.19× |
 
 Motty is behind in one place, a non-streamed text call against LangChain. Motty always reads a
 stream upstream, and that is the entry the gate lists as a known loss.
 
-The figures were measured on 2026-10-14 on an Apple M4 Max with Bun 1.4.2, against `ai` 7.0.137,
-`@mastra/core` 1.75.0, `@langchain/openai` 1.6.2 and `@tanstack/ai` 0.68.0. Each time per call is
+The figures were measured on 2026-11-01 on an Apple M4 Max with Bun 1.4.4, against `ai` 7.0.153,
+`@mastra/core` 1.79.0, `@langchain/openai` 1.7.0 and `@tanstack/ai` 1.0.0. Each time per call is
 the median of five runs, each of 15 rounds of 20,000 chunks after one discarded, with the SDKs
 taking turns in one process. Cold start is the median of five runs of 21 starts, each in a fresh
-process and taken before the timed calls. Run `bun gates/bench/rivals/compare.ts` to measure it
-yourself.
+process and taken before the timed calls. The machine had other work running, and cold start is
+the figure that moved most, with Motty at 29 to 31 ms across these runs and 21 to 35 ms on another day. Run
+`bun gates/bench/rivals/compare.ts` to measure it yourself.
 
 ### Storage
 
@@ -262,19 +272,19 @@ not see it. Each key has an object of its own by default, and making an
 object is the slowest step here. A host that writes many new keys should group them with `name`,
 though an object takes one call at a time.
 
-With 100 calls in flight the Redis adapter makes 226,000 gets, 181,000 sets and 131,000
+With 100 calls in flight the Redis adapter makes 224,000 gets, 179,000 sets and 179,000
 increments a second. With 50 in flight the local Durable Object makes 46,000 gets a second, and
 13,000 to 17,000 increments of one key. Increments made at once all count, and none is lost. On
 Cloudflare, 200 sent at once from outside all counted too.
 
 The local figures were measured on 2026-10-29 on an Apple M4 Max with Bun 1.4.4, against Valkey 9.1.2
-in a container and a Durable Object in workerd 2026-10-25 on the same machine, and the two for a new
-key on 2026-10-31. A time is the median of many calls made one after another, with a value of 512
+in a container and a Durable Object in workerd 2026-10-25 on the same machine, the two for a new
+key on 2026-10-31, and the Redis calls in flight on 2026-11-01. A time is the median of many calls made one after another, with a value of 512
 bytes. A share is the median over 200 rounds the two take in turn, and the range is over five runs.
 The Cloudflare figures were measured on 2026-10-31 from a deployed Worker to its objects, both near
 London, over three to six runs of 20 to 100 calls each. A caller far from an object will wait longer. No
-hosted Redis was measured. Run `bun test gates/test/storage.test.ts` with `REDIS_URL` set to measure
-the shares yourself.
+hosted Redis was measured. Run `bun gates/bench/storage.ts` to measure the local times yourself, and
+`bun test gates/test/storage.test.ts` for the shares, both with `REDIS_URL` set for Redis.
 
 ## Status
 

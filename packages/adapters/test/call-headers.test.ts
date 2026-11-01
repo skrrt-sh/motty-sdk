@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { model, motty } from '@mottyjs/core';
 import {
   credentials,
@@ -11,6 +11,17 @@ import { chatCompletions, messages, mount, responses } from '@mottyjs/serve';
 import { anthropic } from '../src/anthropic.ts';
 import { chat } from '../src/chat.ts';
 import { openai } from '../src/openai.ts';
+
+// The auth adapters here go to motties with no auth(), which a mount warns of.
+let stderr: ReturnType<typeof spyOn<Console, 'error'>>;
+
+beforeEach(() => {
+  stderr = spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  stderr.mockRestore();
+});
 
 async function sent(
   made: (address: string) => ModelAdapter,

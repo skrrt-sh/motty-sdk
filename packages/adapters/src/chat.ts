@@ -27,10 +27,12 @@ type Upstream = {
   keyHeader?: string;
 } & Connection;
 
-// What a host states of a connection beside its key and address. A body
-// field is in the provider's own name, and a request's own replaces it
-// whole; what each model takes is said in place of the adapter's own rule.
+/** What a host states of a connection beside its key and address. */
 export type Connection = {
+  /**
+   * Sent with every request, and they win over a header of the same name a call
+   * states.
+   */
   headers?: { [name: string]: string };
   /**
    * The headers a call may state for this connection, by name in any letter
@@ -38,7 +40,15 @@ export type Connection = {
    * since a gateway may act on a header the host never thought to state.
    */
   forwardHeaders?: Parameters<typeof forwarded>[1];
+  /**
+   * Fields in the provider's own names, sent with every request. A field the
+   * request states replaces one whole.
+   */
   body?: Parameters<Codec['encode']>[2];
+  /**
+   * The rule of what each model takes of the neutral options, in place of the
+   * adapter's own.
+   */
   takes?: Parameters<Codec['encode']>[3];
 };
 

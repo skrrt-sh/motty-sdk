@@ -37,9 +37,9 @@ Each layer imports only from the layers above it in this table.
 | Data | `message` | Parts, messages, the request, the prompt | Any wire format |
 | Data | `errors` | The base class, `define`, the known classes, facts for the host and for the caller, the stop's error | Where an error lands |
 | Data | `event` | The stream event union, usage, finish reason | Buffering |
-| Contract | `contract` | The mark, the version, what the host supplies, the description, the record | Running anything |
+| Contract | `contract` | The mark, the version, what the host supplies, the description, the built chain a host may check, the record, the longest delay a timer takes | Running anything |
 | Request | `context` | The async context, the two phases' signals, `calls`, `limits`, opening and counting a call, what the host supplied | What runs in a phase, its time limit |
-| Request | `wait` | Every wait on code the core does not control, the core's own signals and how one follows another, running a step under a signal, the timer every time limit uses | Which signal is in force, the stop's error |
+| Request | `wait` | Every wait on code the core does not control, the core's own signals and how one follows another, running a step under a signal, the timer every time limit of a bundle uses | Which signal is in force, the stop's error |
 | Request | `structured-output` | Telling a Standard Schema, parsing and validating JSON | Buffering |
 | Request | `replay` | One reader's pass over an answer's buffer, left when that reader's signal fires | Buffering |
 | Request | `answer` | The buffered, re-readable answer and `answer()` | Model calls |
@@ -124,6 +124,8 @@ Each layer imports only from the layers above it in this table.
   every host that takes host options owes. They sit beside the choice of adapter for the same
   reason: `serve` and the test kit must do them alike and neither may depend on the other. It is
   host-entry code, so it is in no bundle. Rejected: each host doing them itself. They had drifted.
+  What a mount does with no `report`, writing the failures to stderr, is `serve`'s own, since the
+  test kit hands its records back.
 - **The host entry also gives a host the buffered answer a model call returns.** A host that hands
   the events of a request back as an answer builds it with the core's own code.
 - **Every wait on code the core does not control goes through one scope that also watches the
@@ -183,25 +185,45 @@ a model adapter, host code written against the contract.
 - **Assembly does the work once.** Hooks flatten into one array per phase with flags for the phases
   a motty has, so an absent phase costs nothing per request. Taken from Elysia 2's route
   descriptor; its generated handlers are excluded by the ban on run-time code generation.
-- **One async-context entry per request,** never per hook. Measured on Node,
-  entering the context costs about 140 nanoseconds and reading it about 6, and
-  entering once per hook made ten hooks 3.4 times slower. On Bun both cost under 10 nanoseconds.
+- **One async-context entry per request,** never per hook. Measured in workerd on an Apple M4 Max,
+  entering the context costs about 0.6 to 0.8 microseconds and reading it about 23 nanoseconds, and
+  entering once per hook made ten awaited hooks about six times slower. On Bun 1.4.4 on the same
+  machine, entering costs under 4 nanoseconds and reading about 1, and entering once per hook left
+  ten awaited hooks as fast, so the rule is paid back in workerd.
 - **A chain is assembled when a host first reads its mark, not when it is built.** Every builder
   call returns a new motty, so assembling each one would repeat the work: measured on Bun, 4.6
   times the cost at load. A motty used only as a part is never assembled.
 - **Part identity is the name and the seed in canonical form, a map key,** merged upward on `.use`,
   as in Elysia. Rejected: a hash. The core has no dependency to supply a good one, and a weak one
   adds collisions.
-- **A signal follows another by one listener, removed when its owner ends.** Rejected:
-  `AbortSignal.any`. Measured on Node against one long-lived host signal, each call cost one to
-  three microseconds and the heap grew with every request; a listener added and removed cost about
-  a tenth of a microsecond. A request whose stream is neither read to its end nor closed is still
-  held for as long as the host's signal lives: its one listener must stay to stop it.
-- **A request that ends normally constructs no error.** An SDK error captures a stack: about a
-  quarter of a microsecond on Bun and over two on Node. Ending a phase stops what is still open
-  without one; the error is made only where a wait turns the stop into a throw.
+- **A signal that outlives a request is followed by one listener, removed when the request ends.**
+  Rejected: `AbortSignal.any` over it. Measured in workerd 1.20261025.1 on an Apple M4 Max, a
+  dropped `AbortSignal.any` on a long-lived signal is never let go. After a full collection 2,000 of
+  2,000 were alive, and 100,000 requests through the host's steps kept about 280 bytes each and
+  added 96 milliseconds to that signal's abort. With the listener they keep under a byte each and
+  add nothing to it, for 0.15 to 0.3 microseconds more a request, of about 10. On Bun 1.4.4 on
+  the same machine a full collection left no dropped signal behind, and the listener is the cheaper
+  of the two by 5 to 10%, on about 3 microseconds a request. An `AbortSignal.any` over signals that end
+  with the call is collected in both, so the rule does not reach the one in `adapters/typesafe.ts`,
+  made per decision call. A request whose stream is neither read to its end nor closed is still held
+  until the host's signal ends or the time limit passes: its one listener must stay to stop it.
+- **The time limit is a timer cleared when the request ends.** Rejected: `AbortSignal.timeout`.
+  It costs no memory across requests, 0 bytes a request on Bun after 100,000 under a one-hour limit
+  and under 4 in workerd, but it runs on after the request. In workerd 12,000 requests in one context
+  failed once ten thousand had run, on the limit of active timers a context has; with the cleared
+  timer they pass. On Bun a request took 2.8 microseconds against 3.1, and in
+  workerd about the same, near 10.8. The timer and the listener are made when the host's signal is first read, so a host that admits
+  and never runs leaves neither.
+- **A request that ends normally constructs no error.** An SDK error captures a stack: under 0.2
+  microseconds on Bun, and in workerd about 0.55 from a shallow stack and 1.3 from twelve frames
+  down. Ending a phase stops what is still open without one; the error is made only where a wait
+  turns the stop into a throw.
 - **A stream is watched by one listener for its whole life, not one per event.** Measured, a wait
   made per event cost about 150 nanoseconds an event, most of what a 200-chunk answer cost.
+- **An answer's chunks go to the reader as they arrive, with no replay between.** Measured on Bun
+  1.4.4 on an Apple M4 Max, that took 1.1 to 1.3 microseconds off a 20-chunk call of about 23.5.
+  `answer.chunks()` stays a generator for whoever reads it. Rejected: an iterator written by hand
+  in place of the generator, which took 13% longer over 200 chunks.
 - **Nothing is adopted unmeasured.** Two choices are settled by benchmark before their scope is
   built: async iteration against web streams for the event stream, and a synchronous lane that
   turns async only on a real promise, which Elysia reports faster on Bun.
@@ -235,7 +257,8 @@ a model adapter, host code written against the contract.
   generator layer costs about 52 nanoseconds an item and a hand-written iterator 24. Rejected:
   an iterator written by hand, which about half a microsecond on a 20-chunk answer does not pay
   for. Together with the three rules above, decoding fell from about 0.95 to 0.42 microseconds an event.
-  Not measured: V8, a real network.
+  A line of data is read from the chunk with no string for the line or its name, which took 20 to 50
+  nanoseconds an event off a 20-chunk call on Bun. Not measured: V8, a real network.
 - **A read that an adapter's stream rejects is told by the core in its own words, and asked for
   by the host once, when the stream is closed.** A throw when the adapter is called is told by
   the host's steps. Rejected: a handler on every read in the host's steps, one promise and one
@@ -251,8 +274,9 @@ a model adapter, host code written against the contract.
 ## Bun by layer
 
 - **Core: none.** Web-standard APIs and the async context only. The async context is the only
-  import a bundle of the core has. Bundles target Node, because the browser target replaces the
-  async context with an empty module and the bundle then fails at load.
+  import a bundle of the core has. The bundler's target is set to `node`, which says how that import
+  is kept and is no runtime: this SDK runs on Bun and Workers. Its browser target replaces the async
+  context with an empty module, and the bundle then fails at load.
 - **The async context stays.** Rejected: passing the request to every call by hand, so that the
   core could run on engines that have no async context. The hosted platforms on those engines end
   a response after two minutes or less, too short for a motty. A replacement for the async

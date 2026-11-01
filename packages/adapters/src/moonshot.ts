@@ -35,6 +35,7 @@ const failures: FailureReader = (_status, _headers, { type, message }) => {
 const kimi: Parameters<typeof chatCompletionsIn>[0] = {
   name: 'moonshot',
   thought: 'reasoning_content',
+  cacheKey: true,
   failures,
   cuts: moonshotCuts,
 };
@@ -58,10 +59,22 @@ function spoken(model: string) {
   return model.includes('-code') ? wordless : switched;
 }
 
+/**
+ * Connects to Moonshot's Kimi over Chat Completions, asking each model for
+ * reasoning in the words it takes.
+ */
 export function moonshot(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is `https://api.moonshot.ai/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `moonshot/some-model`, taken off
+     * before the call. The default is `moonshot`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

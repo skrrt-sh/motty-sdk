@@ -4,7 +4,7 @@ import { openai } from "@mottyjs/adapters/openai";
 import { openrouter } from "@mottyjs/adapters/openrouter";
 import { answer } from "@mottyjs/core";
 import { fake, on, run } from "@mottyjs/test";
-import { flash, haiku, nano, oss } from "../src/models";
+import { flash, haiku, luna, oss } from "../src/models";
 import { verdict } from "../src/modules/verdict";
 import council from "../src/motty";
 
@@ -45,7 +45,7 @@ describe.skipIf(!ANTHROPIC_KEY)("the verdict of the real judge", () => {
   test("answers that contradict each other are found disputed 4 times in 5", async () => {
     const panel = fake(
       on(haiku, "Yes. Light always travels at the same speed, in any medium."),
-      on(nano, "No. Light slows down in glass and water; only in a vacuum is its speed fixed."),
+      on(luna, "No. Light slows down in glass and water; only in a vacuum is its speed fixed."),
       on(oss, "No. Its speed depends on the medium it passes through."),
       on(flash, "No. Its speed depends on the medium it passes through."),
     );
@@ -67,7 +67,7 @@ describe.skipIf(!ANTHROPIC_KEY)("the verdict of the real judge", () => {
   test("answers that say one thing in other words are found agreed 4 times in 5", async () => {
     const panel = fake(
       on(haiku, "No. It is slower in glass or water than in a vacuum."),
-      on(nano, "No. Light slows down in a medium; only in a vacuum is its speed fixed."),
+      on(luna, "No. Light slows down in a medium; only in a vacuum is its speed fixed."),
       on(oss, "No. Its speed depends on the medium it passes through."),
       on(flash, "No. Its speed depends on the medium it passes through."),
     );

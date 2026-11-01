@@ -1,4 +1,5 @@
 import { RouteLoop, UnknownRoute } from '../data/errors.ts';
+import { isObject } from '../data/message.ts';
 import { type Answer, isAnswer } from '../request/answer.ts';
 import { stepUnder, wait } from '../request/wait.ts';
 import type { Entry, Lifecycle, Route } from './assemble.ts';
@@ -13,16 +14,17 @@ export type Routed = {
 
 type RunNested = (lifecycle: Lifecycle, context: Supplied) => Promise<Routed>;
 
+/**
+ * Hands the request to another entry of the same route table, with `prompt` as
+ * it stands. An entry that already ran throws `RouteLoop`.
+ */
 export function reroute<Name extends string>(name: Name): Reroute<Name> {
   return { reroute: name };
 }
 
 function isReroute(value: unknown): value is Reroute {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'reroute' in value &&
-    typeof value.reroute === 'string'
+    isObject(value) && 'reroute' in value && typeof value.reroute === 'string'
   );
 }
 

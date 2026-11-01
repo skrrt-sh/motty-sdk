@@ -164,7 +164,12 @@ describe.skipIf(key === undefined || key === '')(
           text: 'What is 17 * 23? Answer in one short sentence.',
           options: { maxTokens: 300, reasoning: { effort: 'none' } },
         },
-        { models: [openrouter({ key })] },
+        {
+          // GMICloud, which the router may pick, reasons whatever it is told.
+          models: [
+            openrouter({ key, body: { provider: { only: ['DeepInfra'] } } }),
+          ],
+        },
       );
       const chunks = await Array.fromAsync(answer.chunks());
 

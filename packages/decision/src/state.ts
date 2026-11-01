@@ -7,6 +7,10 @@ type Fields = { readonly [key: string]: Loose | undefined };
 
 type Loose = ReadonlyJson | readonly Loose[] | Fields;
 
+/**
+ * What a decision is about, as text or structured data. A field that is
+ * undefined is left out, as JSON leaves it out.
+ */
 export type State = string | readonly Loose[] | Fields;
 
 function isList(value: Loose): value is readonly Loose[] {

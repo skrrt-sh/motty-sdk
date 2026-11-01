@@ -23,8 +23,15 @@ export type {
   Structured,
 } from './wire.ts';
 
+/** A model that answers typed questions with probabilities. */
 export type DecisionModel = {
   readonly name: string;
+  /**
+   * Asks about a state, which is text or structured data, and gives one answer
+   * per question under its id. It needs at least one question, counts toward
+   * `limits.calls`, and fails with `UnknownModel` when the host serves no such
+   * model.
+   */
   decide<Asked extends Questions>(
     state: State,
     questions: Asked,
@@ -42,6 +49,10 @@ function usageOf(output: Json): Usage {
   };
 }
 
+/**
+ * Names a decision model of the host, as its adapter's prefix, a slash and the
+ * provider's own name.
+ */
 export function decision(name: string): DecisionModel {
   return Object.freeze({
     name,

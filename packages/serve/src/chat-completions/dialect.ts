@@ -7,83 +7,114 @@ import type { Cut, FailureReader } from '../wire/upstream-failure.ts';
 import { family, hinted } from './family.ts';
 import { wrapped } from './think-tags.ts';
 
-// What a provider adds to Chat Completions. OpenAI's own adds nothing, and
-// refuses a field it does not know, so each addition goes only where named.
+/**
+ * What a provider adds to Chat Completions. OpenAI's own adds nothing, and
+ * refuses a field it does not know, so each addition goes only where named.
+ */
 export type Dialect = {
-  // What an upstream failure is recorded under.
+  /** What an upstream failure is recorded under. */
   name: string;
-  // The field of an assistant turn that takes reasoning text back.
+  /** The field of an assistant turn that takes reasoning text back. */
   thought?: 'reasoning' | 'reasoning_content';
-  // `reasoning_details`: read from a reply and sent back as it came.
+  /** `reasoning_details`: read from a reply and sent back as it came. */
   details?: true;
-  // Reasoning comes inside the answer's text, between think tags, and an
-  // assistant turn takes it back the same way. `open` is a server whose
-  // template wrote the opening tag, so its reply begins inside the thinking.
+  /**
+   * Reasoning comes inside the answer's text, between think tags, and an
+   * assistant turn takes it back the same way. `open` is a server whose
+   * template wrote the opening tag, so its reply begins inside the thinking.
+   */
   tagged?: true | 'open';
-  // Reasoning comes as a typed chunk of a content that is then a list, and
-  // an assistant turn takes it back the same way, with what signed it.
+  /**
+   * Reasoning comes as a typed chunk of a content that is then a list, and an
+   * assistant turn takes it back the same way, with what signed it.
+   */
   chunked?: true;
-  // What asks for reasoning beside `reasoning_effort`: an object that takes
-  // it over with a budget and a mute, or a switch for thinking: a type, a
-  // flag with a budget beside it, a template argument, an object with a flag.
+  /**
+   * What asks for reasoning beside `reasoning_effort`: an object that takes it
+   * over with a budget and a mute, or a switch for thinking: a type, a flag
+   * with a budget beside it, a template argument, an object with a flag.
+   */
   asks?:
     | 'reasoning'
     | 'reasoning.enabled'
     | 'thinking'
     | 'enable_thinking'
     | 'chat_template_kwargs';
-  // The levels `reasoning_effort` takes, where they are not OpenAI's: `none`
-  // among them where it is one, and no level where there is no such field.
+  /**
+   * The levels `reasoning_effort` takes, where they are not OpenAI's: `none`
+   * among them where it is one, and no level where there is no such field.
+   */
   efforts?: readonly Effort[];
-  // The upstream takes any JSON object and no schema.
+  /** The upstream takes any JSON object and no schema. */
   output?: 'json_object';
-  // The provider's own failures, named before the family's.
+  /** The provider's own failures, named before the family's. */
   failures?: FailureReader;
-  // A failure it tells with no error object, in a body or in a chunk of a
-  // reply that began well: the error such a body holds, or none.
+  /**
+   * A failure it tells with no error object, in a body or in a chunk of a reply
+   * that began well: the error such a body holds, or none.
+   */
   envelope?: (body: Dict) => Dict | undefined;
-  // What in its failures names the host's account: a caller is told the
-  // failure without it.
+  /**
+   * What in its failures names the host's account: a caller is told the failure
+   * without it.
+   */
   cuts?: readonly Cut[];
-  // `top_k`, which OpenAI's own API has no field for.
+  /** `top_k`, which OpenAI's own API has no field for. */
   topK?: true;
-  // The output limit, where it is not `max_completion_tokens`.
+  /** The output limit, where it is not `max_completion_tokens`. */
   limit?: 'max_tokens';
-  // A file part beside OpenAI's, a PDF by bytes or by id under `file`: one
-  // of any type that may be an address too, or a picture alone, by bytes or
-  // by id, with no object around it, which is how a picture goes by id.
+  /**
+   * A file part beside OpenAI's, a PDF by bytes or by id under `file`: one of
+   * any type that may be an address too, or a picture alone, by bytes or by id,
+   * with no object around it, which is how a picture goes by id.
+   */
   files?: 'any' | 'pictures';
-  // Sound beside OpenAI's wav and mp3: in every format, or none at all.
+  /** Sound beside OpenAI's wav and mp3: in every format, or none at all. */
   sound?: 'any' | 'none';
-  // `video_url`, for a file that is a video.
+  /** `video_url`, for a file that is a video. */
   video?: true;
-  // A tool message takes the parts a user message takes.
+  /** A tool message takes the parts a user message takes. */
   shown?: true;
-  // `images` on an assistant turn: read from a reply and sent back.
+  /** `images` on an assistant turn: read from a reply and sent back. */
   images?: true;
-  // A cache marker on a content part: `prompt_cache_breakpoint`, which most
-  // of OpenAI's own models refuse, or a router's `cache_control`, which has
-  // a lifetime.
+  /**
+   * A cache marker on a content part: `prompt_cache_breakpoint`, which most of
+   * OpenAI's own models refuse, or a router's `cache_control`, which has a
+   * lifetime.
+   */
   breakpoints?: true | 'cache_control';
-  // Where a marker's lifetime goes, if not on the marker: nowhere, as an
-  // upstream that keeps one five minutes alone, or in the request's
-  // `prompt_cache_options`, as one that caches every prefix by itself.
+  /**
+   * `prompt_cache_key`, OpenAI's own field beside the additions, which an
+   * upstream that does not name it may refuse.
+   */
+  cacheKey?: true;
+  /**
+   * Where a marker's lifetime goes, if not on the marker: nowhere, as an
+   * upstream that keeps one five minutes alone, or in the request's
+   * `prompt_cache_options`, as one that caches every prefix by itself.
+   */
   lifetime?: '5m' | 'prompt_cache_options';
-  // Headers that say what the body may hold, by name in lower case: sent
-  // from the hint or the option of that name, and never in the body.
+  /**
+   * Headers that say what the body may hold, by name in lower case: sent from
+   * the hint or the option of that name, and never in the body.
+   */
   carried?: readonly string[];
-  // `native_finish_reason`: tells a stop sequence apart from a natural stop.
+  /**
+   * `native_finish_reason`: tells a stop sequence apart from a natural stop.
+   */
   native?: true;
-  // Its own words for an ending, beside the ones OpenAI lists.
+  /** Its own words for an ending, beside the ones OpenAI lists. */
   endings?: { readonly [word: string]: FinishReason };
-  // Its own words for a reply that did not end: the call failed.
+  /** Its own words for a reply that did not end: the call failed. */
   broken?: readonly string[];
-  // `cached_tokens` at the top of usage, where a model sends no details:
-  // the details and DeepSeek's `prompt_cache_hit_tokens` outrank it.
+  /**
+   * `cached_tokens` at the top of usage, where a model sends no details: the
+   * details and DeepSeek's `prompt_cache_hit_tokens` outrank it.
+   */
   flat?: true;
 };
 
-export const plain: Dialect = { name: family };
+export const plain: Dialect = { name: family, cacheKey: true };
 
 // Every field that asks for reasoning, under any dialect's name.
 export const reasoningWords = [

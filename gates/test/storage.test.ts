@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import type { Storage } from '@mottyjs/core/host';
 import { RedisClient } from 'bun';
 import { redis } from '../../packages/adapters/src/redis.ts';
-import { workerd } from '../hosts/workerd.ts';
+import { speedWorker, timedCalls, value } from '../hosts/storage.ts';
 import { nanosecondsPerCall, share } from '../measure.ts';
 
 // Each adapter call as a share of the least its server does for the same
@@ -16,13 +15,13 @@ const run = `motty-gate:${crypto.randomUUID()}`;
 
 // Made once the server is known: a skipped block still runs its body.
 describe.skipIf(url === undefined)('on Valkey', () => {
-  let storage: Storage;
+  let calls: ReturnType<typeof timedCalls>;
   let client: RedisClient;
-  const value = { role: 'user', text: 'x'.repeat(512) };
   const timed = (subject: () => unknown) => nanosecondsPerCall(subject, 10);
 
   beforeAll(async () => {
-    storage = redis({ url });
+    const storage = redis({ url });
+    calls = timedCalls(storage, run);
     client = new RedisClient(url, {
       autoReconnect: false,
       enableAutoPipelining: false,
@@ -39,18 +38,18 @@ describe.skipIf(url === undefined)('on Valkey', () => {
   test.each([
     {
       call: 'get',
-      motty: () => storage.get(`${run}:timed`),
+      motty: () => calls.get(),
       bare: async () => JSON.parse((await client.get(`${run}:timed`)) ?? ''),
     },
     {
       call: 'set',
-      motty: () => storage.set(`${run}:timed`, value, { ttl: 60_000 }),
+      motty: () => calls.set(),
       bare: () =>
         client.set(`${run}:timed`, JSON.stringify(value), 'PX', 60_000),
     },
     {
       call: 'increment',
-      motty: () => storage.increment?.(`${run}:counted`, 1, { ttl: 60_000 }),
+      motty: () => calls.increment(),
       bare: () => client.incrby(`${run}:bare`, 1),
     },
   ])(
@@ -63,46 +62,22 @@ describe.skipIf(url === undefined)('on Valkey', () => {
 });
 
 describe('on Workers', () => {
-  let address = '';
-  let stop = async () => {};
+  let worker: Awaited<ReturnType<typeof speedWorker>>;
 
   beforeAll(async () => {
-    const { outputs } = await Bun.build({
-      entrypoints: [
-        `${import.meta.dir}/../../packages/adapters/test/speed.worker.ts`,
-      ],
-      target: 'browser',
-      external: ['cloudflare:workers'],
-    });
-    ({ address, stop } = await workerd({
-      modules: { 'worker.js': (await outputs[0]?.text()) ?? '' },
-      flags: ['delete_all_deletes_alarm'],
-      bindings: {},
-      objects: { STORAGE: 'MottyStorage', BARE: 'BareStorage' },
-    }));
-    await made('motty set', 1)();
-    await made('bare set', 1)();
+    worker = await speedWorker();
   }, 30_000);
 
   afterAll(async () => {
-    await stop();
+    await worker.stop();
   });
-
-  function made(call: string, calls: number) {
-    return async () => {
-      const reply = await fetch(
-        `${address}/?${new URLSearchParams({ call, calls: `${calls}` })}`,
-      );
-      if (!reply.ok) throw new Error(await reply.text());
-    };
-  }
 
   test.each(['get', 'set', 'increment'])(
     'a %s through the adapter takes about what a bare Durable Object takes',
     async (call) => {
       const taken = await share(
-        made(`bare ${call}`, 100),
-        made(`motty ${call}`, 100),
+        worker.made(`bare ${call}`, 100),
+        worker.made(`motty ${call}`, 100),
         (subject) => nanosecondsPerCall(subject, 1),
         200,
       );

@@ -191,6 +191,35 @@ test('a model past the closed list samples only when the request says not to rea
   );
 });
 
+test.each([
+  'gpt-6-luna',
+  'gpt-6-luna-2026-09-30',
+  'gpt-6-luna:batch',
+  'ft:gpt-6-luna-2026-09-30:acme::9xYz',
+])(
+  '%s, which answered a penalty with a 500, samples without one when the request says not to reason',
+  (model) => {
+    for (const takes of [openaiTakes, openaiChatTakes]) {
+      expect(takes(model, false)).toMatchObject({
+        temperature: [0, 2],
+        topP: [0.01, 1],
+        presencePenalty: false,
+        frequencyPenalty: false,
+      });
+    }
+  },
+);
+
+test.each(['gpt-6-luna-pro', 'gpt-6-lunar', 'gpt-6-sol', 'gpt-5.6-luna'])(
+  '%s, which nobody has seen fail on a penalty, is not held to the rule of gpt-6-luna',
+  (model) => {
+    expect(openaiTakes(model, false)).toMatchObject({
+      presencePenalty: true,
+      frequencyPenalty: true,
+    });
+  },
+);
+
 test.each(['o1', 'gpt-5'])(
   '%s, which never samples and refuses the order not to reason, is held to the newest behaviour',
   (model) => {
@@ -232,6 +261,7 @@ test.each([
   ['gpt-5.6-luna', [...stoppable, 'max'], stoppable],
   ['gpt-6-sol', [...stoppable, 'max'], stoppable],
   ['gpt-6.1-sol', [...newest, 'max'], newest],
+  ['gpt-6.1-terra-2026-10-01', [...stoppable, 'max'], stoppable],
   ['gpt-7', [...newest, 'max'], newest],
 ] as const)(
   '%s takes the effort levels it has a word for on each API',

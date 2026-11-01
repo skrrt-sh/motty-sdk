@@ -13,7 +13,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -30,7 +30,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
           stream: true,
           stream_options: { include_usage: true },
           max_completion_tokens: 60,
-          reasoning_effort: 'minimal',
+          reasoning_effort: 'none',
           messages: [
             { role: 'user', content: 'Say the word pong and nothing else.' },
           ],
@@ -49,7 +49,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         outcome: 'completed',
         calls: [
           {
-            model: 'openai/gpt-5-nano',
+            model: 'openai/gpt-6-luna',
             input: expect.any(Number),
             output: expect.any(Number),
             cached: 0,
@@ -115,7 +115,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
   test('the Responses API calls two tools at once for an Anthropic Messages caller', async () => {
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -271,7 +271,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
   test('a JSON schema from an Anthropic Messages caller shapes the answer of the Responses API', async () => {
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -482,7 +482,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
   test('a cache marker from an Anthropic Messages caller does not fail a model that has no explicit caching', async () => {
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -524,7 +524,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
   test('a loose JSON schema from a Chat Completions caller stays loose over the Responses API', async () => {
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -538,7 +538,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 60,
-          reasoning_effort: 'minimal',
+          reasoning_effort: 'none',
           response_format: {
             type: 'json_schema',
             json_schema: {
@@ -572,7 +572,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
   test('a presence penalty from a Chat Completions caller reaches the Responses API', async () => {
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4o-mini').complete(prompt),
+        model('openai/gpt-5.6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -586,6 +586,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 30,
+          reasoning_effort: 'none',
           presence_penalty: 0.5,
           messages: [{ role: 'user', content: 'Say ok.' }],
         }),
@@ -601,7 +602,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
   test('a PDF from an Anthropic Messages caller is read over the Responses API', async () => {
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -658,7 +659,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key: `sk-proj-${secret}` })],
@@ -746,7 +747,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key: `sk-proj-${secret}`, api: 'chat-completions' })],
@@ -829,7 +830,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete({
+        model('openai/gpt-6-luna').complete({
           ...prompt,
           output: {
             schema: {
@@ -857,7 +858,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 60,
-          reasoning_effort: 'minimal',
+          reasoning_effort: 'none',
           messages: [
             { role: 'user', content: 'Give the capital of France as JSON.' },
           ],
@@ -886,7 +887,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete({
+        model('openai/gpt-6-luna').complete({
           ...prompt,
           output: {
             schema: {
@@ -914,7 +915,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 60,
-          reasoning_effort: 'minimal',
+          reasoning_effort: 'none',
           messages: [
             { role: 'user', content: 'Give the capital of France as JSON.' },
           ],
@@ -943,7 +944,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete({
+        model('openai/gpt-6-luna').complete({
           ...prompt,
           output: {
             schema: {
@@ -1000,7 +1001,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete({
+        model('openai/gpt-6-luna').complete({
           ...prompt,
           output: {
             schema: {
@@ -1089,7 +1090,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6.1-sol').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -1122,7 +1123,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5.4-nano').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -1155,7 +1156,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5.4-nano').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -1189,7 +1190,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4o-mini').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -1204,6 +1205,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 16,
+          reasoning_effort: 'none',
           temperature: 2.5,
           messages: [{ role: 'user', content: 'Say ok.' }],
         }),
@@ -1255,7 +1257,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5.4-nano').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -1448,7 +1450,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4o-mini').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key })],
@@ -1463,7 +1465,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 16,
-          messages: [{ role: 'user', content: 'hello '.repeat(260_000) }],
+          messages: [{ role: 'user', content: 'hello '.repeat(500_000) }],
         }),
       }),
     );
@@ -1476,7 +1478,9 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       error: {
         type: 'invalid_request_error',
         code: 'context_length_exceeded',
-        message: expect.stringMatching(/context (?:window|length)/),
+        message: expect.stringMatching(
+          /context (?:window|length)|exceed the configured limit/,
+        ),
       },
     });
     expect(reports).toMatchObject([
@@ -1484,7 +1488,9 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         outcome: 'failed',
         error: {
           code: 'context_too_long',
-          message: expect.stringMatching(/context (?:window|length)/),
+          message: expect.stringMatching(
+            /context (?:window|length)|exceed the configured limit/,
+          ),
           provider: {
             'openai.responses': { code: 'context_length_exceeded' },
           },
@@ -1553,7 +1559,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete({
+        model('openai/gpt-6.1-sol').complete({
           ...prompt,
           options: {
             ...prompt.options,
@@ -1614,7 +1620,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key, address: 'https://api.openai.com/v0' })],
@@ -1689,7 +1695,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6.1-sol').complete(prompt),
       ),
       () => ({
         models: [openai({ key, api: 'chat-completions' })],
@@ -1722,7 +1728,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5.4-nano').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key, api: 'chat-completions' })],
@@ -1755,7 +1761,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5.4-nano').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key, api: 'chat-completions' })],
@@ -1789,7 +1795,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4o-mini').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key, api: 'chat-completions' })],
@@ -1804,6 +1810,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 16,
+          reasoning_effort: 'none',
           temperature: 2.5,
           messages: [{ role: 'user', content: 'Say ok.' }],
         }),
@@ -1855,7 +1862,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5.4-nano').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key, api: 'chat-completions' })],
@@ -2070,7 +2077,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-4o-mini').complete(prompt),
+        model('openai/gpt-5.4-mini').complete(prompt),
       ),
       () => ({
         models: [openai({ key, api: 'chat-completions' })],
@@ -2085,7 +2092,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 16,
-          messages: [{ role: 'user', content: 'hello '.repeat(260_000) }],
+          messages: [{ role: 'user', content: 'hello '.repeat(500_000) }],
         }),
       }),
     );
@@ -2098,7 +2105,9 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
       error: {
         type: 'invalid_request_error',
         code: 'context_length_exceeded',
-        message: expect.stringMatching(/context (?:window|length)/),
+        message: expect.stringMatching(
+          /context (?:window|length)|exceed the configured limit/,
+        ),
       },
     });
     expect(reports).toMatchObject([
@@ -2106,7 +2115,9 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
         outcome: 'failed',
         error: {
           code: 'context_too_long',
-          message: expect.stringMatching(/context (?:window|length)/),
+          message: expect.stringMatching(
+            /context (?:window|length)|exceed the configured limit/,
+          ),
           provider: {
             'openai.chat': { status: 400, code: 'context_length_exceeded' },
           },
@@ -2120,7 +2131,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete({
+        model('openai/gpt-6.1-sol').complete({
           ...prompt,
           options: {
             ...prompt.options,
@@ -2175,7 +2186,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [
@@ -2224,7 +2235,7 @@ describe.skipIf(key === undefined || key === '')('against OpenAI', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openai/gpt-5-nano').complete(prompt),
+        model('openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openai({ key, api: 'chat-completions' })],

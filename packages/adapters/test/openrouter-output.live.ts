@@ -15,7 +15,7 @@ describe.skipIf(key === undefined || key === '')(
     test("an Anthropic Messages caller's JSON schema is kept by an OpenAI model, streamed", async () => {
       const served = mount(
         motty({ name: 'relay' }).handle(({ prompt }) =>
-          model('openrouter/openai/gpt-4.1-nano').complete(prompt),
+          model('openrouter/openai/gpt-6-luna').complete(prompt),
         ),
         () => ({
           models: [openrouter({ key })],
@@ -33,6 +33,7 @@ describe.skipIf(key === undefined || key === '')(
             model: 'relay',
             stream: true,
             max_tokens: 80,
+            thinking: { type: 'disabled' },
             output_config: {
               format: {
                 type: 'json_schema',
@@ -142,7 +143,7 @@ describe.skipIf(key === undefined || key === '')(
       const reports: Report[] = [];
       const served = mount(
         motty({ name: 'relay' }).handle(({ prompt }) =>
-          model('openrouter/openai/gpt-4.1-nano').complete(prompt),
+          model('openrouter/openai/gpt-6-luna').complete(prompt),
         ),
         () => ({
           models: [openrouter({ key })],
@@ -157,6 +158,7 @@ describe.skipIf(key === undefined || key === '')(
           body: JSON.stringify({
             model: 'relay',
             max_output_tokens: 200,
+            reasoning: { effort: 'none' },
             tools: [
               {
                 type: 'function',
@@ -194,6 +196,7 @@ describe.skipIf(key === undefined || key === '')(
           body: JSON.stringify({
             model: 'relay',
             max_output_tokens: 120,
+            reasoning: { effort: 'none' },
             tools: [
               {
                 type: 'function',
@@ -276,7 +279,7 @@ describe.skipIf(key === undefined || key === '')(
     test("a named tool is called, its arguments streamed to an Anthropic Messages caller as one block's fragments", async () => {
       const served = mount(
         motty({ name: 'relay' }).handle(({ prompt }) =>
-          model('openrouter/openai/gpt-4.1-nano').complete(prompt),
+          model('openrouter/openai/gpt-6-luna').complete(prompt),
         ),
         () => ({
           models: [openrouter({ key })],
@@ -294,6 +297,7 @@ describe.skipIf(key === undefined || key === '')(
             model: 'relay',
             stream: true,
             max_tokens: 120,
+            thinking: { type: 'disabled' },
             tool_choice: { type: 'tool', name: 'get_weather' },
             tools: [
               {

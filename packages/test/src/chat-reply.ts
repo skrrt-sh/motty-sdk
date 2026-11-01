@@ -22,6 +22,11 @@ type Scripted =
 // What a function may give besides: chunks that come one at a time.
 type Late = AsyncIterable<Chunk | Finish>;
 
+/**
+ * A scripted reply to a chat call. It is text, chunks, an object sent as JSON,
+ * an error, or a function of the prompt that gives one of them or chunks that
+ * come one at a time.
+ */
 export type ChatReply =
   | Scripted
   | ((

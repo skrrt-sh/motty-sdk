@@ -11,7 +11,7 @@ import {
 } from "@mottyjs/core";
 import type { Report } from "@mottyjs/core/host";
 import { fake, memory, on, run } from "@mottyjs/test";
-import { gemini, haiku, jev, nano, oss, sonnet } from "../src/models";
+import { gemini, haiku, jev, luna, oss, sonnet } from "../src/models";
 import desk from "../src/motty";
 
 describe("early answers", () => {
@@ -67,7 +67,7 @@ describe("routes", () => {
   test("a plain question goes to the small model", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { billing: 0.9, dispute: 0.1 }, urgency: 0 }),
-      on(nano, "Plus is 12 USD a month."),
+      on(luna, "Plus is 12 USD a month."),
     );
 
     const { path, answer } = await run(desk, { text: "How much is Plus?" }, { models: [models] });
@@ -178,7 +178,7 @@ describe("routes", () => {
 
   test("a request for JSON is filed as a ticket and never triaged", async () => {
     const models = fake(
-      on(nano, {
+      on(luna, {
         category: "dispute",
         urgency: "high",
         summary: "Charged twice for May",
@@ -195,13 +195,13 @@ describe("routes", () => {
 
     expect(path).toEqual(["ticket"]);
     expect(await answer.json()).toMatchObject({ category: "dispute", orderNumber: "A-1042" });
-    expect(calls.map((call) => call.model)).toEqual([nano.name]);
-    expect(models.sent(nano)[0]?.output).toMatchObject({ name: "ticket", strict: true });
+    expect(calls.map((call) => call.model)).toEqual([luna.name]);
+    expect(models.sent(luna)[0]?.output).toMatchObject({ name: "ticket", strict: true });
   });
 
   test("a ticket the schema refuses is filed again by the second clerk", async () => {
     const models = fake(
-      on(nano, { category: "refund", summary: "Charged twice" }),
+      on(luna, { category: "refund", summary: "Charged twice" }),
       on(haiku, {
         category: "dispute",
         urgency: "normal",
@@ -223,7 +223,7 @@ describe("routes", () => {
 
 describe("triage", () => {
   test("a request is answered as an ordinary one when the decision model is down", async () => {
-    const models = fake(on(jev, new Overloaded("busy")), on(nano, "Plus is 12 USD a month."));
+    const models = fake(on(jev, new Overloaded("busy")), on(luna, "Plus is 12 USD a month."));
 
     const { path, answer } = await run(
       desk,
@@ -283,7 +283,7 @@ describe("the caller's tools", () => {
     expect(path).toEqual(["conversation", "standard"]);
     expect(await answer.text()).toBe("It was refunded on 3 May.");
     expect(models.sent(jev)).toHaveLength(1);
-    expect(models.sent(nano)).toEqual([]);
+    expect(models.sent(luna)).toEqual([]);
     expect(models.sent(haiku)[1]?.messages[2]?.parts).toContainEqual({
       type: "reasoning",
       text: "I need the order",
@@ -296,7 +296,7 @@ describe("the policy", () => {
   test("it is sent first with a cache marker, and what was read from cache is kept", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { billing: 1 }, urgency: 0 }),
-      on(nano, [
+      on(luna, [
         { type: "text", text: "Plus is 12 USD a month." },
         { type: "finish", reason: "stop", usage: { input: 900, output: 9, cached: 800 } },
       ]),
@@ -306,7 +306,7 @@ describe("the policy", () => {
 
     await run(desk, { text: "And Team?" }, { models: [models], storage });
 
-    expect(models.sent(nano)[1]?.messages[0]).toMatchObject({
+    expect(models.sent(luna)[1]?.messages[0]).toMatchObject({
       role: "system",
       cache: { ttl: "1h" },
     });
@@ -319,9 +319,9 @@ describe("resilience", () => {
   test("a conversation too long for the model is summarised and asked once more", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { technical: 1 }, urgency: 0 }),
-      on(nano, new ContextTooLong("too many tokens")),
-      on(nano, "The customer cannot sync on a second device."),
-      on(nano, "Sign out on the old device first."),
+      on(luna, new ContextTooLong("too many tokens")),
+      on(luna, "The customer cannot sync on a second device."),
+      on(luna, "Sign out on the old device first."),
       on(haiku, new ContextTooLong("too many tokens")),
     );
 
@@ -336,7 +336,7 @@ describe("resilience", () => {
       { models: [models] },
     );
 
-    const again = models.sent(nano)[2]?.messages;
+    const again = models.sent(luna)[2]?.messages;
     expect(path).toEqual(["conversation", "standard"]);
     expect(await answer.text()).toBe("Sign out on the old device first.");
     expect(thoughts).toContain("This conversation is long: summarising its earlier part");
@@ -368,7 +368,7 @@ describe("resilience", () => {
       on(jev, { abuse: 0.01, category: { dispute: 1 }, urgency: 0 }),
       on(sonnet, new RateLimited("slow down", { retryAfter: 1 })),
       on(oss, new Overloaded("busy")),
-      on(nano, "Clause 2 applies."),
+      on(luna, "Clause 2 applies."),
     );
 
     const { path, answer } = await run(
@@ -379,7 +379,7 @@ describe("resilience", () => {
 
     expect(path).toEqual(["conversation", "standard"]);
     expect(await answer.text()).toBe("Clause 2 applies.");
-    expect(models.sent(nano)[0]?.options).toEqual({});
+    expect(models.sent(luna)[0]?.options).toEqual({});
   });
 
   test("a strong path failing by the request's own fault is not answered by a weaker", async () => {
@@ -411,7 +411,7 @@ describe("time limits", () => {
         await Bun.sleep(100);
         return "Too late";
       }),
-      on(nano, "Clause 2 applies."),
+      on(luna, "Clause 2 applies."),
     );
 
     const { path, answer } = await run(
@@ -449,7 +449,7 @@ describe("the answer", () => {
   test("a card number split between chunks never reaches the caller", async () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { billing: 1 }, urgency: 0 }),
-      on(nano, [
+      on(luna, [
         { type: "text", text: "The card 4111 1111 " },
         { type: "text", text: "1111 1111 was charged 12 USD " },
         { type: "text", text: "on 3 May." },

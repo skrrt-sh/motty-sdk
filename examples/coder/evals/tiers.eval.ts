@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { typesafe } from "@mottyjs/adapters/typesafe";
 import { fake, on, run } from "@mottyjs/test";
-import { gpt, haiku, mini, opus, sonnet } from "../src/models";
+import { haiku, luna, opus, sol, sonnet } from "../src/models";
 import { tiers } from "../src/modules/tiers";
 
 const { TYPESAFE_KEY } = process.env;
@@ -10,10 +10,10 @@ const { TYPESAFE_KEY } = process.env;
 describe.skipIf(!TYPESAFE_KEY)("tier choice by the real decision model", () => {
   test("a concurrency bug across services goes to the deep tier 9 times in 10", async () => {
     const answers = fake(
-      on(mini, "quick reply"),
+      on(luna, "quick reply"),
       on(haiku, "quick reply"),
       on(sonnet, "plan or standard reply"),
-      on(gpt, "standard reply"),
+      on(sol, "standard reply"),
       on(opus, "deep reply"),
     );
     const decisions = typesafe({ key: TYPESAFE_KEY });

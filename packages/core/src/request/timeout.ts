@@ -1,6 +1,7 @@
 import { bound, type EventStream } from '../contract.ts';
 import { stopReason, TimedOut, toFacts } from '../data/errors.ts';
 import { isTerminal, type StreamEvent } from '../data/event.ts';
+import { isObject } from '../data/message.ts';
 import { callable, callOf, type Model, type Read, stopEvent } from './model.ts';
 import {
   abandon,
@@ -161,18 +162,25 @@ function stallWatched(
   });
 }
 
-// Both limits are in milliseconds. A bare number is the first chunk's.
+/**
+ * Limits a model in ms. A bare number or `first` limits the wait for the first
+ * event, and failing it throws `TimedOut`, so `retry` and `fallback` around it
+ * can act. `stall` limits each silence after that and ends the answer with
+ * `TimedOut`, which they cannot. With neither it returns the model as it was.
+ *
+ * @example
+ * ```ts
+ * const patient = timeout(sol, 5_000);
+ * const watched = timeout(sol, { first: 5_000, stall: 20_000 });
+ * ```
+ */
 export function timeout(
   model: Model,
   limit: number | { first?: number; stall?: number },
 ): Model {
   const call = callOf(model);
   const limits = typeof limit === 'number' ? { first: limit } : limit;
-  if (
-    typeof limits !== 'object' ||
-    limits === null ||
-    Object.getPrototypeOf(limits) !== Object.prototype
-  ) {
+  if (!isObject(limits) || Object.getPrototypeOf(limits) !== Object.prototype) {
     throw new Error('timeout() needs limits of zero or more milliseconds');
   }
   const first = bound('first', limits.first);

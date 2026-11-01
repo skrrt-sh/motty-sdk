@@ -1,5 +1,11 @@
 import { type Contract, version } from '../contract.ts';
-import type { ChatRequest, Draft, Message, Tool } from '../data/message.ts';
+import {
+  type ChatRequest,
+  type Draft,
+  isObject,
+  type Message,
+  type Tool,
+} from '../data/message.ts';
 import { type Answer, isAnswer } from '../request/answer.ts';
 import {
   admitted,
@@ -38,8 +44,8 @@ const reserved = [
 
 const contracts = new WeakMap<Chain, Contract>();
 
-function isPlain(value: unknown): value is object {
-  if (typeof value !== 'object' || value === null) return false;
+export function isPlain(value: unknown): value is object {
+  if (!isObject(value)) return false;
   const kind: unknown = Object.getPrototypeOf(value);
   return kind === Object.prototype || kind === null;
 }
@@ -48,7 +54,7 @@ function isPlain(value: unknown): value is object {
 // costs its node count, not its bytes.
 function copied<Data>(data: Data): Data;
 function copied(data: unknown): unknown {
-  if (typeof data !== 'object' || data === null) return data;
+  if (!isObject(data)) return data;
   if (Array.isArray(data)) {
     const items: unknown[] = new Array(data.length);
     for (let at = 0; at < data.length; at += 1) items[at] = copied(data[at]);
@@ -311,6 +317,7 @@ export function contractOf(motty: AnyMotty): Contract {
   const made: Contract = {
     version,
     description,
+    root,
     // Entered once here and not in the stream: a generator's body runs in the
     // async context of whoever reads it, where the request would not be found.
     run: (request, host) =>

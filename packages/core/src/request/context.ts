@@ -13,7 +13,7 @@ import {
   toFacts,
 } from '../data/errors.ts';
 import { counts, type Usage, usageOf } from '../data/event.ts';
-import type { Closed } from '../data/message.ts';
+import { type Closed, isObject } from '../data/message.ts';
 import { ownSignal, wait } from './wait.ts';
 
 type Made = RequestRecord['calls'][number];
@@ -21,8 +21,11 @@ type Made = RequestRecord['calls'][number];
 // What a call says of itself when it ends; the rest of its entry is measured.
 type Reported = Omit<Made, 'model' | 'time'>;
 
+/** The model calls of a request so far. */
 export type Calls = {
+  /** Each call that has ended, with its usage and times. */
   readonly made: readonly Readonly<Made>[];
+  /** The usage of those calls added up. */
   readonly total: Readonly<Usage>;
 };
 
@@ -88,7 +91,7 @@ function limited(limits: Limits | null | undefined): State['limits'] {
 }
 
 function checked(host: Host): State['limits'] {
-  if (typeof host !== 'object' || host === null) {
+  if (!isObject(host)) {
     throw new Error('The host must be an object');
   }
   for (const name of ['models', 'decisions', 'record'] as const) {
@@ -165,6 +168,10 @@ function storageUnderSignal({ state }: Running, held: Storage): Storage {
   };
 }
 
+/**
+ * Gives what the host supplies to the running request, for a plugin to read. It
+ * throws outside a request.
+ */
 export function hosted(): Closed<
   Pick<Host, 'caller' | 'storage' | 'settings' | 'decisions'>
 > & {
@@ -208,6 +215,16 @@ export async function endPhase(): Promise<void> {
   await live.idle.promise;
 }
 
+function added(call: Made, total: Usage, reported: unknown): void {
+  const usage = usageOf(reported);
+  for (const name of counts) {
+    const used = usage[name];
+    if (used === undefined) continue;
+    call[name] = (call[name] ?? 0) + used;
+    total[name] = (total[name] ?? 0) + used;
+  }
+}
+
 function count(live: Running, call: Made, reported?: Reported): void {
   const total = { ...live.total };
   if (reported?.code !== undefined) {
@@ -217,13 +234,7 @@ function count(live: Running, call: Made, reported?: Reported): void {
   }
   if (typeof reported?.id === 'string') call.id = reported.id;
   if (reported?.warnings?.length) call.warnings = reported.warnings;
-  const usage = usageOf(reported);
-  for (const name of counts) {
-    const used = usage[name];
-    if (used === undefined) continue;
-    call[name] = used;
-    total[name] = (total[name] ?? 0) + used;
-  }
+  added(call, total, reported);
   live.made = Object.freeze([...live.made, Object.freeze(call)]);
   live.total = Object.freeze(total);
   live.open -= 1;
@@ -239,15 +250,9 @@ function countLate(
   entry: Readonly<Made>,
   reported: unknown,
 ): Readonly<Made> {
-  const usage = usageOf(reported);
   const call = { ...entry };
   const total = { ...live.total };
-  for (const name of counts) {
-    const used = usage[name];
-    if (used === undefined) continue;
-    call[name] = (call[name] ?? 0) + used;
-    total[name] = (total[name] ?? 0) + used;
-  }
+  added(call, total, reported);
   live.made = Object.freeze(
     live.made.map((made) => (made === entry ? Object.freeze(call) : made)),
   );
@@ -302,6 +307,10 @@ export function mayGoUnawaited<Result>(call: Promise<Result>): Promise<Result> {
   return call;
 }
 
+/**
+ * Runs one call as a model call of the running request, so that it counts
+ * toward `limits.calls`, follows the request's signal and goes in the record.
+ */
 export function counted<Result>(
   name: string,
   call: (signal: AbortSignal, markFirstEvent: () => void) => Promise<Result>,

@@ -27,7 +27,7 @@ flowchart TD
   long -- no --> kind
   long -- yes --> older{"any turns before<br/>the kept tail?"}
   older -- "no: left as it is" --> kind
-  older -- yes --> summarise["mini summarises the older turns<br/>prompt = system + summary + last turns"]
+  older -- yes --> summarise["luna summarises the older turns<br/>prompt = system + summary + last turns"]
   summarise --> kind
 
   kind{"request.output set?"}
@@ -75,14 +75,14 @@ flowchart TD
   pickedStandard --> strongest
   strongest{"stronger of picked and previous<br/>think: Answering with the X tier"}
 
-  strongest -- quick --> quick["race: mini, haiku"]
-  strongest -- standard --> standard["fallback: sonnet retried twice, then gpt"]
+  strongest -- quick --> quick["race: luna, haiku"]
+  strongest -- standard --> standard["fallback: sonnet retried twice, then sol"]
   strongest -- deep --> plan
 
   subgraph deep [deep module]
     plan["sonnet outlines a plan, shown to the caller as reasoning<br/>plan appended to prompt; skipped if sonnet is down"]
     plan --> effort[reasoning effort: high]
-    effort --> strong["fallback: opus with 20 s to the first chunk, then gpt"]
+    effort --> strong["fallback: opus with 20 s to the first chunk, then sol"]
   end
 
   quick -- "both down: reroute" --> standard
@@ -112,12 +112,12 @@ choice.
 ```mermaid
 flowchart TD
   start([structured]) --> size{"jev: can a small model fill<br/>this JSON without reasoning?"}
-  size -- "probability >= 0.7" --> small["mini answers"]
-  size -- "lower, or jev is down" --> strong["fallback: sonnet retried twice, then gpt"]
+  size -- "probability >= 0.7" --> small["luna answers"]
+  size -- "lower, or jev is down" --> strong["fallback: sonnet retried twice, then sol"]
 
   small --> valid{"reply parses<br/>as JSON?"}
   valid -- yes --> answer([Answer])
-  valid -- "no, or mini failed: reroute" --> strong
+  valid -- "no, or luna failed: reroute" --> strong
   strong --> answer
 ```
 

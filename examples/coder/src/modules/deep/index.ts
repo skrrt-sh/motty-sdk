@@ -1,5 +1,5 @@
 import { fallback, motty, timeout } from "@mottyjs/core";
-import { gpt, opus } from "../../models";
+import { opus, sol } from "../../models";
 import { tuning } from "../../settings";
 import { withPlan } from "./plan";
 
@@ -10,5 +10,5 @@ export const deep = motty({ name: "deep" })
     prompt.options = { ...prompt.options, reasoning: { effort: "high" } };
   })
   .handle(({ prompt, settings }) =>
-    fallback(timeout(opus, settings.deep.firstChunk), gpt).complete(prompt),
+    fallback(timeout(opus, settings.deep.firstChunk), sol).complete(prompt),
   );

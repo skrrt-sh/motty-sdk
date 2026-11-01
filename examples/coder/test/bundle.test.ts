@@ -6,7 +6,7 @@ import { mount } from "@mottyjs/serve";
 import { parsed } from "@mottyjs/serve/sse";
 import { fake, memory, on } from "@mottyjs/test";
 import { z } from "zod";
-import { haiku, jev, mini, opus, sonnet } from "../src/models";
+import { haiku, jev, luna, opus, sonnet } from "../src/models";
 import source from "../src/motty";
 import { bundled, file } from "./bundled";
 
@@ -114,7 +114,7 @@ describe("the motty from its bundle, behind a host with its own SDK copy", () =>
       models: [
         fake(
           on(jev, { software: 0.97 }),
-          on(mini, [
+          on(luna, [
             { type: "text", text: "git stash " },
             { type: "text", text: "shelves changes" },
           ]),

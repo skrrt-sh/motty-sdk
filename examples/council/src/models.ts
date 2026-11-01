@@ -3,17 +3,17 @@ import type { Tuning } from "./settings";
 
 export const haiku = model("anthropic/claude-haiku-5-5");
 export const sonnet = model("anthropic/claude-sonnet-5-5");
-export const nano = model("openai/gpt-5-nano");
+export const luna = model("openai/gpt-6-luna");
 export const oss = model("openrouter/openai/gpt-oss-20b");
 export const flash = model("openrouter/deepseek/deepseek-v4-flash");
 
 type Limits = Tuning["timeouts"];
 
 const claudeSeat = (limits: Limits) =>
-  fallback(retry(timeout(haiku, limits), 1), timeout(nano, limits));
+  fallback(retry(timeout(haiku, limits), 1), timeout(luna, limits));
 
 const gptSeat = (limits: Limits) =>
-  fallback(retry(timeout(nano, limits), 1), timeout(oss, limits));
+  fallback(retry(timeout(luna, limits), 1), timeout(oss, limits));
 
 // Two cheap models share this seat: the first to start answering keeps it
 const openSeat = (limits: Limits) =>
@@ -31,4 +31,4 @@ export const chair = (limits: Limits) =>
 
 // The stand-in is of another family, so the judge's prompt addresses each family it may reach
 export const judge = (limits: Limits) =>
-  fallback(retry(timeout(sonnet, limits), 1), timeout(nano, limits));
+  fallback(retry(timeout(sonnet, limits), 1), timeout(luna, limits));

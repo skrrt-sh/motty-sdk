@@ -154,7 +154,12 @@ function percentile(sorted: number[], share: number) {
   return sorted.at(Math.floor((sorted.length - 1) * share)) ?? Number.NaN;
 }
 
-async function report() {
+function medianTime(taken: number[][]) {
+  const sorted = taken.flat().toSorted((left, right) => left - right);
+  return percentile(sorted, 0.5) / 1000;
+}
+
+async function report(output: string | undefined) {
   const chunksPerSample = 20_000;
   const rounds = 15;
   // First and from a lean process: a start of a few milliseconds is the one
@@ -166,12 +171,10 @@ async function report() {
   console.log(
     `bun ${Bun.version}; ${rounds} rounds of ${chunksPerSample} chunks after one discarded (twice the rounds for text), the SDKs taking turns in one process; microseconds per call over every call, and each rival's cost as a multiple of motty's, the median over the rounds`,
   );
-  console.log(
-    (await $`bun pm ls`.text())
-      .split('\n')
-      .filter((line) => /ai|langchain|mastra|zod/.test(line))
-      .join('\n'),
-  );
+  const packages = (await $`bun pm ls`.text())
+    .split('\n')
+    .filter((line) => /ai|langchain|mastra|zod/.test(line));
+  console.log(packages.join('\n'));
   const multiples = ahead(timed);
   console.table(
     Object.entries(timed).flatMap(([name, sdks]) =>
@@ -180,7 +183,7 @@ async function report() {
         return {
           scenario: name,
           sdk,
-          'median µs': (percentile(sorted, 0.5) / 1000).toFixed(1),
+          'median µs': medianTime(taken).toFixed(1),
           'p99 µs': (percentile(sorted, 0.99) / 1000).toFixed(1),
           'of motty': multiples[name]?.[sdk]?.toFixed(2) ?? '',
         };
@@ -196,6 +199,56 @@ async function report() {
       'of motty ': size.ahead[sdk]?.toFixed(2) ?? '',
     })),
   );
+  if (output === undefined) return;
+  await Bun.write(
+    output,
+    JSON.stringify(
+      {
+        bun: Bun.version,
+        versions: Object.fromEntries(
+          packages.flatMap((line) => {
+            const [, name, version] = /(\S+)@(\S+)$/.exec(line) ?? [];
+            return name === undefined ? [] : [[name, version]];
+          }),
+        ),
+        // Motty is its own one: the multiples list the rivals alone.
+        time: Object.fromEntries(
+          Object.entries(timed).map(([name, sdks]) => [
+            name,
+            Object.fromEntries(
+              Object.entries(sdks).map(([sdk, taken]) => [
+                sdk,
+                {
+                  median: medianTime(taken),
+                  multiple: multiples[name]?.[sdk] ?? 1,
+                },
+              ]),
+            ),
+          ]),
+        ),
+        cold: Object.fromEntries(
+          Object.keys(programs).map((sdk) => [
+            sdk,
+            {
+              median: median(cold.taken[sdk] ?? []),
+              multiple: cold.ahead[sdk] ?? 1,
+            },
+          ]),
+        ),
+        size: Object.fromEntries(
+          Object.keys(programs).map((sdk) => [
+            sdk,
+            {
+              bytes: size.bytes[sdk]?.at(0),
+              multiple: size.ahead[sdk] ?? 1,
+            },
+          ]),
+        ),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
-if (import.meta.main) await report();
+if (import.meta.main) await report(Bun.argv[2]);

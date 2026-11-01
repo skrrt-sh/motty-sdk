@@ -1,32 +1,45 @@
-import type { ProviderData } from './message.ts';
+import { isObject, type ProviderData } from './message.ts';
 
 // The second member keeps an author's own code allowed and the known ones
 // offered by an editor.
 type Code = KnownCode | (string & {});
 
+/**
+ * An error as plain data, which is how it crosses between a motty and its host.
+ */
 export type ErrorFacts = {
   code: Code;
   status?: number;
   message: string;
-  // In milliseconds.
+  /** How long the upstream asked to wait, in ms. */
   retryAfter?: number;
   retryable?: boolean;
   provider?: ProviderData;
-  // The error came from outside the motty, so its message is not the motty's.
-  // Only a host says false, of a failure of its own; absent means the same.
+  /**
+   * The error came from outside the motty, so its message is not the motty's.
+   * Only a host says false, of a failure of its own; absent means the same.
+   */
   upstream?: boolean;
-  // What was thrown is no SDK error, so its message was not written for a
-  // caller.
+  /**
+   * What was thrown is no SDK error, so its message was not written for a
+   * caller.
+   */
   unexpected?: true;
   stack?: string;
   cause?: string;
 };
 
 type RaiseOptions = {
+  /** Kept as the error's `cause` and never sent to a caller. */
   cause?: unknown;
+  /** The HTTP status a caller is sent, in place of the class's own. */
   status?: number;
+  /** Whether `retry` may try again, in place of the class's own. */
   retryable?: boolean;
-  // In milliseconds.
+  /**
+   * How long to wait before another try, in ms. `retry` honors up to 30000 and
+   * gives up beyond it.
+   */
   retryAfter?: number;
   provider?: ProviderData;
   upstream?: true;
@@ -37,11 +50,16 @@ type RaiseOptions = {
 const brand = Symbol.for('@mottyjs/core/error');
 
 function raised(value: unknown, code?: string): boolean {
-  if (typeof value !== 'object' || value === null) return false;
+  if (!isObject(value)) return false;
   if (!(brand in value && 'code' in value)) return false;
   return code === undefined || value.code === code;
 }
 
+/**
+ * The base of every error the SDK raises. A caller is told its code, status and
+ * message, while anything thrown that is no `MottyError` reaches a caller only
+ * as an internal error with no words of its own.
+ */
 export class MottyError extends Error {
   static override [Symbol.hasInstance](value: unknown): boolean {
     // biome-ignore lint/complexity/noThisInStatic: a subclass given no code of its own raises the base's code, and only `this` tells it from the base
@@ -77,6 +95,11 @@ export class MottyError extends Error {
 
   // Named, or a declaration file spells out the class it returns, and with
   // it the statics the runtime's own types give Error, Node's among them.
+  /**
+   * Makes an error class with its own `code` and default status, as in `class
+   * Spent extends MottyError.define('spent', 402) {}`. `retryable` is false
+   * unless stated.
+   */
   static define(
     code: string,
     status: number,
@@ -100,40 +123,91 @@ export class MottyError extends Error {
   }
 }
 
+/**
+ * An upstream's rate limit was reached. Status 429, and `retry` tries again.
+ */
 export class RateLimited extends MottyError.define('rate_limited', 429, {
   retryable: true,
 }) {}
+/**
+ * A balance, budget or quota is spent, which a wait does not mend. Status 429,
+ * and `retry` does not try again.
+ */
 export class QuotaExceeded extends MottyError.define('quota_exceeded', 429) {}
+/**
+ * An upstream is too busy, or the server is shutting down. Status 503, and
+ * `retry` tries again.
+ */
 export class Overloaded extends MottyError.define('overloaded', 503, {
   retryable: true,
 }) {}
+/** The prompt does not fit the model's context. Status 400. */
 export class ContextTooLong extends MottyError.define(
   'context_too_long',
   400,
 ) {}
+/** A content filter or policy refused the request. Status 400. */
 export class Blocked extends MottyError.define('blocked', 400) {}
+/**
+ * The model, the API or the host has no way to do what was asked. Status 400.
+ */
 export class Unsupported extends MottyError.define('unsupported', 400) {}
+/** The caller may not do what was asked. Status 403. */
 export class Forbidden extends MottyError.define('forbidden', 403) {}
+/** The request itself is wrong. Status 400. */
 export class InvalidRequest extends MottyError.define('invalid_request', 400) {}
+/**
+ * An upstream failed or could not be reached. Status 502, and `retry` tries
+ * again unless the failure says it would not help.
+ */
 export class UpstreamFailed extends MottyError.define('upstream_failed', 502, {
   retryable: true,
 }) {}
+/**
+ * An upstream refused the host's key, account or settings, which another try
+ * does not mend. Status 502.
+ */
 export class UpstreamRefused extends MottyError.define(
   'upstream_refused',
   502,
 ) {}
+/**
+ * No adapter of the host serves the model name, or the upstream does not know
+ * it. Status 404.
+ */
 export class UnknownModel extends MottyError.define('unknown_model', 404) {}
+/** A time limit passed. Status 504, and `retry` tries again. */
 export class TimedOut extends MottyError.define('timed_out', 504, {
   retryable: true,
 }) {}
+/**
+ * The work was stopped, as when the caller leaves. Status 499, and `retry`
+ * never tries again.
+ */
 export class Aborted extends MottyError.define('aborted', 499) {}
+/**
+ * The request has no caller the host could identify, which `auth()` raises.
+ * Status 401.
+ */
 export class Unauthenticated extends MottyError.define(
   'unauthenticated',
   401,
 ) {}
+/**
+ * The answer is not JSON or does not match the schema, which `answer.json()`
+ * raises. Status 502.
+ */
 export class InvalidOutput extends MottyError.define('invalid_output', 502) {}
+/**
+ * The request needs more model calls than `limits.calls` allows. Status 400,
+ * and `retry` never tries again.
+ */
 export class LimitReached extends MottyError.define('limit_reached', 400) {}
+/** A reroute named an entry that already ran for this request. Status 500. */
 export class RouteLoop extends MottyError.define('route_loop', 500) {}
+/**
+ * A chooser or a reroute named an entry the table does not have. Status 500.
+ */
 export class UnknownRoute extends MottyError.define('unknown_route', 500) {}
 
 type Raised = new (message: string, options?: RaiseOptions) => MottyError;
@@ -163,6 +237,7 @@ const known = {
 // All a caller is told of a throw that was not meant for them.
 const internal = 'Internal error';
 
+/** The code of an error class the SDK knows. */
 export type KnownCode = keyof typeof known;
 
 // An own-property check keeps a code like "constructor" off the prototype.
@@ -189,7 +264,7 @@ function because(cause: unknown): { cause?: string } {
 
 // True of a call and of a whole request alike: either may be what ended.
 export const stopped = 'The work was stopped';
-const timedOut = 'The work timed out';
+export const timedOut = 'The work timed out';
 
 function interrupted(
   thrown: unknown,
@@ -269,6 +344,10 @@ function told(thrown: unknown): ErrorFacts {
   };
 }
 
+/**
+ * Turns anything thrown into facts and never throws. A value that is no SDK
+ * error is marked `unexpected`.
+ */
 export function toFacts(thrown: unknown): ErrorFacts {
   try {
     return told(thrown);
@@ -277,9 +356,10 @@ export function toFacts(thrown: unknown): ErrorFacts {
   }
 }
 
-// An error says what happened in its own words, an upstream's included. A
-// thrown value that is no SDK error may hold anything, so only its code goes
-// out. The stack and the cause are the host's to read and never go out.
+/**
+ * Cuts facts down to what a caller may read. The stack and the cause never go
+ * out, and an unexpected error's message and provider data do not either.
+ */
 export function disclosed(facts: ErrorFacts): ErrorFacts {
   const { code, status, message, retryable, retryAfter, provider } = facts;
   const meant = facts.unexpected !== true;
@@ -293,6 +373,10 @@ export function disclosed(facts: ErrorFacts): ErrorFacts {
   };
 }
 
+/**
+ * Raises facts again as the error class of their code, or as a class made for a
+ * code the SDK does not know.
+ */
 export function fromFacts(facts: ErrorFacts): MottyError {
   const { status, retryable, retryAfter, provider, upstream, cause } = facts;
   const { unexpected } = facts;
@@ -306,11 +390,7 @@ export function fromFacts(facts: ErrorFacts): MottyError {
     ...(typeof status === 'number' ? { status } : {}),
     ...(typeof retryable === 'boolean' ? { retryable } : {}),
     ...(typeof retryAfter === 'number' ? { retryAfter } : {}),
-    ...(typeof provider === 'object' &&
-    provider !== null &&
-    !Array.isArray(provider)
-      ? { provider }
-      : {}),
+    ...(isObject(provider) && !Array.isArray(provider) ? { provider } : {}),
     ...(upstream === true ? { upstream } : {}),
     ...(unexpected === true ? { unexpected } : {}),
     ...(typeof cause === 'string' ? { cause } : {}),

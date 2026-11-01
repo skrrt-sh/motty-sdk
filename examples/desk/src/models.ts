@@ -2,14 +2,14 @@ import { fallback, model, retry, timeout, type Model, type NamedModel } from "@m
 import { decision } from "@mottyjs/decision";
 import type { Tuning } from "./settings";
 
-export const nano = model("openai/gpt-5-nano");
+export const luna = model("openai/gpt-6-luna");
 export const haiku = model("anthropic/claude-haiku-5-5");
 export const sonnet = model("anthropic/claude-sonnet-5-5");
 export const oss = model("openrouter/openai/gpt-oss-20b");
 export const gemini = model("openrouter/google/gemini-2.5-flash-lite");
 export const jev = decision("typesafe/jev-latest");
 
-const frontlines = { nano, haiku };
+const frontlines = { luna, haiku };
 const seniors = { sonnet, oss };
 const readers = { gemini, haiku };
 
@@ -49,6 +49,6 @@ export function reader(chosen: Tuning["models"], family?: string): Model {
   );
 }
 
-export const clerk = fallback(nano, haiku);
+export const clerk = fallback(luna, haiku);
 export const secondClerk = fallback(haiku, sonnet);
-export const summariser = fallback(nano, haiku);
+export const summariser = fallback(luna, haiku);

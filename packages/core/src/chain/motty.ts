@@ -1,5 +1,5 @@
 import { isMarked, mark } from '../contract.ts';
-import type { ReadonlyJson } from '../data/message.ts';
+import { isObject, type ReadonlyJson } from '../data/message.ts';
 import {
   type AnyMotty,
   type Base,
@@ -10,7 +10,7 @@ import {
   type Step,
   type Target,
 } from './builder.ts';
-import { contractOf } from './run.ts';
+import { contractOf, isPlain } from './run.ts';
 
 type Given =
   | ((context: never) => unknown)
@@ -31,9 +31,7 @@ function asFunction<Fn extends (...given: never[]) => unknown>(
 }
 
 function chainOf(given: AnyMotty | string): Chain | undefined {
-  return typeof given === 'object' && given !== null && chain in given
-    ? given[chain]
-    : undefined;
+  return isObject(given) && chain in given ? given[chain] : undefined;
 }
 
 // A motty of another copy of the SDK carries the mark and not this copy's
@@ -47,11 +45,10 @@ function refusal(given: unknown, foreign: string, otherwise: string): Error {
 }
 
 function canonical(name: string, seed: unknown, within: unknown[]): string {
-  if (typeof seed === 'object' && seed !== null && !within.includes(seed)) {
+  if (isObject(seed) && !within.includes(seed)) {
     const inner = (value: unknown) => canonical(name, value, [...within, seed]);
     if (Array.isArray(seed)) return `[${Array.from(seed, inner).join(',')}]`;
-    const kind = Object.getPrototypeOf(seed);
-    if (kind === Object.prototype || kind === null) {
+    if (isPlain(seed)) {
       const fields = Object.entries(seed)
         .sort(([left], [right]) => (left < right ? -1 : 1))
         .map(([key, value]) => `${JSON.stringify(key)}:${inner(value)}`);
@@ -153,7 +150,7 @@ function tabled(
   owner: string,
   given: { readonly [name: string]: Given } | string,
 ): { readonly [name: string]: Target } {
-  const entries = typeof given === 'object' && given !== null ? given : {};
+  const entries = isObject(given) ? given : {};
   if (Object.getOwnPropertySymbols(entries).length > 0) {
     throw new Error(
       `An entry of the motty "${owner}" is named by a symbol, and an entry is named by a string`,
@@ -229,6 +226,19 @@ function build<Context, Paths extends string[]>(
   return Object.freeze(built);
 }
 
+/**
+ * Starts a chain of hooks that a host serves as a model. The `name` is the
+ * model name clients list and goes ahead of stored keys unless the host sets
+ * `namespace`. Name and `seed`, which must be plain JSON, identify a part, so
+ * two parts that share both run as one.
+ *
+ * @example
+ * ```ts
+ * const relay = motty({ name: 'relay' }).handle(({ prompt }) =>
+ *   model('openai/gpt-6.1-sol').complete(prompt),
+ * );
+ * ```
+ */
 export function motty(options: {
   name: string;
   seed?: ReadonlyJson;

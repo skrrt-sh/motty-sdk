@@ -23,6 +23,10 @@ function expiry(ttl: number | undefined): number {
 // The key-value calls are synchronous and the object runs one call at a
 // time, so nothing comes between a read and the write after it. A SQL table
 // would have to be made again after deleteAll(); these keys need no schema.
+/**
+ * The Durable Object class behind `cloudflare`. The Worker's entry exports it
+ * and `wrangler.jsonc` binds it with a `new_sqlite_classes` migration.
+ */
 export class MottyStorage extends DurableObject {
   // The expiry is checked on every read, so a key is gone at its time to
   // the millisecond, whenever the alarm comes.
@@ -119,10 +123,21 @@ export class MottyStorage extends DurableObject {
   }
 }
 
-// One object per key unless the host groups keys under a name of its own.
-// A binding restricted to a jurisdiction is passed as the binding.
+/**
+ * Stores in Durable Objects, so it runs on Workers alone. The Worker must
+ * export `MottyStorage`, and its binding comes from the `env` of
+ * `cloudflare:workers`.
+ */
 export function cloudflare(options: {
+  /**
+   * The binding of `MottyStorage`. A binding restricted to a jurisdiction is
+   * passed here as it is.
+   */
   binding: DurableObjectNamespace<MottyStorage>;
+  /**
+   * Gives the name of the object a key lives in, to keep related keys together.
+   * By default each key has its own.
+   */
   name?: (key: string) => string;
 }): Storage {
   const { binding, name = (key) => key } = options;

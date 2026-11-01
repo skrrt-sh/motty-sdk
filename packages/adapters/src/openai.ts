@@ -4,11 +4,27 @@ import { type Connection, chat } from './chat.ts';
 import { openaiCuts } from './cuts.ts';
 import { openaiChatTakes, openaiTakes } from './takes.ts';
 
+/**
+ * Connects to OpenAI, or with `address` to any server that speaks its API,
+ * which is then sent the key. It speaks the Responses API unless `api` says
+ * otherwise, and what it knows of OpenAI's models does not apply at another
+ * address, so an option is sent as stated. It writes a cache marker on input
+ * content only when `breakpoints` states how.
+ */
 export function openai(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is `https://api.openai.com/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `openai/some-model`, taken off
+     * before the call. The default is `openai`.
+     */
     prefix?: string;
+    /** The wire API to speak. The default is `responses`. */
     api?: 'responses' | 'chat-completions';
   } & Pick<Parameters<typeof responsesIn>[0], 'breakpoints'> &
     Connection,
@@ -39,6 +55,7 @@ export function openai(
         ? responsesIn({ ...marks, cuts: openaiCuts })
         : chatCompletionsIn({
             name: 'openai.chat',
+            cacheKey: true,
             ...marks,
             cuts: openaiCuts,
           }),

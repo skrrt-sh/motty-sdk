@@ -687,7 +687,9 @@ core stays what every motty uses, and a plugin is proven possible by being writt
 - **The definition in the code is the only one.** A host that shows settings to an owner reads
   them from the code, and no copy is kept anywhere else.
 - **The host supplies overrides; the motty never fetches them** nor reads the environment. They are
-  checked when the host supplies them, which may be per request. Rejected: values compiled into the
+  checked when the host supplies them, which may be per request. A mount is given them once, so it
+  refuses at start a bad override or a group the motty does not have, though an async schema's
+  verdict is only written to stderr, as a mount returns at once. Rejected: values compiled into the
   bundle, a version per retuning, and overrides in `store`, which only a request can write.
 - **Settings are frozen at every depth of plain data,** the defaults once when loaded and an
   override when merged, so a write throws in the motty that makes it. Cause: the defaults were
@@ -707,7 +709,10 @@ core stays what every motty uses, and a plugin is proven possible by being writt
 - **The motty says it needs a caller; the host says how one is proven.** `auth()` holds no key and
   no check: it throws `Unauthenticated`, 401, when the host knows no caller, else adds `caller`.
 - **`caller.id` is extracted and validated, never read raw.** The motty never sees the key or token.
-- **Without `auth()` a motty is open** to whoever reaches its host.
+- **Without `auth()` a motty is open** to whoever reaches its host, whatever auth adapter the host
+  gave. A mount warns at start of an adapter with no `auth()` to use it, and of `auth()` with no
+  adapter. It does not refuse either, since a host may mean an optional caller or state the caller
+  itself.
 - **`store` is a thin layer over one key-value database:** `get`, `set` with `{ ttl }`,
   `delete`, and `increment`. It adds a key prefix only: one call is one command, no cache, no
   batching.
@@ -1054,6 +1059,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   alike, and neither may depend on the other. Rejected: a package of their own, one more for three
   types and two functions; and keeping them in `serve`, which a test would then install with its
   codecs.
+- **A mount refuses at start what every request would fail on.** That is a motty with no route or
+  handle, a bad override and an unknown settings group. The contract holds `root`, the built chain,
+  so that a host can check these without running the motty. A contract from an older SDK has none,
+  and that check is skipped.
 - **A host's steps are one function, which every host that takes host options calls.** Given the
   motty and the options once, it checks the contract version, sends each call to its adapter and
   puts the namespace ahead of every storage key. Given a request, it removes the credential,
@@ -1120,7 +1129,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   named. The secret must itself be a token a header can carry, and it is compared in a time
   that does not depend on what was sent.
 - **With no `auth` adapter there is nothing to verify against,** so `auth()` rejects the request
-  unless the host stated the caller itself.
+  unless the host stated the caller itself. A mount warns of this at start.
 - **A host that authenticated the request itself states the caller as an argument, in process.**
   The handler a mount returns takes a third argument to `fetch`, whose `caller` is who is
   asking. The auth adapter is then not asked, and the credential headers are removed as
@@ -1179,16 +1188,23 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **The overrides are typed by the motty they are given with:** any of the groups its settings
   part declares, each with any of its values. A wrong group name or value type does not compile.
   A motty held without its types takes any overrides. The values are still checked per request by
-  the motty's own schemas, which the host cannot reach: the description carries no settings.
+  the motty's own schemas. The description carries no settings, so a host reads those schemas from
+  the contract's `root` to check what it was given at start.
 - **`report` receives one record per request:** the record the contract delivers, to which the
   host adds the request id, the setting overrides in effect, as `warnings` what the edge left
   out of the reply it wrote, and as `failed` what a service of the host threw. What an upstream
   call left out is in that call's entry.
+- **With no `report`, a mount writes failed records to stderr, one line a failure.** That is what the
+  host should see: a failure on its side, a 5xx, an upstream's refusal and a name no adapter serves,
+  which may be its own wiring. A 4xx the motty itself gave writes nothing, or anyone with a bad token could fill the log, and a
+  caller leaving is no failure. Credentials and the host's setting overrides are masked, and a line
+  is cut at 1,000 characters. A throw at the edge that is no SDK error and that no record holds
+  is written whatever the report.
 - **`report` may return a promise, and the SDK's part in a record ends when that promise
   settles.** Settling says the host's report has finished with the record, not that it
-  succeeded, which only the host's own code can know and tell. A rejection is caught, since
-  nobody is left to tell. Cause: a host that writes its records to a database or a queue had no
-  way to keep its process alive until one was written.
+  succeeded, which only the host's own code can know and tell. A report that throws or rejects
+  is written to stderr with the failures of the record it lost. Cause: a host that writes its
+  records to a database or a queue had no way to keep its process alive until one was written.
 - **A mount hands the host the delivery of each record through `waitUntil`,** a field of the
   third argument to `fetch`. It is called once for every request that was let in, before the
   reply is returned, with work that settles when the host's report has finished with that
@@ -1378,7 +1394,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   message, which cost the type check about 870 instantiations at each call site on a read-only
   message.
 - **Inside one family nothing is lost:** reasoning signatures, logprobs, metadata, and a cache
-  marker where the upstream takes one.
+  marker or a cache key where the upstream takes one.
 - **A reply's likelihoods are never dropped:** where no text came for them, they are told on an
   empty text before the reply ends.
 - **JSON nested deeper than 512 levels is not read.** A caller's body that deep is
@@ -1429,10 +1445,14 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   `client_metadata` and the safety identifier among others, left out by another family. Cause:
   Codex sends `client_metadata` on every request, and as provider data it made an Anthropic
   upstream refuse the first one.
-- **The cache key is held under the shared `openai` key, whichever OpenAI API sent it.** An
-  upstream of either API is sent it, and another family leaves it out. Cause: a key held as a
-  hint of the API that sent it was lost between the two, so a caller of one API routed to the
-  other paid its prompt again.
+- **The cache key is held under the shared `openai` key, whichever OpenAI API sent it.** The
+  Responses API is sent it, Chat Completions only as below, and another family leaves it out.
+  Cause: a key held as a hint of the API that sent it was lost between the two, so a caller of one
+  API routed to the other paid its prompt again.
+- **A Chat Completions upstream is sent the key only where its dialect says `cacheKey`.** Elsewhere
+  it is left out and reported, and the marker it implied stays. Most upstreams that cache need no
+  key, and one may refuse a field it does not know. `local` takes the word from the host, as only
+  the host knows its server. Rejected: sending it to every dialect, a call that may fail for a hint.
 - **Across families the common set is translated:** messages, tools and tool choice, structured
   output, reasoning effort, stop, max tokens, sampling, finish reason, usage.
 - **Nothing that changes the meaning is dropped.** It fails that call with `Unsupported`, so
@@ -1553,8 +1573,8 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **A caller of either OpenAI API that keys its cache and marks none asks for a marker on the
   last message.** The decoder puts the neutral marker there, so an upstream that caches only
   where it is told, as Anthropic does, is told, and the author sees the marker and may move or
-  remove it. One marker is within Anthropic's limit of four. A request that sends an OpenAI API
-  the key is cached by it, so a marker left out of it is not reported. The marker says it was
+  remove it. One marker is within Anthropic's limit of four. A request that sends the Responses
+  API the key is cached by it, so a marker left out of it is not reported. The marker says it was
   implied by a key, so an upstream that takes no marker, caching by itself, is sent the request
   as if there were none, with nothing reported. Cause: Codex sends
   `prompt_cache_key` on every turn and no marker, so every turn to Claude paid its 13,000 tokens

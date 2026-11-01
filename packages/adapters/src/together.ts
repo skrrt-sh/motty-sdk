@@ -45,10 +45,22 @@ function spoken(model: string) {
   return /^(?:moonshotai|zai-org|minimaxai)\//i.test(model) ? contented : named;
 }
 
+/**
+ * Connects to Together over Chat Completions, asking each model for reasoning
+ * in the words its family takes.
+ */
 export function together(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is `https://api.together.ai/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `together/some-model`, taken off
+     * before the call. The default is `together`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

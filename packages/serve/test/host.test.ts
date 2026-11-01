@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { auth } from '@mottyjs/auth';
 import { answer, model, motty, Unauthenticated } from '@mottyjs/core';
 import type {
@@ -13,6 +13,18 @@ import { store } from '@mottyjs/store';
 import { fake, memory, on } from '@mottyjs/test';
 import { z } from 'zod';
 import { mount, serve } from '../src/index.ts';
+
+// What a host with no report has written to stderr is not what these cases
+// are about, and failures.test.ts reads it.
+let stderr: ReturnType<typeof spyOn<Console, 'error'>>;
+
+beforeEach(() => {
+  stderr = spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  stderr.mockRestore();
+});
 
 const gpt = model('openai/gpt');
 
@@ -279,65 +291,47 @@ test("the host's setting overrides reach the motty, and the rest keep their defa
   ]);
 });
 
-test("an override the motty's schema refuses fails the request, and only the report says why", async () => {
-  const reported = Promise.withResolvers<Report>();
-  const served = serve(tuned, () => ({
-    settings: { routing: { threshold: 2 } },
-    report: reported.resolve,
-  }));
-
-  const reply = await served.fetch(ask());
-
-  expect(reply.status).toBe(500);
-  expect(await reply.json()).toMatchObject({
-    error: { message: 'Internal error' },
-  });
-  expect(await reported.promise).toMatchObject({
-    outcome: 'failed',
-    error: {
-      message: expect.stringContaining(
-        'The host\'s settings for the group "routing" are not valid',
-      ),
-    },
-  });
-});
-
 test('the overrides are typed by the settings the motty declares, for a serve file and for a mounted motty', () => {
-  const typed: HostOptions<Overrides<typeof tuned>> = {
-    settings: { routing: { tier: 'deep' } },
-  };
-  const untyped: HostOptions = { settings: { anything: { goes: true } } };
+  // Never called: a bad override fails at mount as well as here.
+  const typedOnly = () => {
+    const typed: HostOptions<Overrides<typeof tuned>> = {
+      settings: { routing: { tier: 'deep' } },
+    };
+    const untyped: HostOptions = { settings: { anything: { goes: true } } };
 
-  serve(tuned, () => ({ settings: { routing: { tier: 'deep' } } }));
-  serve(tuned, ({ PORT }) => ({
-    ...typed,
-    limits: { calls: Number(PORT ?? 8) },
-  }));
-  mount(tuned, () => ({ settings: {} }));
-  mount(tuned, () => untyped);
-  mount(tuned, () => ({
-    models: (request, caller) => [
-      fake(on(gpt, `${request.id} for ${caller?.id}`)),
-    ],
-    settings: { routing: { tier: 'deep' } },
-  }));
-  mount(tuned, () => ({
-    models: () => [],
-    // @ts-expect-error the tier is one of the two, with models per request too
-    settings: { routing: { tier: 'slow' } },
-  }));
-  // @ts-expect-error the models are a list, or a function that returns one
-  mount(tuned, () => ({ models: () => fake() }));
-  // @ts-expect-error the motty declares no group of that name
-  serve(tuned, () => ({ settings: { routes: { tier: 'deep' } } }));
-  // @ts-expect-error nor beside a group it does declare
-  mount(tuned, () => ({ settings: { routing: {}, routes: {} } }));
-  // @ts-expect-error the tier is one of the two the schema names
-  serve(tuned, () => ({ settings: { routing: { tier: 'slow' } } }));
-  // @ts-expect-error the threshold is a number
-  mount(tuned, () => ({ settings: { routing: { threshold: 'high' } } }));
-  // @ts-expect-error the group has no such value
-  mount(tuned, () => ({ settings: { routing: { depth: 2 } } }));
+    serve(tuned, () => ({ settings: { routing: { tier: 'deep' } } }));
+    serve(tuned, ({ PORT }) => ({
+      ...typed,
+      limits: { calls: Number(PORT ?? 8) },
+    }));
+    mount(tuned, () => ({ settings: {} }));
+    mount(tuned, () => untyped);
+    mount(tuned, () => ({
+      models: (request, caller) => [
+        fake(on(gpt, `${request.id} for ${caller?.id}`)),
+      ],
+      settings: { routing: { tier: 'deep' } },
+    }));
+    mount(tuned, () => ({
+      models: () => [],
+      // @ts-expect-error the tier is one of the two, with models per request too
+      settings: { routing: { tier: 'slow' } },
+    }));
+    // @ts-expect-error the models are a list, or a function that returns one
+    mount(tuned, () => ({ models: () => fake() }));
+    // @ts-expect-error the motty declares no group of that name
+    serve(tuned, () => ({ settings: { routes: { tier: 'deep' } } }));
+    // @ts-expect-error nor beside a group it does declare
+    mount(tuned, () => ({ settings: { routing: {}, routes: {} } }));
+    // @ts-expect-error the tier is one of the two the schema names
+    serve(tuned, () => ({ settings: { routing: { tier: 'slow' } } }));
+    // @ts-expect-error the threshold is a number
+    mount(tuned, () => ({ settings: { routing: { threshold: 'high' } } }));
+    // @ts-expect-error the group has no such value
+    mount(tuned, () => ({ settings: { routing: { depth: 2 } } }));
+  };
+
+  expect(typedOnly).toBeFunction();
 });
 
 const counting = (name: string) =>

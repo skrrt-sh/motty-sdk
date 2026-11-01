@@ -256,7 +256,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/openai/gpt-5-nano').complete(prompt),
+        model('openrouter/openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [
@@ -460,7 +460,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/openai/gpt-4.1-nano').complete(prompt),
+        model('openrouter/openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openrouter({ key: `sk-or-v1-${secret}` })],
@@ -963,7 +963,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/openai/gpt-4.1-nano').complete({
+        model('openrouter/openai/gpt-6-luna').complete({
           ...prompt,
           output: {
             schema: {
@@ -991,6 +991,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
         body: JSON.stringify({
           model: 'relay',
           max_completion_tokens: 60,
+          reasoning_effort: 'none',
           messages: [
             { role: 'user', content: 'Give the capital of France as JSON.' },
           ],
@@ -1019,7 +1020,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/openai/gpt-4.1-nano').complete({
+        model('openrouter/openai/gpt-6-luna').complete({
           ...prompt,
           output: {
             schema: {
@@ -1216,7 +1217,7 @@ describe.skipIf(key === undefined || key === '')('against OpenRouter', () => {
     const reports: Report[] = [];
     const served = mount(
       motty({ name: 'relay' }).handle(({ prompt }) =>
-        model('openrouter/openai/gpt-5-nano').complete(prompt),
+        model('openrouter/openai/gpt-6-luna').complete(prompt),
       ),
       () => ({
         models: [openrouter({ key })],
