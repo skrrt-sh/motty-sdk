@@ -50,12 +50,12 @@ type KnownPart =
   | { type: 'reasoning'; text: string }
   // `input` is the parsed arguments, a string for a custom tool's free-form
   // input; `raw` is arguments that did not parse.
-  | ({ type: 'tool_call'; id: string; name: string; hosted?: boolean } & (
+  | ({ type: 'toolCall'; id: string; name: string; hosted?: boolean } & (
       | { input: ReadonlyJson; raw?: never }
       | { input?: never; raw: string }
     ))
   | ({
-      type: 'tool_result';
+      type: 'toolResult';
       id: string;
       failed?: boolean;
       hosted?: boolean;
@@ -126,7 +126,8 @@ export type ToolChoice =
 
 /**
  * The neutral options of a model call, which each upstream receives in its own
- * names.
+ * names. One that only helps, as a seed, a user or a penalty, goes only to an
+ * upstream whose list has it, and a warning on the call tells where it did not.
  */
 export type Options = {
   toolChoice?: ToolChoice;
@@ -147,19 +148,45 @@ export type Options = {
   frequencyPenalty?: number;
   user?: string;
   /**
+   * The tier to run on, as `flex`, whose values differ by provider and are not
+   * translated.
+   */
+  serviceTier?: string;
+  /**
+   * What the upstream caches and routes this conversation by. With no marker
+   * placed, it also asks for one on the last message.
+   */
+  cacheKey?: string;
+  /** How the upstream is to cache this request, in its own words. */
+  cacheOptions?: { readonly [key: string]: ReadonlyJson };
+  /** How long the upstream keeps the cache, in its own words, as `24h`. */
+  cacheRetention?: string;
+  /** Labels the upstream keeps with the request and does not read. */
+  metadata?: { readonly [key: string]: ReadonlyJson };
+  /** Whether the upstream keeps the response for later. */
+  store?: boolean;
+  /** A stable name for the end user, which the upstream's safety checks read. */
+  safetyIdentifier?: string;
+  /** Text the answer will mostly repeat, which makes it faster where taken. */
+  prediction?: { readonly [key: string]: ReadonlyJson };
+  /** How much the answer is to say, as `low`, `medium` or `high`. */
+  verbosity?: string;
+  /**
    * Sent upstream only where the host's connection allows the name. The
    * connection's and the API's own headers win, a null or undefined value is skipped,
    * and credentials, cookies and connection headers are never sent.
    */
   headers?: { readonly [name: string]: string | null | undefined };
   /**
-   * Fields in the upstream's own names, keyed by wire API or vendor. A call
-   * fails if this has fields only for another API, so a fallback can move on.
+   * Fields in the upstream's own names, keyed by wire API or vendor, and sent
+   * as said. A call fails if this has fields only for another API, so a
+   * fallback can move on.
    */
   provider?: ProviderData;
   /**
    * The same as `provider`, except that what this upstream cannot carry is
-   * dropped and the call goes on.
+   * dropped and the call goes on, and a field in OpenAI's names goes under this
+   * upstream's name for it.
    */
   hints?: ProviderData;
 };

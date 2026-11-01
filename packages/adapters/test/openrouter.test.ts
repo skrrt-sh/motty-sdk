@@ -247,7 +247,7 @@ data: [DONE]
             parts: [
               { type: 'reasoning', text: 'I need the tool.' },
               {
-                type: 'tool_call',
+                type: 'toolCall',
                 id: 'call_1',
                 name: 'get_weather',
                 input: { city: 'Paris' },
@@ -256,7 +256,7 @@ data: [DONE]
           },
           {
             role: 'tool',
-            parts: [{ type: 'tool_result', id: 'call_1', text: 'Sunny' }],
+            parts: [{ type: 'toolResult', id: 'call_1', text: 'Sunny' }],
           },
         ],
       },
@@ -324,14 +324,14 @@ data: [DONE]
             role: 'assistant',
             parts: [
               { type: 'image', data: 'iVBORw0=', mediaType: 'image/png' },
-              { type: 'tool_call', id: 'call_1', name: 'plot', input: {} },
+              { type: 'toolCall', id: 'call_1', name: 'plot', input: {} },
             ],
           },
           {
             role: 'tool',
             parts: [
               {
-                type: 'tool_result',
+                type: 'toolResult',
                 id: 'call_1',
                 parts: [{ type: 'image', url: 'https://x.test/chart.png' }],
               },
@@ -426,7 +426,7 @@ test('a budget held by requests still in flight is a limit a wait meets, by its 
     {
       type: 'error',
       error: {
-        code: 'rate_limited',
+        code: 'rateLimited',
         message: 'Insufficient budget while other requests are in flight',
         retryable: true,
         upstream: true,
@@ -460,7 +460,7 @@ test('a path the router does not have is the host`s address to mend, in the word
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'Not Found',
         retryable: false,
         upstream: true,
@@ -485,7 +485,7 @@ test.each([
         spend_usd: 52,
       },
     },
-    kind: 'quota_exceeded',
+    kind: 'quotaExceeded',
   },
   {
     status: 402,
@@ -497,7 +497,7 @@ test.each([
       code: 402,
       metadata: { limit_source: 'openrouter_in_flight_budget' },
     },
-    kind: 'rate_limited',
+    kind: 'rateLimited',
   },
   {
     status: 403,
@@ -560,7 +560,7 @@ test.each([
       code: 400,
       metadata: { error_type: 'context_length_exceeded' },
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     status: 400,
@@ -571,7 +571,7 @@ test.each([
         "This endpoint's maximum context length is 131072 tokens. However, you requested about 100000003 tokens (3 of text input, 100000000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.",
       code: 400,
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     status: 400,
@@ -581,7 +581,7 @@ test.each([
       message: 'nobody/no-such-model is not a valid model ID',
       code: 400,
     },
-    kind: 'unknown_model',
+    kind: 'unknownModel',
   },
   {
     status: 400,
@@ -592,7 +592,7 @@ test.each([
       code: 400,
       metadata: { error_type: 'not_found' },
     },
-    kind: 'unknown_model',
+    kind: 'unknownModel',
   },
   {
     status: 502,
@@ -614,7 +614,7 @@ test.each([
       code: 503,
       metadata: { error_type: 'provider_unavailable' },
     },
-    kind: 'upstream_failed',
+    kind: 'upstreamFailed',
   },
   {
     status: 502,
@@ -625,7 +625,7 @@ test.each([
       code: 502,
       metadata: { error_type: 'timeout' },
     },
-    kind: 'timed_out',
+    kind: 'timedOut',
   },
   {
     status: 400,
@@ -675,7 +675,7 @@ test.each([
       message:
         "This endpoint's maximum context length is 131072 tokens. However, you requested about 140000 tokens.",
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
 ])(
   '$told told inside a reply that began well, with its status a number in the error, is $kind, by its reference',
@@ -798,7 +798,7 @@ test('a model the host`s data policy shuts out is the host`s setup to mend, by i
     {
       type: 'error',
       error: {
-        code: 'upstream_refused',
+        code: 'upstreamRefused',
         message: "The upstream refused the host's credentials or account",
         provider: {
           openrouter: {

@@ -9,6 +9,16 @@ type Send = NonNullable<HostOptions['report']>;
 
 const mask = '[held]';
 
+// What a Worker writes at global scope, where a mount runs, reaches no log, so
+// there it is held for the mount's first request. Elsewhere it goes at once, for
+// an operator to see before any traffic.
+export function heldAtStart(): string[] | undefined {
+  return typeof navigator !== 'undefined' &&
+    navigator.userAgent === 'Cloudflare-Workers'
+    ? []
+    : undefined;
+}
+
 // What reads as a credential whatever it belongs to, a long run of a token's
 // alphabet last: the host's keys are in no list the edge can read.
 const credentials =
@@ -81,7 +91,7 @@ function recordError(report: Report, error: ErrorFacts): void {
   if (error.code === 'aborted') return;
   if (
     error.upstream !== true &&
-    error.code !== 'unknown_model' &&
+    error.code !== 'unknownModel' &&
     (error.status ?? 500) < 500
   ) {
     return;
@@ -90,7 +100,7 @@ function recordError(report: Report, error: ErrorFacts): void {
   // In the core's words: an upstream that knows no such model says so in its
   // own, having been reached by an adapter that serves the name.
   if (
-    error.code === 'unknown_model' &&
+    error.code === 'unknownModel' &&
     error.message.startsWith('No model named ')
   ) {
     line(

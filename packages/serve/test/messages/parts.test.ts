@@ -83,7 +83,7 @@ test('a tool call and a hosted tool call are read with their input', () => {
     }),
   ).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_01A09q90qw90lq917835lq9',
       name: 'get_weather',
       input: { location: 'Paris' },
@@ -99,7 +99,7 @@ test('a tool call and a hosted tool call are read with their input', () => {
     }),
   ).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_01',
       name: 'web_search',
       input: { query: 'weather' },
@@ -112,7 +112,7 @@ test('a tool call and a hosted tool call are read with their input', () => {
 test('a tool result is read as text, as blocks, failed or empty', () => {
   expect(
     partsOf({ type: 'tool_result', tool_use_id: 'toolu_01', content: '15C' }),
-  ).toEqual([{ type: 'tool_result', id: 'toolu_01', text: '15C' }]);
+  ).toEqual([{ type: 'toolResult', id: 'toolu_01', text: '15C' }]);
   expect(
     partsOf({
       type: 'tool_result',
@@ -123,7 +123,7 @@ test('a tool result is read as text, as blocks, failed or empty', () => {
     }),
   ).toEqual([
     {
-      type: 'tool_result',
+      type: 'toolResult',
       id: 'toolu_01',
       parts: [{ type: 'text', text: 'No such city' }],
       failed: true,
@@ -131,7 +131,7 @@ test('a tool result is read as text, as blocks, failed or empty', () => {
     },
   ]);
   expect(partsOf({ type: 'tool_result', tool_use_id: 'toolu_01' })).toEqual([
-    { type: 'tool_result', id: 'toolu_01', text: '' },
+    { type: 'toolResult', id: 'toolu_01', text: '' },
   ]);
 });
 

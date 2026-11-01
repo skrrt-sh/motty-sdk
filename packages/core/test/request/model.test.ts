@@ -319,7 +319,7 @@ test('a failure before the first chunk rejects complete with its class', async (
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           status: 429,
           message: 'Slow down',
           retryAfter: 30,
@@ -1786,7 +1786,7 @@ test('fields a host put on a finish beside its usage are neither counted nor tak
       ...stubHost(),
       models: async function* () {
         yield JSON.parse(
-          '{"type":"finish","reason":"stop","usage":{"input":3,"output":2},"output":900,"cost":7,"code":"rate_limited","message":"Slow down"}',
+          '{"type":"finish","reason":"stop","usage":{"input":3,"output":2},"output":900,"cost":7,"code":"rateLimited","message":"Slow down"}',
         );
       },
     },
@@ -2015,7 +2015,7 @@ test.each([
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           status: 429,
           message: 'Rate limit reached for acme',
           retryable: true,
@@ -2024,7 +2024,7 @@ test.each([
       },
     ]);
     expect((await over.promise).error).toEqual({
-      code: 'rate_limited',
+      code: 'rateLimited',
       status: 429,
       message: 'Rate limit reached for acme',
       retryable: true,
@@ -2165,7 +2165,7 @@ test.each([
     expect((await stopped.promise).calls).toStrictEqual([
       {
         ...slow,
-        code: 'timed_out',
+        code: 'timedOut',
         message: 'The host gave the request two minutes',
       },
     ]);

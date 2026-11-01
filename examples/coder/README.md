@@ -15,7 +15,7 @@ flowchart TD
   request([Chat request]) --> auth{"auth<br/>host identifies the caller?"}
   auth -- no --> rejected(["Error: unauthenticated, 401"])
   auth -- "yes: caller.id on the context" --> empty{"empty-prompt<br/>any messages?"}
-  empty -- no --> emptyError(["Error: empty_prompt, 400"])
+  empty -- no --> emptyError(["Error: emptyPrompt, 400"])
   empty -- yes --> opening{"off-topic<br/>first turn of the thread?"}
 
   opening -- "no, an assistant already replied" --> long

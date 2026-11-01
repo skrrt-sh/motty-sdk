@@ -80,7 +80,7 @@ test('fragments of tool calls are numbered by call, opened once each', () => {
   const { piece } = pieces(false);
 
   expect(
-    piece({ type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' }),
+    piece({ type: 'toolCall', id: 'call_a', name: 'weather', arguments: '' }),
   ).toEqual({
     kind: 'call',
     index: 0,
@@ -89,7 +89,7 @@ test('fragments of tool calls are numbered by call, opened once each', () => {
     input: '',
   });
   expect(
-    piece({ type: 'tool_call', id: 'call_b', name: 'now', arguments: '{}' }),
+    piece({ type: 'toolCall', id: 'call_b', name: 'now', arguments: '{}' }),
   ).toEqual({
     kind: 'call',
     index: 1,
@@ -98,7 +98,7 @@ test('fragments of tool calls are numbered by call, opened once each', () => {
     input: '{}',
   });
   expect(
-    piece({ type: 'tool_call', id: 'call_a', arguments: '{"city":"Oslo"}' }),
+    piece({ type: 'toolCall', id: 'call_a', arguments: '{"city":"Oslo"}' }),
   ).toEqual({
     kind: 'call',
     index: 0,
@@ -112,22 +112,25 @@ test('a call this wire marked as free-form stays free-form to its end', () => {
 
   expect(
     piece({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_a',
       name: 'shell',
       arguments: 'ls',
       provider: { 'openai.chat': { type: 'custom' } },
     }),
   ).toMatchObject({ kind: 'call', type: 'custom' });
-  expect(piece({ type: 'tool_call', id: 'call_a', arguments: ' -la' })).toEqual(
-    { kind: 'call', index: 0, type: 'custom', input: ' -la' },
-  );
+  expect(piece({ type: 'toolCall', id: 'call_a', arguments: ' -la' })).toEqual({
+    kind: 'call',
+    index: 0,
+    type: 'custom',
+    input: ' -la',
+  });
 });
 
 test('what a fragment holds for this API is carried as it came', () => {
   expect(
     pieces(false, new Set(['shell'])).piece({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_a',
       name: 'shell',
       arguments: 'ls',
@@ -153,25 +156,25 @@ test.each([
   (more) => {
     const { piece } = pieces(false);
     piece({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_a',
       name: 'weather',
       arguments: '{}',
     });
 
     expect(
-      piece({ type: 'tool_call', id: 'call_a', arguments: '', ...more }),
+      piece({ type: 'toolCall', id: 'call_a', arguments: '', ...more }),
     ).toBeUndefined();
   },
 );
 
 test('a later fragment with no input that carries a field is added', () => {
   const { piece } = pieces(false);
-  piece({ type: 'tool_call', id: 'call_a', name: 'weather', arguments: '{}' });
+  piece({ type: 'toolCall', id: 'call_a', name: 'weather', arguments: '{}' });
 
   expect(
     piece({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_a',
       arguments: '',
       provider: { 'openai.chat': { extra_content: { a: 1 } } },
@@ -187,14 +190,14 @@ test('a later fragment with no input that carries a field is added', () => {
 
 test('a function call that ends with no input is sent an empty object', () => {
   const { piece, ended } = pieces(false);
-  piece({ type: 'tool_call', id: 'call_a', name: 'now', arguments: '' });
+  piece({ type: 'toolCall', id: 'call_a', name: 'now', arguments: '' });
 
   expect(
-    piece({ type: 'tool_call', id: 'call_a', arguments: '', ended: true }),
+    piece({ type: 'toolCall', id: 'call_a', arguments: '', ended: true }),
   ).toEqual({ kind: 'call', index: 0, type: 'function', input: '{}' });
   expect(
     piece({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_b',
       name: 'now',
       arguments: '',
@@ -212,10 +215,10 @@ test('a function call that ends with no input is sent an empty object', () => {
 
 test('the reply ending closes each function call still empty, and only once', () => {
   const { piece, ended } = pieces(false);
-  piece({ type: 'tool_call', id: 'call_a', name: 'now', arguments: '' });
-  piece({ type: 'tool_call', id: 'call_b', name: 'later', arguments: '' });
-  piece({ type: 'tool_call', id: 'call_b', arguments: '{"in":1}' });
-  piece({ type: 'tool_call', id: 'call_c', name: 'today', arguments: '' });
+  piece({ type: 'toolCall', id: 'call_a', name: 'now', arguments: '' });
+  piece({ type: 'toolCall', id: 'call_b', name: 'later', arguments: '' });
+  piece({ type: 'toolCall', id: 'call_b', arguments: '{"in":1}' });
+  piece({ type: 'toolCall', id: 'call_c', name: 'today', arguments: '' });
 
   expect(ended()).toEqual([
     { kind: 'call', index: 0, type: 'function', input: '{}' },
@@ -226,14 +229,14 @@ test('the reply ending closes each function call still empty, and only once', ()
 
 test('a call that had input, or a custom call, is sent nothing more', () => {
   const { piece, ended } = pieces(false, new Set(['shell']));
-  piece({ type: 'tool_call', id: 'call_a', name: 'now', arguments: '{}' });
-  piece({ type: 'tool_call', id: 'call_b', name: 'shell', arguments: '' });
+  piece({ type: 'toolCall', id: 'call_a', name: 'now', arguments: '{}' });
+  piece({ type: 'toolCall', id: 'call_b', name: 'shell', arguments: '' });
 
   expect(
-    piece({ type: 'tool_call', id: 'call_a', arguments: '', ended: true }),
+    piece({ type: 'toolCall', id: 'call_a', arguments: '', ended: true }),
   ).toBeUndefined();
   expect(
-    piece({ type: 'tool_call', id: 'call_b', arguments: '', ended: true }),
+    piece({ type: 'toolCall', id: 'call_b', arguments: '', ended: true }),
   ).toBeUndefined();
   expect(ended()).toEqual([]);
 });
@@ -243,7 +246,7 @@ test('a tool the upstream ran itself, and its result, add nothing', () => {
 
   expect(
     piece({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_1',
       name: 'web_search',
       arguments: '{"query":"oslo"}',
@@ -251,10 +254,10 @@ test('a tool the upstream ran itself, and its result, add nothing', () => {
     }),
   ).toBeUndefined();
   expect(
-    piece({ type: 'tool_result', id: 'srvtoolu_1', output: [], hosted: true }),
+    piece({ type: 'toolResult', id: 'srvtoolu_1', output: [], hosted: true }),
   ).toBeUndefined();
   expect(
-    piece({ type: 'tool_call', id: 'call_a', name: 'now', arguments: '' }),
+    piece({ type: 'toolCall', id: 'call_a', name: 'now', arguments: '' }),
   ).toMatchObject({ index: 0 });
 });
 

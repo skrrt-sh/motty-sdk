@@ -83,7 +83,7 @@ test('a connection cut mid-stream ends in one retryable error', async () => {
     { type: 'text', text: ' there' },
     {
       type: 'error',
-      error: { code: 'upstream_failed', retryable: true, upstream: true },
+      error: { code: 'upstreamFailed', retryable: true, upstream: true },
     },
   ]);
 });

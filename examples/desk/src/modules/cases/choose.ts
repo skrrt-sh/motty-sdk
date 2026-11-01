@@ -4,7 +4,7 @@ import type { Triage } from "../../middleware/triage";
 function mediaIn(parts: readonly Part[]): Part["type"][] {
   return parts.flatMap((part) => {
     if (part.type === "image" || part.type === "file" || part.type === "audio") return [part.type];
-    return part.type === "tool_result" && part.parts ? mediaIn(part.parts) : [];
+    return part.type === "toolResult" && part.parts ? mediaIn(part.parts) : [];
   });
 }
 

@@ -13,8 +13,8 @@ test('content that is the answer and has no form here ends the reply', () => {
   expect(
     formless({ type: 'file', data: 'iVBORw0KGgo=', mediaType: 'image/png' }),
   ).toEqual(ends('file', 'a file the model made'));
-  expect(formless({ type: 'tool_result', id: 'srv_1', output: [] })).toEqual(
-    ends('tool_result', 'the result of a tool the upstream ran'),
+  expect(formless({ type: 'toolResult', id: 'srv_1', output: [] })).toEqual(
+    ends('toolResult', 'the result of a tool the upstream ran'),
   );
   expect(
     formless({
@@ -24,13 +24,13 @@ test('content that is the answer and has no form here ends the reply', () => {
   ).toEqual(ends('provider', 'a part only another API can read'));
   expect(
     formless({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'ws_1',
       name: 'web_search',
       arguments: '{}',
       hosted: true,
     }),
-  ).toEqual(ends('tool_call', 'a call to a tool another upstream ran'));
+  ).toEqual(ends('toolCall', 'a call to a tool another upstream ran'));
 });
 
 test('an encrypted reasoning item is left out and the reply goes on', () => {
@@ -72,7 +72,7 @@ test('what this API has a form for is not named', () => {
   expect(formless({ type: 'text', text: 'Hi' })).toBeUndefined();
   expect(
     formless({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_1',
       name: 'web_search',
       arguments: '{}',
@@ -82,7 +82,7 @@ test('what this API has a form for is not named', () => {
   ).toBeUndefined();
   expect(
     formless({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srvtoolu_1',
       arguments: '{"query":',
     }),

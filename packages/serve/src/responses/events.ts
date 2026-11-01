@@ -70,7 +70,7 @@ function usageOf(response: Dict): { usage?: Usage } {
 
 function cut(reason: string | undefined): FinishReason {
   if (reason === 'max_output_tokens') return 'length';
-  return reason === 'content_filter' ? 'content_filter' : 'other';
+  return reason === 'content_filter' ? 'contentFilter' : 'other';
 }
 
 // The rest of a response echoes the request its upstream was sent, so only
@@ -98,7 +98,7 @@ function ending(
     case 'response.completed':
       return {
         type: 'finish',
-        reason: called ? 'tool_calls' : 'stop',
+        reason: called ? 'toolCalls' : 'stop',
         rawReason: 'completed',
         ...told,
         ...beyond(response),
@@ -181,8 +181,8 @@ function fragment(
   const first = seen.call === undefined;
   seen.call ??= text(id) ?? `call_${block}`;
   seen.given += more.length;
-  const chunk: Chunk & { type: 'tool_call' } = {
-    type: 'tool_call',
+  const chunk: Chunk & { type: 'toolCall' } = {
+    type: 'toolCall',
     id: seen.call,
     ...(first && typeof name === 'string' ? { name } : {}),
     ...(first || last ? untold(seen, item) : {}),
@@ -407,7 +407,7 @@ export async function* events(
       return;
     }
     for (const chunk of read(event, items)) {
-      called ||= chunk.type === 'tool_call';
+      called ||= chunk.type === 'toolCall';
       yield chunk;
     }
   }

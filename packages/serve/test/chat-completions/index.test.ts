@@ -144,7 +144,6 @@ test('a request read and sent on again reaches the upstream unchanged', () => {
   const { body } = chatCompletionsIn({
     name: 'openai.chat',
     breakpoints: true,
-    cacheKey: true,
   }).encode('gpt-x', request);
 
   expect(body).toEqual({
@@ -325,7 +324,7 @@ test('a provider`s own reader names a failed response and a failure in a stream 
     name: 'deepseek',
     failures: (_, __, { message }) =>
       message === 'Insufficient Balance'
-        ? { code: 'quota_exceeded' }
+        ? { code: 'quotaExceeded' }
         : undefined,
   });
 
@@ -335,16 +334,16 @@ test('a provider`s own reader names a failed response and a failure in a stream 
       new Headers(),
       '{"error":{"message":"Insufficient Balance","type":"unknown_error","param":null,"code":"invalid_request_error"}}',
     ).code,
-  ).toBe('quota_exceeded');
+  ).toBe('quotaExceeded');
   expect(
     await Array.fromAsync(
       codec.events(sent('{"error":{"message":"Insufficient Balance"}}')),
     ),
-  ).toMatchObject([{ type: 'error', error: { code: 'quota_exceeded' } }]);
+  ).toMatchObject([{ type: 'error', error: { code: 'quotaExceeded' } }]);
   expect(
     codec.failure(400, new Headers(), '{"error":{"message":"Bad request"}}')
       .code,
-  ).toBe('invalid_request');
+  ).toBe('invalidRequest');
 });
 
 test('progress a caller sends back never reaches the upstream', () => {

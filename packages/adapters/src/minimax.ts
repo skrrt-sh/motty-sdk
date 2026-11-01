@@ -2,6 +2,7 @@ import type { Json, ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
+import { minimaxFields } from './fields.ts';
 import { minimaxTakes } from './takes.ts';
 
 // The status may come as a number written as text.
@@ -13,33 +14,33 @@ const failures: FailureReader = (_status, _headers, { status_code: code }) => {
   switch (numbered(code)) {
     case 1001:
     case 2066:
-      return { code: 'timed_out' };
+      return { code: 'timedOut' };
     case 1002:
     case 1041:
     case 2045:
     case 2046:
     case 2047:
-      return { code: 'rate_limited' };
+      return { code: 'rateLimited' };
     case 1004:
     case 2049:
-      return { code: 'upstream_refused' };
+      return { code: 'upstreamRefused' };
     case 1008:
     case 2053:
     case 2056:
     case 2067:
-      return { code: 'quota_exceeded' };
+      return { code: 'quotaExceeded' };
     case 1013:
-      return { code: 'upstream_failed' };
+      return { code: 'upstreamFailed' };
     case 1026:
     case 1027:
       return { code: 'blocked' };
     case 1039:
-      return { code: 'context_too_long' };
+      return { code: 'contextTooLong' };
     case 2013:
-      return { code: 'invalid_request' };
+      return { code: 'invalidRequest' };
     case 2022:
     case 2069:
-      return { code: 'unknown_model' };
+      return { code: 'unknownModel' };
     case 2064:
       return { code: 'overloaded' };
     default:
@@ -84,6 +85,7 @@ export function minimax(
       tagged: true,
       efforts: [],
       output: 'json_object',
+      fields: minimaxFields,
       failures,
       // MiniMax numbers a failure in a status of its own that is not zero,
       // with no error object: inside a reply that began well, and in a body

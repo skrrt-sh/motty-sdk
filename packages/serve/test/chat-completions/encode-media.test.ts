@@ -196,7 +196,7 @@ test('a tool answers with a picture beside its text, where a tool message takes 
           role: 'tool',
           parts: [
             {
-              type: 'tool_result',
+              type: 'toolResult',
               id: 'call_1',
               parts: [
                 { type: 'text', text: 'The chart:' },
@@ -227,7 +227,7 @@ test.each<Part>([{ type: 'image', url: 'https://x.test/chart.png' }])(
       wireMessages(leaving('chat'), [
         {
           role: 'tool',
-          parts: [{ type: 'tool_result', id: 'call_1', parts: [inner] }],
+          parts: [{ type: 'toolResult', id: 'call_1', parts: [inner] }],
         },
       ]);
     expect(sent).toThrow(Unsupported);

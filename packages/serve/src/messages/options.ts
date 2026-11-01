@@ -3,6 +3,7 @@ import type { Codec, Taken } from '../codec.ts';
 import type { Leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, isDict } from '../wire/json.ts';
 import { numberOf } from '../wire/number.ts';
+import { meaningful } from '../wire/provider-data.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
 import { effortless, sampling } from '../wire/taken.ts';
 import { hinted, marked, noted, own, parted } from './family.ts';
@@ -112,6 +113,17 @@ function unless<Fields extends Dict>(fields: Fields): Fields | undefined {
   return Object.keys(fields).length === 0 ? undefined : fields;
 }
 
+const unmapped = [
+  'metadata',
+  'store',
+  'serviceTier',
+  'safetyIdentifier',
+  'cacheOptions',
+  'cacheRetention',
+  'prediction',
+  'verbosity',
+] as const;
+
 export function optionsTo(
   left: Leaving,
   options: Options,
@@ -122,6 +134,8 @@ export function optionsTo(
   left.without('presencePenalty', options.presencePenalty);
   left.without('frequencyPenalty', options.frequencyPenalty);
   left.without('seed', options.seed);
+  // A key has its marker, which is what it asks here, so only these are lost.
+  for (const name of unmapped) left.without(name, meaningful(options[name]));
   const told = parted(own(options.provider, 'options'));
   const hint = parted(hinted(options.hints));
   const provider = told.rest;

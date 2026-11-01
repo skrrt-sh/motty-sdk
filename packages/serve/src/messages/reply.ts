@@ -124,7 +124,7 @@ export function writer(
           ? [...within(`redacted ${event.block}`, block), ...closed()]
           : thought(`thinking ${event.block}`, event.text, signature);
       }
-      case 'tool_call': {
+      case 'toolCall': {
         const { id, name = '', arguments: json } = event;
         const ended = event.ended === true;
         const key = `tool ${id}`;
@@ -192,7 +192,7 @@ export function writer(
       // A result or a file the model made has no block in this API unless
       // it came from this family, and then it came as the block itself. The
       // reply ends before either gets here.
-      case 'tool_result':
+      case 'toolResult':
       case 'file':
         return [];
     }
@@ -203,7 +203,7 @@ export function writer(
   // end writes the calls, then what waited, whatever state they are in.
   return (event) => {
     switch (event.type) {
-      case 'tool_call': {
+      case 'toolCall': {
         const out = write(event);
         return queued.length === 0 || busy() ? out : [...out, ...replayed()];
       }

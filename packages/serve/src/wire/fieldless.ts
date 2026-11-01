@@ -21,6 +21,25 @@ export const fieldless = {
   seed: { said: 'a seed', responses: 'hint', messages: 'hint' },
   topK: { said: 'top-k sampling', chat: 'hint', responses: 'hint' },
   stop: { said: 'stop sequences', responses: 'meaning' },
+  // A value Anthropic's own field takes is not one the other APIs do, and none
+  // is translated, so a tier said for them would turn the call into a 400.
+  serviceTier: {
+    said: "a service tier, whose values are each provider's own",
+    messages: 'hint',
+  },
+  metadata: { said: 'metadata', messages: 'hint' },
+  // The Responses API has the field, but no state is held for a caller, so none
+  // is kept upstream, whoever asks.
+  store: {
+    said: 'an order to keep the response',
+    responses: 'hint',
+    messages: 'hint',
+  },
+  safetyIdentifier: { said: 'a safety name', messages: 'hint' },
+  cacheOptions: { said: 'cache options', messages: 'hint' },
+  cacheRetention: { said: 'a cache lifetime', messages: 'hint' },
+  prediction: { said: 'a prediction', responses: 'hint', messages: 'hint' },
+  verbosity: { said: 'a level of verbosity', messages: 'hint' },
   presencePenalty: {
     said: 'a presence penalty',
     unset: 0,
@@ -233,7 +252,7 @@ export const fieldless = {
     responses: 'meaning',
     messages: 'meaning',
   },
-  'tool_result.failed': {
+  'toolResult.failed': {
     said: 'the mark of a tool that failed',
     chat: 'hint',
     responses: 'hint',

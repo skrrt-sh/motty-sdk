@@ -54,6 +54,77 @@ test('a schema with no name is given one, and no schema asks for any JSON', () =
   ).toMatchObject({ text: { format: { type: 'json_object' } } });
 });
 
+test('a hint under the shared key goes as it is, and one addressing this API outranks it, with no word of either', () => {
+  const { body, leftOut } = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: {
+      hints: {
+        openai: {
+          service_tier: 'flex',
+          metadata: { ticket: 'T-1' },
+          safety_identifier: 's1',
+          prompt_cache_options: { mode: 'implicit' },
+          prompt_cache_retention: '24h',
+        },
+        'openai.responses': { service_tier: 'priority' },
+      },
+    },
+  });
+
+  expect(body).toMatchObject({
+    service_tier: 'priority',
+    metadata: { ticket: 'T-1' },
+    safety_identifier: 's1',
+    prompt_cache_options: { mode: 'implicit' },
+    prompt_cache_retention: '24h',
+  });
+  expect(leftOut).toEqual([]);
+});
+
+test('an option goes under this API`s own name, over a hint or an option of it in its raw name, and verbosity goes in `text`', () => {
+  const { body, leftOut } = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: {
+      serviceTier: 'flex',
+      verbosity: 'low',
+      hints: {
+        openai: { service_tier: 'hinted' },
+        'openai.responses': { text: { verbosity: 'high' } },
+      },
+      provider: { 'openai.responses': { service_tier: 'own' } },
+    },
+  });
+
+  expect(body).toMatchObject({
+    service_tier: 'flex',
+    text: { verbosity: 'low' },
+    store: false,
+  });
+  expect(leftOut).toEqual([]);
+});
+
+test('an order to keep the response is left out and told, and one not to says what is sent anyway', () => {
+  const kept = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { store: true },
+  });
+  const unkept = encode('gpt-5', {
+    messages: [{ role: 'user', text: 'Hi' }],
+    options: { store: false },
+  });
+
+  expect(kept.body).toMatchObject({ store: false });
+  expect(kept.leftOut).toEqual([
+    {
+      setting: 'store',
+      detail:
+        'The Responses API has no field for an order to keep the response',
+    },
+  ]);
+  expect(unkept.body).toMatchObject({ store: false });
+  expect(unkept.leftOut).toEqual([]);
+});
+
 test("this family's own options and hints are put back on the wire", () => {
   expect(
     encode('gpt-5', {

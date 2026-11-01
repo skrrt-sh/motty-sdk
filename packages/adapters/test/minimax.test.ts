@@ -48,12 +48,12 @@ data: [DONE]
     { type: 'reasoning', text: 'I need the weather tool.' },
     { type: 'text', text: 'Let me check.' },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_function_7k2',
       name: 'get_weather',
       arguments: '{"city": "Hangzhou"}',
     },
-    { type: 'finish', reason: 'tool_calls', usage: { input: 58, output: 40 } },
+    { type: 'finish', reason: 'toolCalls', usage: { input: 58, output: 40 } },
   ]);
   expect(events.at(-1)).not.toHaveProperty('warnings');
 });
@@ -230,11 +230,11 @@ data: [DONE]
 test.each([
   {
     base: { status_code: 1002, status_msg: 'rate limit' },
-    kind: 'rate_limited',
+    kind: 'rateLimited',
   },
   {
     base: { status_code: 1008, status_msg: 'insufficient balance' },
-    kind: 'quota_exceeded',
+    kind: 'quotaExceeded',
   },
   {
     base: { status_code: 1027, status_msg: 'output new_sensitive' },
@@ -242,23 +242,23 @@ test.each([
   },
   {
     base: { status_code: 1039, status_msg: 'token limit' },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     base: { status_code: 1001, status_msg: 'request timeout' },
-    kind: 'timed_out',
+    kind: 'timedOut',
   },
   {
     base: { status_code: 2013, status_msg: 'invalid params' },
-    kind: 'invalid_request',
+    kind: 'invalidRequest',
   },
   {
     base: { status_code: '1008', status_msg: 'insufficient balance' },
-    kind: 'quota_exceeded',
+    kind: 'quotaExceeded',
   },
   {
     base: { status_code: 2022, status_msg: 'model is not exist' },
-    kind: 'unknown_model',
+    kind: 'unknownModel',
   },
   {
     base: {
@@ -316,7 +316,7 @@ test.each([
       status_msg:
         'login fail: Please carry the API secret key in the Authorization field of the request header',
     },
-    kind: 'upstream_refused',
+    kind: 'upstreamRefused',
   },
 ])(
   'status $base.status_code inside a reply is the host`s to mend, and its words are kept for the host, by its reference',
@@ -399,7 +399,7 @@ test('a status of zero in every chunk of a reply is no failure, and one MiniMax 
       {
         type: 'error',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           message: 'unknown error',
           retryable: false,
           provider: {
@@ -413,7 +413,7 @@ test('a status of zero in every chunk of a reply is no failure, and one MiniMax 
       {
         type: 'error',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           message: 'The upstream answered with an error',
           retryable: false,
           provider: { minimax: { status_code: '1000' } },
@@ -448,7 +448,7 @@ test('a failure told as one JSON body under a status that tells none is read fro
     {
       type: 'error',
       error: {
-        code: 'quota_exceeded',
+        code: 'quotaExceeded',
         message: 'insufficient balance',
         provider: {
           minimax: {
@@ -488,7 +488,7 @@ test('a failed response that holds MiniMax`s own status and no error is named by
     {
       type: 'error',
       error: {
-        code: 'upstream_refused',
+        code: 'upstreamRefused',
         message: "The upstream refused the host's credentials or account",
         provider: {
           minimax: {

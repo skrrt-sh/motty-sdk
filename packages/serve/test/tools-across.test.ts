@@ -147,14 +147,14 @@ test('a tool of its own type that the caller runs goes to another family as a fu
     decoded.collected(
       [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'toolu_1',
           name: 'tool_search',
           arguments: '{"query":',
         },
-        { type: 'tool_call', id: 'toolu_1', arguments: '"mini echo"}' },
+        { type: 'toolCall', id: 'toolu_1', arguments: '"mini echo"}' },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       'r1',
     ),
   ).toMatchObject({
@@ -169,9 +169,9 @@ test('a tool of its own type that the caller runs goes to another family as a fu
     ],
   });
   const chunks: StreamEvent[] = [
-    { type: 'tool_call', id: 'toolu_1', name: 'tool_search', arguments: '' },
-    { type: 'tool_call', id: 'toolu_1', arguments: '{"query":"mini echo"}' },
-    { type: 'finish', reason: 'tool_calls' },
+    { type: 'toolCall', id: 'toolu_1', name: 'tool_search', arguments: '' },
+    { type: 'toolCall', id: 'toolu_1', arguments: '{"query":"mini echo"}' },
+    { type: 'finish', reason: 'toolCalls' },
   ];
   async function* run() {
     yield* chunks;
@@ -233,13 +233,13 @@ test('the tools a search the caller ran has found are declared to another family
     decoded.collected(
       [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'toolu_2',
           name: 'mcp__mini__echo',
           arguments: '{"text":"ping"}',
         },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       'r1',
     ),
   ).toMatchObject({
@@ -357,14 +357,14 @@ test('a call to a custom tool an Anthropic upstream answers is told as its free 
 
   expect(read).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_1',
       name: 'apply_patch',
       arguments: '',
       block: 0,
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'toolu_1',
       arguments: '*** Begin Patch\n',
       block: 0,
@@ -379,7 +379,7 @@ test('a call to a custom tool an Anthropic upstream answers is told as its free 
     new Headers(),
   );
   expect(
-    decoded.collected(read, { type: 'finish', reason: 'tool_calls' }, 'r1'),
+    decoded.collected(read, { type: 'finish', reason: 'toolCalls' }, 'r1'),
   ).toMatchObject({
     output: [
       {
@@ -446,15 +446,15 @@ test('the tools of a namespace go to a family with none under flat names, and to
   expect(
     decoded.collected(
       [
-        { type: 'tool_call', id: 'toolu_1', name: 'shell', arguments: '{}' },
+        { type: 'toolCall', id: 'toolu_1', name: 'shell', arguments: '{}' },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'toolu_2',
           name: 'mcp__mini__ping',
           arguments: '{}',
         },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       'r1',
     ),
   ).toEqual(
@@ -505,10 +505,10 @@ test('a flat name another tool already has, or one no family takes, is made apar
   expect(
     decoded.collected(
       [
-        { type: 'tool_call', id: 'toolu_1', name: ping, arguments: '{}' },
-        { type: 'tool_call', id: 'toolu_2', name: find, arguments: '{}' },
+        { type: 'toolCall', id: 'toolu_1', name: ping, arguments: '{}' },
+        { type: 'toolCall', id: 'toolu_2', name: find, arguments: '{}' },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       'r1',
     ),
   ).toMatchObject({

@@ -11,7 +11,7 @@ async function* replay(
     yield {
       type: 'error',
       error: {
-        code: 'unknown_model',
+        code: 'unknownModel',
         status: 404,
         message: `No model named ${model}`,
       },

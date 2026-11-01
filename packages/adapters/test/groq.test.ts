@@ -48,12 +48,12 @@ data: [DONE]
     { type: 'reasoning', text: 'I need the weather tool.' },
     { type: 'text', text: 'Let me check.' },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_function_7k2',
       name: 'get_weather',
       arguments: '{"city": "Hangzhou"}',
     },
-    { type: 'finish', reason: 'tool_calls', usage: { input: 58, output: 40 } },
+    { type: 'finish', reason: 'toolCalls', usage: { input: 58, output: 40 } },
   ]);
   expect(events.at(-1)).not.toHaveProperty('warnings');
 });
@@ -118,7 +118,7 @@ test.each([
       message:
         'Request too large for model `qwen/qwen3-32b`: Limit 6000, Requested 20480, please reduce your message size and try again.',
     },
-    kind: 'invalid_request',
+    kind: 'invalidRequest',
   },
 ])(
   '$error.type told as $status is $kind, in the upstream`s words, by its reference',
@@ -181,7 +181,7 @@ test.each([
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           message: told,
           provider: { groq: { message: said } },
         },

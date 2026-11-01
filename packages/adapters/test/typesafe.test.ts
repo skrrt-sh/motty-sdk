@@ -188,8 +188,8 @@ test('a local server is asked with no key', async () => {
 });
 
 test.each([
-  [401, 'upstream_refused', UpstreamRefused],
-  [429, 'rate_limited', RateLimited],
+  [401, 'upstreamRefused', UpstreamRefused],
+  [429, 'rateLimited', RateLimited],
 ])('an upstream %i rejects with %s', async (status, code, Raised) => {
   using upstream = Bun.serve({
     port: 0,
@@ -213,7 +213,7 @@ test.each([
   expect(toFacts(thrown)).toMatchObject({
     code,
     message:
-      code === 'upstream_refused'
+      code === 'upstreamRefused'
         ? "The upstream refused the host's credentials or account"
         : 'The upstream said why',
     retryAfter: 2000,
@@ -314,7 +314,7 @@ test.each([
 
     expect(thrown).toBeInstanceOf(InvalidRequest);
     expect(toFacts(thrown)).toMatchObject({
-      code: 'invalid_request',
+      code: 'invalidRequest',
       status,
       message,
       cause: JSON.stringify(body),
@@ -343,7 +343,7 @@ test.each([
   ).catch((raised: unknown) => raised);
 
   expect(toFacts(thrown)).toMatchObject({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The decision upstream answered 500',
     cause: body,
   });
@@ -375,7 +375,7 @@ test.each([
     ).catch((raised: unknown) => raised);
 
     expect(thrown).toBeInstanceOf(UnknownModel);
-    expect(toFacts(thrown)).toMatchObject({ code: 'unknown_model', message });
+    expect(toFacts(thrown)).toMatchObject({ code: 'unknownModel', message });
   },
 );
 
@@ -412,7 +412,7 @@ test.each([
 
     expect(thrown).toBeInstanceOf(UpstreamFailed);
     expect(toFacts(thrown)).toMatchObject({
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       status: 502,
       message: `The decision upstream has no decisions at the adapter's address, which is likely wrong${said}`,
       retryable: false,
@@ -471,7 +471,7 @@ test('a name Laya does not know, answered by a checkpoint its router chose, reje
 
   expect(thrown).toBeInstanceOf(UnknownModel);
   expect(toFacts(thrown)).toMatchObject({
-    code: 'unknown_model',
+    code: 'unknownModel',
     message:
       "The decision upstream does not know the model 'multilingul' and answered with one its router chose",
     provider: {
@@ -574,28 +574,28 @@ test.each([
   [
     'a 413 that says it in other letters',
     413,
-    'context_too_long',
+    'contextTooLong',
     ContextTooLong,
     'State Too Large (50001 > 50000 chars)',
   ],
   [
     'a 413 that is about no state',
     413,
-    'invalid_request',
+    'invalidRequest',
     InvalidRequest,
     "too many choice options for 'team' (300 > 100)",
   ],
   [
     'a state too large that comes with another status than 413',
     400,
-    'invalid_request',
+    'invalidRequest',
     InvalidRequest,
     'state too large (50001 > 50000 chars)',
   ],
   [
     'an unknown model named past the start of a sentence',
     400,
-    'invalid_request',
+    'invalidRequest',
     InvalidRequest,
     "lang 'xx' is served by an unknown model",
   ],
@@ -932,7 +932,7 @@ test.each([[307, 'another']])(
 
     expect(thrown).toBeInstanceOf(UpstreamFailed);
     expect(toFacts(thrown)).toEqual({
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       status: 502,
       message: `The upstream answered ${status}, a redirect, which is not followed`,
       retryable: false,
@@ -991,7 +991,7 @@ test('a failure longer than an adapter reads is let go where the reading stops, 
   ).catch((raised: unknown) => raised);
 
   expect(toFacts(thrown)).toMatchObject({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The decision upstream answered 500',
     cause: 'm'.repeat(1000),
   });

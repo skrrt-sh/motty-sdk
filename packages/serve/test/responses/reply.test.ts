@@ -124,8 +124,8 @@ test('a reply that failed finished none of the items still being written, and th
     'r1',
   );
   push({ type: 'text', text: 'Hel' });
-  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{"c' });
-  push({ type: 'tool_call', id: 'call_2', name: 'patch', arguments: '***' });
+  push({ type: 'toolCall', id: 'call_1', name: 'weather', arguments: '{"c' });
+  push({ type: 'toolCall', id: 'call_2', name: 'patch', arguments: '***' });
 
   const sent = closed('failed');
 
@@ -201,8 +201,8 @@ test('a reply that was cut off did not finish its last item, and finished the re
     'r1',
   );
   push({ type: 'text', text: 'Checking.' });
-  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{}' });
-  push({ type: 'tool_call', id: 'call_2', name: 'weather', arguments: '{"c' });
+  push({ type: 'toolCall', id: 'call_1', name: 'weather', arguments: '{}' });
+  push({ type: 'toolCall', id: 'call_2', name: 'weather', arguments: '{"c' });
 
   closed('cut');
 
@@ -914,7 +914,7 @@ test('the fragments of a call are assembled, also when calls interleave', () => 
     'r1',
   );
   expect(
-    push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '' }),
+    push({ type: 'toolCall', id: 'call_1', name: 'weather', arguments: '' }),
   ).toEqual([
     {
       type: 'response.output_item.added',
@@ -929,9 +929,9 @@ test('the fragments of a call are assembled, also when calls interleave', () => 
       },
     },
   ]);
-  push({ type: 'tool_call', id: 'call_2', name: 'time', arguments: '{"tz"' });
+  push({ type: 'toolCall', id: 'call_2', name: 'time', arguments: '{"tz"' });
   expect(
-    push({ type: 'tool_call', id: 'call_1', arguments: '{"city"' }),
+    push({ type: 'toolCall', id: 'call_1', arguments: '{"city"' }),
   ).toEqual([
     {
       type: 'response.function_call_arguments.delta',
@@ -940,8 +940,8 @@ test('the fragments of a call are assembled, also when calls interleave', () => 
       delta: '{"city"',
     },
   ]);
-  push({ type: 'tool_call', id: 'call_2', arguments: ':"UTC"}' });
-  push({ type: 'tool_call', id: 'call_1', arguments: ':"Oslo"}' });
+  push({ type: 'toolCall', id: 'call_2', arguments: ':"UTC"}' });
+  push({ type: 'toolCall', id: 'call_1', arguments: ':"Oslo"}' });
   expect(closed('whole')).toEqual([
     {
       type: 'response.function_call_arguments.done',
@@ -998,12 +998,12 @@ test('a call to a custom tool is written as one, with its free text', () => {
   expect(
     [
       ...push({
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_1',
         name: 'patch',
         arguments: '',
       }),
-      ...push({ type: 'tool_call', id: 'call_1', arguments: '*** Begin' }),
+      ...push({ type: 'toolCall', id: 'call_1', arguments: '*** Begin' }),
       ...closed('whole'),
     ].map(({ type }) => type),
   ).toEqual([
@@ -1137,7 +1137,7 @@ test('the writer writes nothing for what has no form: the reply is ended before'
   ).toEqual([]);
   expect(
     push({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srv_1',
       name: 'web_search',
       arguments: '{}',
@@ -1145,7 +1145,7 @@ test('the writer writes nothing for what has no form: the reply is ended before'
     }),
   ).toEqual([]);
   expect(
-    push({ type: 'tool_result', id: 'srv_1', output: 'x', hosted: true }),
+    push({ type: 'toolResult', id: 'srv_1', output: 'x', hosted: true }),
   ).toEqual([]);
   expect(push({ type: 'file', url: 'https://example.com/out.pdf' })).toEqual(
     [],
@@ -1169,13 +1169,13 @@ test('a call the upstream marked as custom is written as one where no tool was d
   expect(
     [
       ...push({
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_1',
         name: 'exec',
         arguments: '',
         provider: { 'openai.responses': { type: 'custom_tool_call' } },
       }),
-      ...push({ type: 'tool_call', id: 'call_1', arguments: '1+1\n' }),
+      ...push({ type: 'toolCall', id: 'call_1', arguments: '1+1\n' }),
       ...closed('whole'),
     ].map(({ type }) => type),
   ).toEqual([
@@ -1207,9 +1207,9 @@ test('a late chunk of a call adds nothing that was written for another family', 
     },
     'r1',
   );
-  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{' });
+  push({ type: 'toolCall', id: 'call_1', name: 'weather', arguments: '{' });
   push({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'call_1',
     arguments: '}',
     provider: { 'openai.chat': { namespace: 'agents' } },
@@ -1250,7 +1250,7 @@ test('each item is done in the place the upstream gave it, a call when its chunk
         },
       }),
       ...push({
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_1',
         name: 'weather',
         arguments: '{}',
@@ -1265,7 +1265,7 @@ test('each item is done in the place the upstream gave it, a call when its chunk
         },
       }),
       ...push({
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_2',
         name: 'exec',
         arguments: '1+1',
@@ -1301,10 +1301,10 @@ test('calls in a row are each done as they end, with what the last chunk held, a
     },
     'r1',
   );
-  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{"c' });
+  push({ type: 'toolCall', id: 'call_1', name: 'weather', arguments: '{"c' });
   expect(
     push({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       arguments: '":1}',
       ended: true,
@@ -1337,9 +1337,9 @@ test('calls in a row are each done as they end, with what the last chunk held, a
       },
     },
   ]);
-  push({ type: 'tool_call', id: 'call_2', name: 'time', arguments: '{}' });
+  push({ type: 'toolCall', id: 'call_2', name: 'time', arguments: '{}' });
   expect(
-    push({ type: 'tool_call', id: 'call_2', arguments: '', ended: true }),
+    push({ type: 'toolCall', id: 'call_2', arguments: '', ended: true }),
   ).toMatchObject([
     { type: 'response.function_call_arguments.done', arguments: '{}' },
     { type: 'response.output_item.done', output_index: 1 },
@@ -1360,7 +1360,7 @@ test('a call to a custom tool whose pieces come around text, with none said to b
     'r1',
   );
   push({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'call_1',
     name: 'patch',
     arguments: '*** Begin',
@@ -1369,7 +1369,7 @@ test('a call to a custom tool whose pieces come around text, with none said to b
     expect.objectContaining({ type: 'response.output_item.done' }),
   );
   expect(
-    push({ type: 'tool_call', id: 'call_1', arguments: '\n*** End' }),
+    push({ type: 'toolCall', id: 'call_1', arguments: '\n*** End' }),
   ).toEqual([
     {
       type: 'response.custom_tool_call_input.delta',
@@ -1408,15 +1408,15 @@ test('a call told more after it ended fails the reply, and an empty piece after 
     'r1',
   );
   push({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'call_1',
     name: 'weather',
     arguments: '{}',
     ended: true,
   });
-  expect(push({ type: 'tool_call', id: 'call_1', arguments: '' })).toEqual([]);
+  expect(push({ type: 'toolCall', id: 'call_1', arguments: '' })).toEqual([]);
   expect(() =>
-    push({ type: 'tool_call', id: 'call_1', arguments: '1}' }),
+    push({ type: 'toolCall', id: 'call_1', arguments: '1}' }),
   ).toThrow(
     new Unsupported(
       'The Responses API cannot write a tool call that was told more after it ended',
@@ -1442,13 +1442,13 @@ test('a call the upstream ended stays completed in a reply that failed, and the 
     'r1',
   );
   push({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'call_1',
     name: 'weather',
     arguments: '{}',
     ended: true,
   });
-  push({ type: 'tool_call', id: 'call_2', name: 'weather', arguments: '{"c' });
+  push({ type: 'toolCall', id: 'call_2', name: 'weather', arguments: '{"c' });
 
   closed('failed');
 
@@ -1470,9 +1470,9 @@ test('a field named as the prototype that a later chunk of a call holds is a fie
     },
     'r1',
   );
-  push({ type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{}' });
+  push({ type: 'toolCall', id: 'call_1', name: 'weather', arguments: '{}' });
   push({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'call_1',
     arguments: '',
     provider: {
@@ -1505,15 +1505,15 @@ test('a function call that ended with no arguments is done with an empty object,
     },
     'r1',
   );
-  push({ type: 'tool_call', id: 'call_1', name: 'now', arguments: '' });
+  push({ type: 'toolCall', id: 'call_1', name: 'now', arguments: '' });
   expect(
-    push({ type: 'tool_call', id: 'call_1', arguments: '', ended: true }),
+    push({ type: 'toolCall', id: 'call_1', arguments: '', ended: true }),
   ).toMatchObject([
     { type: 'response.function_call_arguments.done', arguments: '{}' },
     { type: 'response.output_item.done', item: { arguments: '{}' } },
   ]);
-  push({ type: 'tool_call', id: 'call_2', name: 'today', arguments: '' });
-  push({ type: 'tool_call', id: 'call_3', name: 'patch', arguments: '' });
+  push({ type: 'toolCall', id: 'call_2', name: 'today', arguments: '' });
+  push({ type: 'toolCall', id: 'call_3', name: 'patch', arguments: '' });
   expect(closed('whole')).toMatchObject([
     { type: 'response.function_call_arguments.done', arguments: '{}' },
     { type: 'response.output_item.done', item: { arguments: '{}' } },
@@ -1537,7 +1537,7 @@ test('a function call that ended with no arguments is done with an empty object,
     },
     'r1',
   );
-  broken.push({ type: 'tool_call', id: 'call_1', name: 'now', arguments: '' });
+  broken.push({ type: 'toolCall', id: 'call_1', name: 'now', arguments: '' });
   expect(broken.closed('failed')).toMatchObject([
     { type: 'response.function_call_arguments.done', arguments: '' },
     {

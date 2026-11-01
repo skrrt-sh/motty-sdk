@@ -22,7 +22,7 @@ import { messages } from './messages/index.ts';
 import { modelList, modelOf } from './models.ts';
 import { failed } from './reply.ts';
 import { formatOf, routed } from './routes.ts';
-import { reporting } from './stderr.ts';
+import { heldAtStart, reporting } from './stderr.ts';
 
 /** The times of the edge, the third argument of `serve` and `mount`. */
 export type Edge = {
@@ -110,7 +110,8 @@ export function mount<
 ) {
   const { run, description } = motty[mark];
   const { name } = description;
-  const started = new Date();
+  let started: Date | undefined;
+  let held = heldAtStart();
   const { begin, landed, stopAll } = flights();
   // A Worker without `nodejs_compat` has no environment to read.
   const given = options(typeof process === 'undefined' ? {} : process.env);
@@ -120,7 +121,10 @@ export function mount<
     ...given,
     report: reporting(given.report),
   });
-  checked(motty[mark], given);
+  checked(motty[mark], given, (line) => {
+    if (held === undefined) console.error(line);
+    else held.push(line);
+  });
   const drain = bound('drain', edge.drain) ?? 25_000;
   const serving = {
     admit,
@@ -183,6 +187,8 @@ export function mount<
       }
     }
     const anthropic = format === messages;
+    // Not at mount: on Workers the clock stands at the epoch at global scope.
+    started ??= new Date();
     if (model === undefined) {
       return Response.json(modelList(name, started, anthropic));
     }
@@ -240,6 +246,10 @@ export function mount<
     server?: unknown,
     from: FromHost = {},
   ): Promise<Response> {
+    if (held !== undefined) {
+      for (const line of held) console.error(line);
+      held = undefined;
+    }
     givenId(from.id);
     const { pathname } = new URL(request.url);
     const format = formatOf(request, pathname);

@@ -14,11 +14,11 @@ export const formless: Formless = (chunk) => {
       return pictured(chunk) === undefined
         ? answer('file', 'a file the model made that is not a picture')
         : undefined;
-    case 'tool_result':
-      return answer('tool_result', 'the result of a tool the upstream ran');
-    case 'tool_call':
+    case 'toolResult':
+      return answer('toolResult', 'the result of a tool the upstream ran');
+    case 'toolCall':
       return chunk.hosted === true
-        ? answer('tool_call', 'a call to a tool the upstream ran')
+        ? answer('toolCall', 'a call to a tool the upstream ran')
         : undefined;
     case 'reasoning': {
       // Details are this family's own, and a caller may send them back.

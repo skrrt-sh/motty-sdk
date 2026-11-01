@@ -52,7 +52,7 @@ test('a failed afterResponse hook is in the record with its part and the error a
       {
         part: 'audit',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           status: 502,
           message: 'The audit log is down',
           retryable: true,
@@ -151,7 +151,7 @@ test('an afterResponse hook that never returns is given up at limits.afterRespon
     {
       part: 'coder',
       error: {
-        code: 'timed_out',
+        code: 'timedOut',
         status: 504,
         message: 'After-response work passed its time limit',
         retryable: true,
@@ -308,7 +308,7 @@ test('an afterResponse hook that throws its own error when its signal fires is r
 
   expect(
     (await over.promise).afterResponse.failed.map(({ error }) => error.code),
-  ).toEqual(['upstream_failed']);
+  ).toEqual(['upstreamFailed']);
 });
 
 test('with no limit from the host, an afterResponse hook that never returns is given up after thirty seconds', async () => {
@@ -343,7 +343,7 @@ test('with no limit from the host, an afterResponse hook that never returns is g
       records.map(({ afterResponse }) =>
         afterResponse.failed.map(({ error }) => error.code),
       ),
-    ).toEqual([['timed_out']]);
+    ).toEqual([['timedOut']]);
   } finally {
     jest.useRealTimers();
   }

@@ -18,17 +18,17 @@ function named(upstream: string | undefined): KnownCode | undefined {
     case undefined:
       return undefined;
     case 'context_length_exceeded':
-      return 'context_too_long';
+      return 'contextTooLong';
     case 'content_filter':
       return 'blocked';
     case 'model_not_found':
-      return 'unknown_model';
+      return 'unknownModel';
     case 'insufficient_quota':
     case 'billing_hard_limit_reached':
-      return 'quota_exceeded';
+      return 'quotaExceeded';
     case 'rate_limit_exceeded':
     case 'slow_down':
-      return 'rate_limited';
+      return 'rateLimited';
     case 'server_is_overloaded':
       return 'overloaded';
     // The key, its organisation, its project and where it may be used from
@@ -38,15 +38,15 @@ function named(upstream: string | undefined): KnownCode | undefined {
     case 'mismatched_organization':
     case 'invalid_project':
     case 'unsupported_country_region_territory':
-      return 'upstream_refused';
+      return 'upstreamRefused';
     case 'unsupported_value':
     case 'unsupported_parameter':
     case 'unknown_parameter':
       return 'unsupported';
     case 'server_error':
-      return 'upstream_failed';
+      return 'upstreamFailed';
     case 'invalid_prompt':
-      return 'invalid_request';
+      return 'invalidRequest';
     default:
       return upstream.endsWith('policy') ||
         upstream.endsWith('policy_violation')

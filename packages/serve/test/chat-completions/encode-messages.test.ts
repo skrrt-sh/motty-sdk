@@ -123,14 +123,14 @@ test('an assistant turn is sent with its tool calls, each in its shape', () => {
           { type: 'text', text: 'Let me look.' },
           { type: 'refusal', text: 'Not that part.' },
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'call_abc',
             name: 'weather',
             input: { city: 'Oslo' },
           },
-          { type: 'tool_call', id: 'call_def', name: 'shell', input: 'ls -la' },
+          { type: 'toolCall', id: 'call_def', name: 'shell', input: 'ls -la' },
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'call_ghi',
             name: 'weather',
             raw: '{"city":',
@@ -171,7 +171,7 @@ test('a turn of tool calls or earlier audio alone has a null content', () => {
     wireMessages(leaving('chat'), [
       {
         role: 'assistant',
-        parts: [{ type: 'tool_call', id: 'call_1', name: 'now', input: {} }],
+        parts: [{ type: 'toolCall', id: 'call_1', name: 'now', input: {} }],
       },
       { role: 'assistant', parts: [{ type: 'audio', id: 'audio_abc123' }] },
     ]),
@@ -216,9 +216,9 @@ test('each tool result is sent as a tool message of its own', () => {
       {
         role: 'tool',
         parts: [
-          { type: 'tool_result', id: 'call_a', text: '4°C' },
+          { type: 'toolResult', id: 'call_a', text: '4°C' },
           {
-            type: 'tool_result',
+            type: 'toolResult',
             id: 'call_b',
             failed: true,
             parts: [{ type: 'text', text: 'No such city' }],
@@ -242,13 +242,13 @@ test('results inside a user turn are sent ahead of what the user said', () => {
       {
         role: 'user',
         parts: [
-          { type: 'tool_result', id: 'call_a', text: '4°C' },
+          { type: 'toolResult', id: 'call_a', text: '4°C' },
           { type: 'text', text: 'And tomorrow?' },
         ],
       },
       {
         role: 'user',
-        parts: [{ type: 'tool_result', id: 'call_b', text: '6°C' }],
+        parts: [{ type: 'toolResult', id: 'call_b', text: '6°C' }],
       },
     ]),
   ).toEqual([
@@ -273,7 +273,7 @@ test('a tool another upstream ran, and what it returned, fail the call', () => {
         role: 'assistant',
         parts: [
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'srvtoolu_1',
             name: 'web_search',
             input: { query: 'oslo' },
@@ -291,7 +291,7 @@ test('a tool another upstream ran, and what it returned, fail the call', () => {
       {
         role: 'assistant',
         parts: [
-          { type: 'tool_result', id: 'srvtoolu_1', text: '...', hosted: true },
+          { type: 'toolResult', id: 'srvtoolu_1', text: '...', hosted: true },
         ],
       },
     ]);
@@ -308,7 +308,7 @@ test('the name on a message of tool results is left out and reported', () => {
       {
         role: 'tool',
         name: 'weather',
-        parts: [{ type: 'tool_result', id: 'call_a', text: '4°C' }],
+        parts: [{ type: 'toolResult', id: 'call_a', text: '4°C' }],
       },
     ]),
   ).toEqual([{ role: 'tool', tool_call_id: 'call_a', content: '4°C' }]);
@@ -330,8 +330,8 @@ test('the provider data of a message of tool results goes on each tool message',
         hints: { 'openai.chat': { vendor_note: 'kept' } },
         provider: { 'openai.chat': { vendor_field: 'kept too' } },
         parts: [
-          { type: 'tool_result', id: 'call_a', text: '4°C' },
-          { type: 'tool_result', id: 'call_b', text: '7°C' },
+          { type: 'toolResult', id: 'call_a', text: '4°C' },
+          { type: 'toolResult', id: 'call_b', text: '7°C' },
         ],
       },
     ]),
@@ -417,15 +417,15 @@ test('a cache marker on a tool result, or on a message of results, is written on
     wireMessages(left, [
       {
         role: 'tool',
-        parts: [{ type: 'tool_result', id: 'call_a', text: '4°C', cache: {} }],
+        parts: [{ type: 'toolResult', id: 'call_a', text: '4°C', cache: {} }],
       },
       {
         role: 'tool',
         cache: { ttl: '1h' },
         parts: [
-          { type: 'tool_result', id: 'call_b', text: '7°C' },
+          { type: 'toolResult', id: 'call_b', text: '7°C' },
           {
-            type: 'tool_result',
+            type: 'toolResult',
             id: 'call_c',
             parts: [
               { type: 'text', text: 'Rain' },
@@ -468,7 +468,7 @@ test('OpenAI`s own takes a marker on a tool result as a breakpoint', () => {
       {
         role: 'tool',
         cache: {},
-        parts: [{ type: 'tool_result', id: 'call_a', text: '4°C' }],
+        parts: [{ type: 'toolResult', id: 'call_a', text: '4°C' }],
       },
     ]),
   ).toEqual([
@@ -498,7 +498,7 @@ test('a marker on a tool result with no place is reported, unless a key implied 
       {
         role: 'tool',
         cache,
-        parts: [{ type: 'tool_result', id: 'call_a', text }],
+        parts: [{ type: 'toolResult', id: 'call_a', text }],
       },
     ]);
     return { wire, leftOut: left.leftOut().map(({ setting }) => setting) };
@@ -567,7 +567,7 @@ test('the reasoning of a turn that only calls a tool goes back as its text', () 
           role: 'assistant',
           parts: [
             { type: 'reasoning', text: 'I need the weather.' },
-            { type: 'tool_call', id: 'call_1', name: 'look', input: {} },
+            { type: 'toolCall', id: 'call_1', name: 'look', input: {} },
           ],
         },
       ],
@@ -707,7 +707,7 @@ test('what a tool call holds for this API is written back where it sat', () => {
         role: 'assistant',
         parts: [
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'call_a',
             name: 'weather',
             input: {},
@@ -719,7 +719,7 @@ test('what a tool call holds for this API is written back where it sat', () => {
             },
           },
           {
-            type: 'tool_call',
+            type: 'toolCall',
             id: 'call_b',
             name: 'shell',
             input: 'ls',

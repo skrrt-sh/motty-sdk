@@ -8,7 +8,7 @@ import type {
   ToolChoice,
 } from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
-import { unkeyed } from '../wire/cache-key.ts';
+import { keyed } from '../wire/cache-key.ts';
 import { carrying } from '../wire/carried.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, picked } from '../wire/json.ts';
@@ -24,6 +24,7 @@ import {
 } from './dialect.ts';
 import { wireMessages } from './encode-messages.ts';
 import { addressed, family, hinted, own } from './family.ts';
+import { listing, withOptions } from './fields.ts';
 import { toolFields, withUnread } from './unread.ts';
 
 // A tool takes a marker only where the marker is a router's, as a client of
@@ -139,8 +140,8 @@ export function encode(
   const { parted } = carrying(
     (name) => dialect.carried?.includes(name) === true,
   );
-  const keyless = unkeyed(said.hints, dialect.name, dialect.cacheKey);
-  const hint = parted(keyless.hints);
+  const listed = listing(dialect);
+  const hint = parted(listed.hints(said.hints));
   const option = parted(said.provider);
   const { rest: hints } = hint;
   const { rest: provider } = option;
@@ -170,8 +171,8 @@ export function encode(
   const choosing = shown.length > 0 || tools.length === 0;
   // Read before the lifetime the markers asked for, which only an hour
   // changes from the default; one the request names outranks it.
-  const wired = wireMessages(left, messages, dialect);
-  const { prompt_cache_options: named } = stated;
+  const wired = wireMessages(left, keyed(messages, options.cacheKey), dialect);
+  const { prompt_cache_options: named = options.cacheOptions } = stated;
   const lasting =
     left.lasted() === '1h' && named === undefined
       ? { prompt_cache_options: { mode: 'implicit', ttl: '1h' } }
@@ -181,42 +182,46 @@ export function encode(
     // A hint first and an option after, so neither outranks a typed field.
     ...hints,
     ...provider,
-    ...given({
-      tools: shown.length === 0 ? undefined : shown,
-      tool_choice:
-        toolChoice === undefined || !choosing
-          ? undefined
-          : choice(toolChoice, tools),
-      parallel_tool_calls: choosing ? options.parallelToolCalls : undefined,
-    }),
     ...reasoning,
-    ...given({
-      stop: options.stop === undefined ? undefined : [...options.stop],
-      [dialect.limit ?? 'max_completion_tokens']: options.maxTokens,
-      seed: options.seed,
-      user: options.user,
-      response_format:
-        output === undefined ? undefined : format(left, dialect, output),
-    }),
-    ...sampling(
-      left,
-      // A switch outranks an effort: thinking that is off does not reason.
-      takes?.(model, switched(stated) ?? reasons(effort, budget)),
-      {
-        temperature: options.temperature,
-        topP: options.topP,
-        topK: dialect.topK === true ? options.topK : undefined,
-        presencePenalty: options.presencePenalty,
-        frequencyPenalty: options.frequencyPenalty,
-      },
-      provider,
+    ...listed.typed(
+      withOptions(
+        given({
+          tools: shown.length === 0 ? undefined : shown,
+          tool_choice:
+            toolChoice === undefined || !choosing
+              ? undefined
+              : choice(toolChoice, tools),
+          parallel_tool_calls:
+            shown.length === 0 ? undefined : options.parallelToolCalls,
+          stop: options.stop === undefined ? undefined : [...options.stop],
+          response_format:
+            output === undefined ? undefined : format(left, dialect, output),
+          // Usage in every stream: the core counts what each call used.
+          stream_options: { include_usage: true },
+        }),
+        options,
+      ),
+    ),
+    // After what `takes` left out, which is told once, under its own name.
+    ...listed.typed(
+      sampling(
+        left,
+        // A switch outranks an effort: thinking that is off does not reason.
+        takes?.(model, switched(stated) ?? reasons(effort, budget)),
+        {
+          temperature: options.temperature,
+          topP: options.topP,
+          topK: dialect.topK === true ? options.topK : undefined,
+          presencePenalty: options.presencePenalty,
+          frequencyPenalty: options.frequencyPenalty,
+        },
+        provider,
+      ),
     ),
     ...lasting,
     model,
     messages: wired,
-    // Always a stream, and usage in it: the core counts what each call used.
     stream: true,
-    stream_options: { include_usage: true },
   };
   return {
     path: '/chat/completions',
@@ -228,6 +233,6 @@ export function encode(
       accept: 'text/event-stream',
     },
     body,
-    leftOut: [...left.leftOut(), ...leftOut, ...keyless.leftOut],
+    leftOut: [...left.leftOut(), ...leftOut, ...listed.told],
   };
 }

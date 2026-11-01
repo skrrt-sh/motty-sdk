@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/serve",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "The host side of a motty: serves it as a model over the Chat Completions, Responses and Messages APIs, on Bun or Cloudflare Workers.",
   "keywords": [
     "motty",

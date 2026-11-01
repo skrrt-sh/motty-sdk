@@ -52,7 +52,7 @@ test("a tool call's own id, name, input and kind are never replaced by what its 
   expect(
     blocksOf(leaving('messages'), [
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'toolu_01',
         name: 'get_weather',
         input: { a: 1 },
@@ -87,7 +87,7 @@ test.each([
     },
   ],
   [
-    { type: 'tool_result', id: 'toolu_01', text: 'Sunny', failed: true },
+    { type: 'toolResult', id: 'toolu_01', text: 'Sunny', failed: true },
     { type: 'other', tool_use_id: 'other', content: 'other', is_error: false },
     {
       type: 'tool_result',
@@ -124,7 +124,7 @@ test("signed reasoning's own fields are never replaced by what rides with it", (
 test('a tool call whose input is no object fails the call', () => {
   expect(() =>
     blocksOf(leaving('messages'), [
-      { type: 'tool_call', id: 'call_1', name: 'apply_patch', input: [1] },
+      { type: 'toolCall', id: 'call_1', name: 'apply_patch', input: [1] },
     ]),
   ).toThrow(
     new Unsupported(
@@ -136,19 +136,19 @@ test('a tool call whose input is no object fails the call', () => {
 test('a tool call and its result are written back', () => {
   expect(
     blocksOf(leaving('messages'), [
-      { type: 'tool_call', id: 'toolu_01', name: 'get', input: { a: 1 } },
+      { type: 'toolCall', id: 'toolu_01', name: 'get', input: { a: 1 } },
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'srvtoolu_01',
         name: 'web_search',
         input: { query: 'x' },
         hosted: true,
         provider: { anthropic: { type: 'server_tool_use' } },
       },
-      { type: 'tool_result', id: 'toolu_01', text: '15C' },
-      { type: 'tool_result', id: 'toolu_02', text: '' },
+      { type: 'toolResult', id: 'toolu_01', text: '15C' },
+      { type: 'toolResult', id: 'toolu_02', text: '' },
       {
-        type: 'tool_result',
+        type: 'toolResult',
         id: 'toolu_03',
         failed: true,
         parts: [{ type: 'text', text: 'No such city' }],
@@ -219,7 +219,7 @@ test('the cache marker of a message sits on its last block', () => {
 test('what this wire cannot say fails the call', () => {
   expect(() =>
     blocksOf(leaving('messages'), [
-      { type: 'tool_call', id: 'call_1', name: 'get', raw: '{"a":' },
+      { type: 'toolCall', id: 'call_1', name: 'get', raw: '{"a":' },
     ]),
   ).toThrow(Unsupported);
   expect(() =>
@@ -245,7 +245,7 @@ test('a hosted call or result this API did not write fails the call', () => {
   expect(() =>
     blocksOf(leaving('messages'), [
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'ws_1',
         name: 'web_search',
         input: { query: 'x' },
@@ -257,13 +257,13 @@ test('a hosted call or result this API did not write fails the call', () => {
   );
   expect(() =>
     blocksOf(leaving('messages'), [
-      { type: 'tool_result', id: 'ws_1', text: 'Rain', hosted: true },
+      { type: 'toolResult', id: 'ws_1', text: 'Rain', hosted: true },
     ]),
   ).toThrow(Unsupported);
   expect(
     blocksOf(leaving('messages'), [
       {
-        type: 'tool_result',
+        type: 'toolResult',
         id: 'srvtoolu_01',
         text: 'Rain',
         hosted: true,
@@ -301,7 +301,7 @@ test('text with nothing in it is no block', () => {
       { type: 'text', text: '' },
       { type: 'text', text: '', cache: {} },
       {
-        type: 'tool_result',
+        type: 'toolResult',
         id: 'toolu_01',
         parts: [{ type: 'text', text: '' }],
       },
@@ -314,8 +314,8 @@ test('a cache marker is written on an image, a document and tool blocks', () => 
     blocksOf(leaving('messages'), [
       { type: 'image', id: 'file_011C', cache: {} },
       { type: 'file', id: 'file_011D', cache: { ttl: '1h' } },
-      { type: 'tool_call', id: 'toolu_01', name: 'get', input: {}, cache: {} },
-      { type: 'tool_result', id: 'toolu_01', text: 'ok', cache: { ttl: '5m' } },
+      { type: 'toolCall', id: 'toolu_01', name: 'get', input: {}, cache: {} },
+      { type: 'toolResult', id: 'toolu_01', text: 'ok', cache: { ttl: '5m' } },
     ]),
   ).toEqual([
     {
@@ -445,14 +445,14 @@ test('a tool call that holds only another API`s data is written as its own field
   expect(
     blocksOf(leaving('messages'), [
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_1',
         name: 'time',
         input: {},
         provider: { 'openai.chat': { extra_content: { google: {} } } },
       },
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'toolu_01',
         name: 'now',
         input: {},
@@ -477,7 +477,7 @@ test('a tool call that holds only another API`s data is written as its own field
 test.each([
   [
     {
-      type: 'tool_call' as const,
+      type: 'toolCall' as const,
       id: 'ws_1',
       name: 'web_search',
       input: {},
@@ -488,7 +488,7 @@ test.each([
   ],
   [
     {
-      type: 'tool_result' as const,
+      type: 'toolResult' as const,
       id: 'call_1',
       text: 'noon',
       provider: { 'openai.responses': { status: 'completed' } },

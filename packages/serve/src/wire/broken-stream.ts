@@ -2,7 +2,7 @@ import type { ErrorFacts } from '@mottyjs/core/host';
 
 // A stream that broke may work when asked again, whatever broke it.
 function broken(message: string): ErrorFacts {
-  return { code: 'upstream_failed', message, retryable: true, upstream: true };
+  return { code: 'upstreamFailed', message, retryable: true, upstream: true };
 }
 
 export function unreadable(): ErrorFacts {

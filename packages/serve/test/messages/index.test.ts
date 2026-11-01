@@ -470,7 +470,7 @@ test('what the adapter cuts is cut from a failed response and from a failure in 
     request_id: 'req_hunter2-hunter2',
   };
   const cleaned = {
-    code: 'invalid_request',
+    code: 'invalidRequest',
     message: `${'Long. '.repeat(332)}[cut]`,
     provider: {
       anthropic: {

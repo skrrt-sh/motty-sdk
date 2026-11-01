@@ -386,7 +386,7 @@ test.each([
       type: 'exceeded_current_quota_error',
       message: 'Token quota is insufficient',
     },
-    kind: 'quota_exceeded',
+    kind: 'quotaExceeded',
   },
   {
     status: 429,
@@ -402,7 +402,7 @@ test.each([
       type: 'invalid_request_error',
       message: 'Input token length too long',
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     status: 400,
@@ -410,7 +410,7 @@ test.each([
       type: 'invalid_request_error',
       message: 'prompt tokens + max_tokens exceeds the model specification',
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
   {
     status: 400,
@@ -419,7 +419,7 @@ test.each([
       message:
         'Invalid request: Your request exceeded model token limit: 262144 (requested: 300000)',
     },
-    kind: 'context_too_long',
+    kind: 'contextTooLong',
   },
 ])(
   '$error.type told as $status is $kind, in the upstream`s words, by its reference',
@@ -487,7 +487,7 @@ test.each([
       {
         type: 'error',
         error: {
-          code: 'rate_limited',
+          code: 'rateLimited',
           message: told,
           provider: { moonshot: { message: said } },
         },

@@ -1,12 +1,13 @@
 import type { Json, JsonOutput, Options } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
-import { keyed, shared } from '../wire/cache-key.ts';
+import { keyed } from '../wire/cache-key.ts';
 import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import { type Dict, dict, given, isDict, list } from '../wire/json.ts';
 import { numberOf } from '../wire/number.ts';
 import { customNames } from '../wire/openai-tools.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
+import { spoken } from '../wire/spoken.ts';
 import { messageOf } from './decode-messages.ts';
 import { choiceOf, toolOf } from './decode-tools.ts';
 import { marked, noted } from './family.ts';
@@ -109,16 +110,20 @@ function optionsOf(body: Dict): Options {
     // What is left changes the answer: it reaches this family or fails.
     ...others
   } = body;
-  const hints = given({
-    metadata,
-    store,
-    service_tier,
-    safety_identifier,
-    prompt_cache_options,
-    prompt_cache_retention,
-    prediction,
-    verbosity,
-  });
+  const { options: helping, odd } = spoken(
+    given({
+      metadata,
+      store,
+      service_tier,
+      safety_identifier,
+      // A null key says nothing, and is sent as nothing.
+      prompt_cache_key: prompt_cache_key ?? undefined,
+      prompt_cache_options,
+      prompt_cache_retention,
+      prediction,
+      verbosity,
+    }),
+  );
   const reasoning = reasoningOf(effort, reasoned);
   const stops = stopOf(stop);
   const maxTokens =
@@ -141,8 +146,9 @@ function optionsOf(body: Dict): Options {
     ...(presencePenalty === undefined ? {} : { presencePenalty }),
     ...(frequencyPenalty === undefined ? {} : { frequencyPenalty }),
     ...(typeof user === 'string' ? { user } : {}),
+    ...helping,
     ...marked(others),
-    ...shared(noted(hints), prompt_cache_key),
+    ...noted(odd),
   };
 }
 

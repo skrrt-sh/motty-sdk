@@ -65,15 +65,15 @@ test('arguments that are not an object of JSON are kept as written', () => {
 
   expect(read('{"city":')).toEqual({
     role: 'assistant',
-    parts: [{ type: 'tool_call', id: 'call_1', name: 'f', raw: '{"city":' }],
+    parts: [{ type: 'toolCall', id: 'call_1', name: 'f', raw: '{"city":' }],
   });
   expect(read('"Oslo"')).toEqual({
     role: 'assistant',
-    parts: [{ type: 'tool_call', id: 'call_1', name: 'f', raw: '"Oslo"' }],
+    parts: [{ type: 'toolCall', id: 'call_1', name: 'f', raw: '"Oslo"' }],
   });
   expect(read('')).toEqual({
     role: 'assistant',
-    parts: [{ type: 'tool_call', id: 'call_1', name: 'f', raw: '' }],
+    parts: [{ type: 'toolCall', id: 'call_1', name: 'f', raw: '' }],
   });
 });
 
@@ -110,7 +110,7 @@ test('a tool message is read as the result of its call', () => {
     messageOf({ role: 'tool', tool_call_id: 'call_abc', content: '4°C' }),
   ).toEqual({
     role: 'tool',
-    parts: [{ type: 'tool_result', id: 'call_abc', text: '4°C' }],
+    parts: [{ type: 'toolResult', id: 'call_abc', text: '4°C' }],
   });
   expect(
     messageOf({
@@ -122,7 +122,7 @@ test('a tool message is read as the result of its call', () => {
     role: 'tool',
     parts: [
       {
-        type: 'tool_result',
+        type: 'toolResult',
         id: 'call_abc',
         parts: [{ type: 'text', text: '4°C' }],
       },
@@ -480,7 +480,7 @@ test('a field of a tool call that is not read is kept on the part as a hint, whe
     role: 'assistant',
     parts: [
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_a',
         name: 'weather',
         input: {},
@@ -492,7 +492,7 @@ test('a field of a tool call that is not read is kept on the part as a hint, whe
         },
       },
       {
-        type: 'tool_call',
+        type: 'toolCall',
         id: 'call_b',
         name: 'shell',
         input: 'ls',
@@ -520,6 +520,6 @@ test('a tool call`s place in a stream is no field of the call', () => {
     }),
   ).toEqual({
     role: 'assistant',
-    parts: [{ type: 'tool_call', id: 'call_a', name: 'now', input: {} }],
+    parts: [{ type: 'toolCall', id: 'call_a', name: 'now', input: {} }],
   });
 });

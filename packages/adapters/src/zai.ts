@@ -2,6 +2,7 @@ import type { ModelAdapter } from '@mottyjs/core/host';
 import { chatCompletionsIn } from '@mottyjs/serve';
 import type { FailureReader } from '@mottyjs/serve/upstream-failure';
 import { type Connection, chat } from './chat.ts';
+import { zaiFields } from './fields.ts';
 import { zaiTakes } from './takes.ts';
 
 // GLM numbers its failures, and tells most of them as 429 or 400: a spent
@@ -16,7 +17,7 @@ const failures: FailureReader = (_status, _headers, { code }) => {
     case '1005':
     case '1220':
     case '1315':
-      return { code: 'upstream_refused' };
+      return { code: 'upstreamRefused' };
     case '1113':
     case '1308':
     case '1309':
@@ -28,23 +29,23 @@ const failures: FailureReader = (_status, _headers, { code }) => {
     case '1319':
     case '1320':
     case '1321':
-      return { code: 'quota_exceeded' };
+      return { code: 'quotaExceeded' };
     case '1302':
     case '1313':
-      return { code: 'rate_limited' };
+      return { code: 'rateLimited' };
     case '1305':
       return { code: 'overloaded' };
     case '1211':
     case '1311':
-      return { code: 'unknown_model' };
+      return { code: 'unknownModel' };
     case '1261':
-      return { code: 'context_too_long' };
+      return { code: 'contextTooLong' };
     case '1301':
       return { code: 'blocked' };
     case '1212':
       return { code: 'unsupported' };
     case '1210':
-      return { code: 'invalid_request' };
+      return { code: 'invalidRequest' };
     default:
       return undefined;
   }
@@ -91,7 +92,7 @@ export function zai(
       efforts: ['low', 'high', 'max'],
       output: 'json_object',
       failures,
-      limit: 'max_tokens',
+      fields: zaiFields,
     }),
     prefix,
     address,

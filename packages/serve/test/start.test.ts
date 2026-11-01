@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { auth } from '@mottyjs/auth';
 import { answer, motty, type StandardSchema } from '@mottyjs/core';
 import {
@@ -304,4 +304,84 @@ test('a motty and a host that agree on auth write nothing at mount', () => {
   mount(replies, () => ({}));
 
   expect(lines()).toEqual([]);
+});
+
+describe('on Workers, where a mount made at global scope writes to no log', () => {
+  const { userAgent } = navigator;
+  const claimed = (value: string) =>
+    Object.defineProperty(navigator, 'userAgent', {
+      value,
+      configurable: true,
+    });
+
+  beforeEach(() => claimed('Cloudflare-Workers'));
+  afterEach(() => claimed(userAgent));
+
+  test('a warning waits for the first fetch of its mount, and is written once', async () => {
+    const open = mount(replies, () => ({ auth: keys }));
+    const shut = mount(guarded, () => ({}));
+    expect(lines()).toEqual([]);
+
+    await open.fetch(ask());
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toContain('without a valid token');
+
+    await open.fetch(ask());
+    expect(lines()).toHaveLength(1);
+
+    await shut.fetch(ask());
+    await shut.fetch(ask());
+    expect(lines()).toHaveLength(2);
+    expect(lines()[1]).toContain('401');
+  });
+
+  test('a first fetch the host numbered wrongly still writes it', async () => {
+    const { fetch } = mount(replies, () => ({ auth: keys }));
+
+    await expect(
+      fetch(ask(), undefined, { id: 'not\na header' }),
+    ).rejects.toThrow();
+
+    expect(lines()).toHaveLength(1);
+  });
+
+  test("an async schema's verdict waits for the first fetch as well, and one that comes after it is written at once", async () => {
+    let refuse = () => {};
+    const late = new Promise<boolean>((settle) => {
+      refuse = () => settle(false);
+    });
+    const { fetch } = mount(
+      motty({ name: 'coder' })
+        .use(
+          settings({
+            soon: slow(async () => false),
+            late: slow(() => late),
+          }),
+        )
+        .handle(() => answer('Hi')),
+      () => ({
+        settings: { soon: { key: 'by-host' }, late: { key: 'by-host' } },
+        report: () => {},
+      }),
+    );
+    await Bun.sleep(0);
+    expect(lines()).toEqual([]);
+
+    await fetch(ask());
+    const written = lines().filter((line) => line.includes('"soon"'));
+    expect(written).toHaveLength(1);
+    expect(written[0]).not.toContain('by-host');
+    expect(lines().filter((line) => line.includes('"late"'))).toEqual([]);
+
+    refuse();
+    await Bun.sleep(0);
+    expect(lines().filter((line) => line.includes('"late"'))).toHaveLength(1);
+  });
+
+  test('what every request would fail on is still refused at mount', () => {
+    expect(() =>
+      // @ts-expect-error nothing answers
+      mount(motty({ name: 'x' }), () => ({})),
+    ).toThrow('The motty "x" has no route or handle');
+  });
 });

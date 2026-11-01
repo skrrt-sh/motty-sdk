@@ -241,8 +241,8 @@ describe("the caller's tools", () => {
     const models = fake(
       on(jev, { abuse: 0.01, category: { billing: 1 }, urgency: 0 }),
       on(haiku, [
-        { type: "tool_call", id: "call_1", name: "find_order", arguments: '{"order":"A-1042"}' },
-        { type: "finish", reason: "tool_calls" },
+        { type: "toolCall", id: "call_1", name: "find_order", arguments: '{"order":"A-1042"}' },
+        { type: "finish", reason: "toolCalls" },
       ]),
       on(haiku, "It was refunded on 3 May."),
     );
@@ -268,12 +268,12 @@ describe("the caller's tools", () => {
                 text: "I need the order",
                 provider: { anthropic: { signature: "s1" } },
               },
-              { type: "tool_call", id: "call_1", name: "find_order", input: { order: "A-1042" } },
+              { type: "toolCall", id: "call_1", name: "find_order", input: { order: "A-1042" } },
             ],
           },
           {
             role: "tool",
-            parts: [{ type: "tool_result", id: "call_1", text: "Refunded on 3 May" }],
+            parts: [{ type: "toolResult", id: "call_1", text: "Refunded on 3 May" }],
           },
         ],
       },

@@ -6,7 +6,7 @@ import type {
   Options,
 } from '@mottyjs/core/host';
 import type { Decoded } from '../codec.ts';
-import { keyed, shared } from '../wire/cache-key.ts';
+import { keyed } from '../wire/cache-key.ts';
 import { isEffort } from '../wire/effort.ts';
 import { formed, formedWhole } from '../wire/formless.ts';
 import {
@@ -22,6 +22,7 @@ import { numberOf } from '../wire/number.ts';
 import { customNames } from '../wire/openai-tools.ts';
 import { meant } from '../wire/provider-data.ts';
 import { invalid, unsupported } from '../wire/refusals.ts';
+import { spoken } from '../wire/spoken.ts';
 import { family, marked, noted } from './family.ts';
 import { field } from './fields.ts';
 import { formless } from './formless.ts';
@@ -119,25 +120,40 @@ function optionsOf(body: Dict): Options {
   if (temperature !== undefined) options.temperature = temperature;
   if (topP !== undefined) options.topP = topP;
   if (user !== undefined) options.user = user;
-  // What may be left out when another family answers, then what may not.
-  const dropped = [
-    'client_metadata',
-    'include',
+  // What both OpenAI APIs have, which is an option whoever answers. A store is
+  // not among them: `refused` holds what this API's caller may say of one, and
+  // what that says is what this API's encoder sends anyway.
+  const crossing = [
     'metadata',
-    'prompt_cache_retention',
-    'prompt_cache_options',
-    'safety_identifier',
     'service_tier',
+    'safety_identifier',
+    'prompt_cache_key',
+    'prompt_cache_options',
+    'prompt_cache_retention',
   ];
-  const hints = {
-    ...defined(Object.fromEntries(dropped.map((key) => [key, body[key]]))),
+  const said = (names: string[], more?: Dict) =>
+    meant(
+      defined({
+        ...Object.fromEntries(names.map((key) => [key, body[key]])),
+        ...more,
+      }),
+    );
+  const worded = typeof verbosity === 'string';
+  const { options: helping, odd } = spoken(
+    said(crossing, worded ? { verbosity } : {}),
+  );
+  // What may be left out when another family answers, then what may not.
+  const alone = ['client_metadata', 'include'];
+  const hints = meant({
+    ...said(alone),
+    ...odd,
     reasoning: meant(defined({ summary, generate_summary })),
-    text: meant(defined({ verbosity })),
-  };
+    text: meant(defined({ verbosity: worded ? undefined : verbosity })),
+  });
   const provider = {
     ...without(body, [
-      ...dropped,
-      'prompt_cache_key',
+      ...crossing,
+      ...alone,
       'model',
       'input',
       'instructions',
@@ -165,7 +181,8 @@ function optionsOf(body: Dict): Options {
   };
   return {
     ...options,
-    ...shared(noted(meant(hints)), given(body, 'prompt_cache_key')),
+    ...helping,
+    ...noted(hints),
     ...marked(provider),
   };
 }

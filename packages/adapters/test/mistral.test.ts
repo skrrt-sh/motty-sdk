@@ -50,14 +50,14 @@ data: [DONE]
     { type: 'text', text: 'Let me' },
     { type: 'text', text: ' check.' },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'D681PevKs',
       name: 'get_weather',
       arguments: '{"city": "Paris"}',
     },
     {
       type: 'finish',
-      reason: 'tool_calls',
+      reason: 'toolCalls',
       usage: { input: 1013, output: 30, cached: 1008 },
     },
   ]);
@@ -128,7 +128,7 @@ data: [DONE]
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream failed before it finished',
         retryable: true,
         provider: { mistral: { finish_reason: 'error' } },
@@ -205,9 +205,7 @@ data: [DONE]
   ]);
   expect(events.at(-1)).toMatchObject({
     type: 'finish',
-    warnings: [
-      { setting: 'user', detail: 'Mistral has no field for an end user' },
-    ],
+    warnings: [{ setting: 'user', detail: 'mistral has no field for user' }],
   });
   expect(events.at(-1)).toHaveProperty('warnings.length', 1);
 });
@@ -381,7 +379,7 @@ test.each([
       param: 'model',
       code: 'unknown_model',
     },
-    kind: 'unknown_model',
+    kind: 'unknownModel',
   },
   {
     status: 503,
@@ -458,7 +456,7 @@ test.each([
       {
         type: 'error',
         error: {
-          code: 'upstream_refused',
+          code: 'upstreamRefused',
           message: "The upstream refused the host's credentials or account",
           upstream: true,
           provider: { mistral: { message: said } },

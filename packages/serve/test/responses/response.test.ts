@@ -80,7 +80,7 @@ test('a stream starts the response, numbers every event and completes it', async
 });
 
 test('an answer cut short by length or by a filter is incomplete, with its reason', async () => {
-  const last = async (reason: 'length' | 'content_filter') =>
+  const last = async (reason: 'length' | 'contentFilter') =>
     (
       await Array.fromAsync(
         streamed(
@@ -105,7 +105,7 @@ test('an answer cut short by length or by a filter is incomplete, with its reaso
       output: [{ type: 'message', status: 'incomplete' }],
     },
   });
-  expect(parsed((await last('content_filter'))?.data ?? '')).toMatchObject({
+  expect(parsed((await last('contentFilter'))?.data ?? '')).toMatchObject({
     type: 'response.incomplete',
     response: {
       status: 'incomplete',
@@ -115,7 +115,7 @@ test('an answer cut short by length or by a filter is incomplete, with its reaso
 });
 
 test('every other end is a completed response', () => {
-  for (const reason of ['stop', 'tool_calls', 'pause', 'other'] as const) {
+  for (const reason of ['stop', 'toolCalls', 'pause', 'other'] as const) {
     expect(
       collected(
         {
@@ -153,7 +153,7 @@ test('an error after the stream started ends it as a failed response', async () 
         {
           type: 'error',
           error: {
-            code: 'rate_limited',
+            code: 'rateLimited',
             status: 429,
             message: 'The upstream rate limit was reached',
             upstream: true,
@@ -204,7 +204,7 @@ test('a collected reply that was cut off says which item did not finish', () => 
       },
       [
         { type: 'text', text: 'Checking.' },
-        { type: 'tool_call', id: 'call_1', name: 'weather', arguments: '{"c' },
+        { type: 'toolCall', id: 'call_1', name: 'weather', arguments: '{"c' },
       ],
       { type: 'finish', reason: 'length' },
       'r1',
@@ -324,7 +324,7 @@ test('the cost in usage is written under its name', () => {
 test('what a chunk carries never stands beside a field this API writes of a call, streamed and collected', async () => {
   const chunks: Chunk[] = [
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       name: 'exec',
       arguments: 'abc',
@@ -342,7 +342,7 @@ test('what a chunk carries never stands beside a field this API writes of a call
       },
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_2',
       name: 'time',
       arguments: '{}',
@@ -367,7 +367,7 @@ test('what a chunk carries never stands beside a field this API writes of a call
         clients: new Set(),
         encrypted: false,
       },
-      run(...chunks, { type: 'finish', reason: 'tool_calls' }),
+      run(...chunks, { type: 'finish', reason: 'toolCalls' }),
       'r1',
     ),
   );
@@ -426,7 +426,7 @@ test('what a chunk carries never stands beside a field this API writes of a call
           encrypted: false,
         },
         chunks,
-        { type: 'finish', reason: 'tool_calls' },
+        { type: 'finish', reason: 'toolCalls' },
         'r1',
       ),
       'output',
@@ -436,10 +436,10 @@ test('what a chunk carries never stands beside a field this API writes of a call
 
 test('a field of a call told after its opening is in the item as done, streamed and collected', async () => {
   const chunks: Chunk[] = [
-    { type: 'tool_call', id: 'call_1', name: 'spawn_agent', arguments: '' },
-    { type: 'tool_call', id: 'call_1', arguments: '{}' },
+    { type: 'toolCall', id: 'call_1', name: 'spawn_agent', arguments: '' },
+    { type: 'toolCall', id: 'call_1', arguments: '{}' },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_1',
       arguments: '',
       provider: {
@@ -463,7 +463,7 @@ test('a field of a call told after its opening is in the item as done, streamed 
         clients: new Set(),
         encrypted: false,
       },
-      run(...chunks, { type: 'finish', reason: 'tool_calls' }),
+      run(...chunks, { type: 'finish', reason: 'toolCalls' }),
       'r1',
     ),
   );
@@ -503,7 +503,7 @@ test('a field of a call told after its opening is in the item as done, streamed 
           encrypted: false,
         },
         chunks,
-        { type: 'finish', reason: 'tool_calls' },
+        { type: 'finish', reason: 'toolCalls' },
         'r1',
       ),
       'output',
@@ -563,11 +563,11 @@ test('a call told more after it ended fails the reply, streamed and collected', 
     encrypted: false,
   };
   const chunks: Chunk[] = [
-    { type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' },
-    { type: 'tool_call', id: 'a', arguments: '', ended: true },
-    { type: 'tool_call', id: 'a', arguments: '1}' },
+    { type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":' },
+    { type: 'toolCall', id: 'a', arguments: '', ended: true },
+    { type: 'toolCall', id: 'a', arguments: '1}' },
   ];
-  const finish: Finish = { type: 'finish', reason: 'tool_calls' };
+  const finish: Finish = { type: 'finish', reason: 'toolCalls' };
   const sent = await Array.fromAsync(
     streamed(asked, run(...chunks, finish), 'r1'),
   );

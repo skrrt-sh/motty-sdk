@@ -60,7 +60,7 @@ function reader(dialect: Dialect) {
     // The caller's wire writes a free-form call apart from a function's.
     const own = marked ? { ...more, type: 'custom' } : more;
     return {
-      type: 'tool_call',
+      type: 'toolCall',
       id: ids.get(at) ?? `call_${at}`,
       ...(typeof name === 'string' ? { name } : {}),
       // Some upstreams send the arguments as the object they spell.

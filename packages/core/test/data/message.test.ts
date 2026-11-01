@@ -110,7 +110,7 @@ test('a function in closed data is still called, and a branded scalar is still i
       get: (key: string) => Promise<Json | undefined>;
       set: (key: string, value: Json) => Promise<void>;
     };
-    code: 'rate_limited' | (string & {});
+    code: 'rateLimited' | (string & {});
   }> = {
     storage: {
       get: async (key) => kept.get(key),
@@ -139,7 +139,7 @@ test('a closed request is passed on as a prompt, its messages and tools as they 
       {
         role: 'assistant',
         parts: [
-          { type: 'tool_call', id: 'call_1', name: 'read', input: ['a', 'b'] },
+          { type: 'toolCall', id: 'call_1', name: 'read', input: ['a', 'b'] },
         ],
       },
     ],
@@ -265,7 +265,7 @@ test.each([
         { type: 'reasoning', text: 'The user wants a fix' },
         { type: 'text', text: 'See the diff' },
         { type: 'image', url: 'https://example.com/diff.png' },
-        { type: 'tool_result', id: 'call_1', text: 'fn main() {}' },
+        { type: 'toolResult', id: 'call_1', text: 'fn main() {}' },
         { type: 'refusal', text: 'I cannot help with that' },
       ],
     },

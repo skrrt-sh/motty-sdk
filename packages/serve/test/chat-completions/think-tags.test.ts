@@ -316,8 +316,8 @@ test('text held before a tool call of a later chunk is sent before the call', as
   expect(read).toEqual([
     { type: 'text', text: ' ' },
     { type: 'text', text: '<' },
-    { type: 'tool_call', id: 'call_1', name: 'look', arguments: '{}' },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'tool_calls' },
+    { type: 'toolCall', id: 'call_1', name: 'look', arguments: '{}' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'tool_calls' },
   ]);
 });
 

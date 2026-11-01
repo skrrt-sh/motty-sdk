@@ -10,7 +10,7 @@ test('a failure is read with its message and the upstream`s own names', () => {
       '{"error":{"message":"Rate limit reached for gpt-x in organization org-abc on tokens per min.","type":"tokens","param":null,"code":"rate_limit_exceeded"}}',
     ),
   ).toEqual({
-    code: 'rate_limited',
+    code: 'rateLimited',
     message:
       'Rate limit reached for gpt-x in organization org-abc on tokens per min.',
     retryAfter: 20_000,
@@ -32,29 +32,29 @@ test('what the upstream calls the failure outranks its status', () => {
       .code;
 
   expect(named(400, '{"code":"context_length_exceeded"}')).toBe(
-    'context_too_long',
+    'contextTooLong',
   );
   expect(named(400, '{"code":"content_policy_violation"}')).toBe('blocked');
   expect(named(400, '{"code":"content_filter"}')).toBe('blocked');
   expect(named(400, '{"code":"bio_policy"}')).toBe('blocked');
-  expect(named(404, '{"code":"model_not_found"}')).toBe('unknown_model');
-  expect(named(403, '{"code":"model_not_found"}')).toBe('unknown_model');
-  expect(named(429, '{"code":"rate_limit_exceeded"}')).toBe('rate_limited');
+  expect(named(404, '{"code":"model_not_found"}')).toBe('unknownModel');
+  expect(named(403, '{"code":"model_not_found"}')).toBe('unknownModel');
+  expect(named(429, '{"code":"rate_limit_exceeded"}')).toBe('rateLimited');
   expect(named(429, '{"code":"billing_hard_limit_reached"}')).toBe(
-    'quota_exceeded',
+    'quotaExceeded',
   );
-  expect(named(401, '{"code":"invalid_api_key"}')).toBe('upstream_refused');
-  expect(named(401, '{"code":"account_deactivated"}')).toBe('upstream_refused');
-  expect(named(400, '{"code":"invalid_prompt"}')).toBe('invalid_request');
-  expect(named(400, '{"code":"server_error"}')).toBe('upstream_failed');
+  expect(named(401, '{"code":"invalid_api_key"}')).toBe('upstreamRefused');
+  expect(named(401, '{"code":"account_deactivated"}')).toBe('upstreamRefused');
+  expect(named(400, '{"code":"invalid_prompt"}')).toBe('invalidRequest');
+  expect(named(400, '{"code":"server_error"}')).toBe('upstreamFailed');
 });
 
 test.each([
-  ['slow_down', 503, 'rate_limited'],
+  ['slow_down', 503, 'rateLimited'],
   ['server_is_overloaded', 503, 'overloaded'],
-  ['mismatched_organization', 401, 'upstream_refused'],
-  ['invalid_project', 401, 'upstream_refused'],
-  ['unsupported_country_region_territory', 403, 'upstream_refused'],
+  ['mismatched_organization', 401, 'upstreamRefused'],
+  ['invalid_project', 401, 'upstreamRefused'],
+  ['unsupported_country_region_territory', 403, 'upstreamRefused'],
   ['unsupported_parameter', 400, 'unsupported'],
 ] as const)('the code %s, whatever its status, is %s', (code, status, kind) => {
   expect(
@@ -186,7 +186,7 @@ test.each([
           },
         }),
       ).code,
-    ).toBe('invalid_request');
+    ).toBe('invalidRequest');
   },
 );
 
@@ -198,7 +198,7 @@ test('an option refused with no code in other words stays an invalid request', (
       new Headers(),
       `{"error":{"message":"Invalid 'temperature': decimal above maximum value. Expected a value <= 2, but got 2.5 instead.","type":"invalid_request_error","param":"temperature","code":null}}`,
     ).code,
-  ).toBe('invalid_request');
+  ).toBe('invalidRequest');
 });
 
 test('a code the table does not know is not outranked by the words beside it', () => {
@@ -209,7 +209,7 @@ test('a code the table does not know is not outranked by the words beside it', (
       new Headers(),
       `{"error":{"message":"Unsupported parameter: 'temperature' is not supported with this model.","type":"invalid_request_error","param":"temperature","code":"invalid_value"}}`,
     ).code,
-  ).toBe('invalid_request');
+  ).toBe('invalidRequest');
 });
 
 test('an option the API does not know is unsupported', () => {
@@ -251,7 +251,7 @@ test('a model the upstream does not know is told so, by code or by a 404 with an
 `,
     ),
   ).toMatchObject({
-    code: 'unknown_model',
+    code: 'unknownModel',
     message:
       'The model `no-such-model-xyz` does not exist or you do not have access to it.',
   });
@@ -263,7 +263,7 @@ test('a model the upstream does not know is told so, by code or by a 404 with an
       '{"error":{"message":"Not Found","code":404}}',
     ),
   ).toEqual({
-    code: 'unknown_model',
+    code: 'unknownModel',
     message: 'Not Found',
     provider: { openrouter: { status: 404, code: 404 } },
     upstream: true,
@@ -272,7 +272,7 @@ test('a model the upstream does not know is told so, by code or by a 404 with an
 
 test('a 404 with nothing in its body is a wrong address, which no retry mends', () => {
   expect(failure('openai.chat', 404, new Headers(), '')).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream answered 404',
     retryable: false,
     provider: { 'openai.chat': { status: 404 } },
@@ -280,7 +280,7 @@ test('a 404 with nothing in its body is a wrong address, which no retry mends', 
   });
   expect(
     failure('openai.chat', 404, new Headers(), '<html>Not Found</html>'),
-  ).toMatchObject({ code: 'upstream_failed', retryable: false });
+  ).toMatchObject({ code: 'upstreamFailed', retryable: false });
 });
 
 test('a router`s spent credits are a spent quota, in its own words without the link to the host`s account, with what it says of the limit', () => {
@@ -292,7 +292,7 @@ test('a router`s spent credits are a spent quota, in its own words without the l
       '{"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 128000 tokens, but can only afford 58128. To increase, visit https://openrouter.ai/workspaces/default/keys/0f1e2d3c and adjust the key\'s total limit","code":402,"metadata":{"limit_source":"openrouter_credits","remedy_hint":"Add credits at https://openrouter.ai/settings/credits, or lower max_tokens / prompt size to fit your remaining balance.","provider_name":null}},"user_id":"user_made_up"}',
     ),
   ).toEqual({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message:
       'This request requires more credits, or fewer max_tokens. You requested up to 128000 tokens, but can only afford 58128.',
     provider: {
@@ -322,7 +322,7 @@ test('the upstream`s word on another try is read from its header', () => {
       '{"error":{"message":"Rate limit reached","code":"rate_limit_exceeded"}}',
     ),
   ).toMatchObject({
-    code: 'rate_limited',
+    code: 'rateLimited',
     retryable: false,
     retryAfter: 20_000,
   });
@@ -333,7 +333,7 @@ test('the upstream`s word on another try is read from its header', () => {
       new Headers({ 'x-should-retry': 'true' }),
       '{"error":{"message":"Conflict"}}',
     ),
-  ).toMatchObject({ code: 'invalid_request', status: 409, retryable: true });
+  ).toMatchObject({ code: 'invalidRequest', status: 409, retryable: true });
 });
 
 test('a provider`s own reader names a failed response first, given all that came', () => {
@@ -347,10 +347,10 @@ test('a provider`s own reader names a failed response first, given all that came
         status === 400 &&
         headers.get('x-ds-limit') === 'balance' &&
         message === 'Insufficient Balance'
-          ? { code: 'quota_exceeded' }
+          ? { code: 'quotaExceeded' }
           : undefined,
     ),
-  ).toMatchObject({ code: 'quota_exceeded', message: 'Insufficient Balance' });
+  ).toMatchObject({ code: 'quotaExceeded', message: 'Insufficient Balance' });
 });
 
 test('a spent quota and a rate limit share a status and not a meaning', () => {
@@ -361,11 +361,11 @@ test('a spent quota and a rate limit share a status and not a meaning', () => {
     '{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}',
   );
 
-  expect(spent.code).toBe('quota_exceeded');
+  expect(spent.code).toBe('quotaExceeded');
   expect(spent).not.toHaveProperty('status');
   expect(spent).not.toHaveProperty('retryable');
   expect(failure('openai.chat', 429, new Headers(), '{}').code).toBe(
-    'rate_limited',
+    'rateLimited',
   );
 });
 
@@ -377,7 +377,7 @@ test('the type names a failure whose code does not', () => {
       new Headers(),
       '{"error":{"message":"quota","type":"insufficient_quota"}}',
     ).code,
-  ).toBe('quota_exceeded');
+  ).toBe('quotaExceeded');
   expect(
     failure(
       'openai.chat',
@@ -385,7 +385,7 @@ test('the type names a failure whose code does not', () => {
       new Headers(),
       '{"error":{"type":"invalid_request_error","code":"context_length_exceeded"}}',
     ).code,
-  ).toBe('context_too_long');
+  ).toBe('contextTooLong');
 });
 
 test('a refused key keeps its status, and the upstream`s words that echo it, for the record alone', () => {
@@ -397,7 +397,7 @@ test('a refused key keeps its status, and the upstream`s words that echo it, for
       '{"error":{"message":"Incorrect API key provided: sk-fake-************0000.","code":"invalid_api_key"}}',
     ),
   ).toEqual({
-    code: 'upstream_refused',
+    code: 'upstreamRefused',
     message: "The upstream refused the host's credentials or account",
     provider: {
       'openai.responses': {
@@ -419,13 +419,13 @@ test('a body that is not the API`s error still names the failure', () => {
       '<html><h1>502 Bad Gateway</h1></html>',
     ),
   ).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream answered 502',
     provider: { 'openai.chat': { status: 502 } },
     upstream: true,
   });
   expect(failure('openai.chat', 500, new Headers(), '').code).toBe(
-    'upstream_failed',
+    'upstreamFailed',
   );
 });
 
@@ -433,7 +433,7 @@ test('an error that is a sentence is read as its message', () => {
   expect(
     failure('ollama', 404, new Headers(), '{"error":"model not found"}'),
   ).toEqual({
-    code: 'unknown_model',
+    code: 'unknownModel',
     message: 'model not found',
     provider: { ollama: { status: 404 } },
     upstream: true,
@@ -447,7 +447,7 @@ test.each([
   'words at the top of a body with no error, as in %s, are the message, and name no model',
   (body) => {
     expect(failure('local', 404, new Headers(), body)).toEqual({
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       message: 'no Route matched with those values',
       retryable: false,
       provider: { local: { status: 404 } },
@@ -469,7 +469,7 @@ test('words at the top of a body beside an error are not the message', () => {
 
 test('a failure in a stream with a status written as text for its code is named by it', () => {
   expect(failed('openrouter', { code: '429', message: 'Slow down' })).toEqual({
-    code: 'rate_limited',
+    code: 'rateLimited',
     message: 'Slow down',
     provider: { openrouter: { code: '429' } },
     upstream: true,
@@ -478,7 +478,7 @@ test('a failure in a stream with a status written as text for its code is named 
 
 test('a code written as text that is no status names nothing', () => {
   expect(failed('zai', { code: '1302', message: 'Busy' }).code).toBe(
-    'upstream_failed',
+    'upstreamFailed',
   );
 });
 
@@ -490,7 +490,7 @@ test('a body with no error is a failure where the provider says what it holds, t
       new Headers(),
       '{"outcome":{"number":"77","words":"insufficient balance"}}',
       (_status, _headers, { number }) =>
-        number === '77' ? { code: 'quota_exceeded' } : undefined,
+        number === '77' ? { code: 'quotaExceeded' } : undefined,
       undefined,
       undefined,
       ({ outcome }) =>
@@ -501,7 +501,7 @@ test('a body with no error is a failure where the provider says what it holds, t
           : undefined,
     ),
   ).toEqual({
-    code: 'quota_exceeded',
+    code: 'quotaExceeded',
     message: 'insufficient balance',
     provider: {
       acme: { status: 401, number: '77', words: 'insufficient balance' },
@@ -522,7 +522,7 @@ test('a body the provider says holds no failure is read as any other, with the w
       undefined,
       () => undefined,
     ),
-  ).toMatchObject({ code: 'upstream_failed', message: 'It broke' });
+  ).toMatchObject({ code: 'upstreamFailed', message: 'It broke' });
 });
 
 test('one provider`s own status, in a body with no error, tells nothing where no provider said it does', () => {
@@ -534,7 +534,7 @@ test('one provider`s own status, in a body with no error, tells nothing where no
       '{"base_resp":{"status_code":1008,"status_msg":"insufficient balance"}}',
     ),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 400,
     message: 'The upstream answered 400',
     provider: { 'openai.responses': { status: 400 } },
@@ -550,7 +550,7 @@ test('one provider`s own code names nothing in the family`s table', () => {
       new Headers(),
       '{"error":{"message":"It failed.","code":"data_inspection_failed"}}',
     ).code,
-  ).toBe('invalid_request');
+  ).toBe('invalidRequest');
 });
 
 test('what the adapter cuts is cut from all the upstream said before any of it is shortened, so no cap leaves a part', () => {
@@ -573,7 +573,7 @@ test('what the adapter cuts is cut from all the upstream said before any of it i
       (text) => text.replaceAll('hunter2-hunter2', '[cut]'),
     ),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 400,
     message: `${'Long. '.repeat(332)}[cut]`,
     provider: {
@@ -621,7 +621,7 @@ test('a failure is named from what the upstream said as it came, whatever is cut
       (text) => text.replaceAll('context_length_exceeded', '[cut]'),
     ),
   ).toEqual({
-    code: 'context_too_long',
+    code: 'contextTooLong',
     message: 'Too long',
     provider: { acme: { status: 400, code: '[cut]' } },
     upstream: true,
@@ -643,7 +643,7 @@ test('a failure told inside a stream is named by its code alone', () => {
       message: 'Slow down',
     }),
   ).toEqual({
-    code: 'rate_limited',
+    code: 'rateLimited',
     message: 'Slow down',
     provider: { 'openai.responses': { code: 'rate_limit_exceeded' } },
     upstream: true,
@@ -652,7 +652,7 @@ test('a failure told inside a stream is named by its code alone', () => {
     failed('openai.responses', { code: 'server_error', message: 'Oops' }),
   ).not.toHaveProperty('retryable');
   expect(failed('openai.responses', { code: 'vector_store_timeout' })).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream answered with an error',
     retryable: false,
     provider: { 'openai.responses': { code: 'vector_store_timeout' } },
@@ -669,7 +669,7 @@ test('a router`s failure is read with its numeric code and what its provider sai
       '{"error":{"message":"Provider returned error","code":400,"metadata":{"provider_name":"acme","raw":"{\\"error\\":{\\"message\\":\\"temperature: range is 0..1\\"}}"}}}',
     ),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 400,
     message: 'Provider returned error: temperature: range is 0..1',
     provider: {
@@ -708,7 +708,7 @@ test('a list of what a validator refused is the message, and the record keeps th
       '{"detail":[{"type":"missing","loc":["body","messages",0,"role"],"msg":"Field required"}]}',
     ),
   ).toEqual({
-    code: 'invalid_request',
+    code: 'invalidRequest',
     status: 422,
     message: 'body.messages.0.role: Field required',
     provider: {
@@ -752,8 +752,8 @@ test('a list beside a message that was told is not what was said, and is not kep
 });
 
 test.each([
-  [404, 'unknown_model', 'Unrecognized request argument supplied: foo'],
-  [500, 'upstream_failed', 'Unrecognized request argument supplied: foo'],
+  [404, 'unknownModel', 'Unrecognized request argument supplied: foo'],
+  [500, 'upstreamFailed', 'Unrecognized request argument supplied: foo'],
 ] as const)(
   'the words of a refused option name nothing on a %i, the status OpenAI never refuses one with',
   (status, code, message) => {

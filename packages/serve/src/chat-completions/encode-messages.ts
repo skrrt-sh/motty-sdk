@@ -42,8 +42,8 @@ function shown(left: Leaving, dialect: Dialect, part: Known): Dict | undefined {
     case 'citation':
       left.without(part.type, part);
       return undefined;
-    case 'tool_call':
-    case 'tool_result':
+    case 'toolCall':
+    case 'toolResult':
       return unsupported(
         `Chat Completions cannot carry ${a(part.type)} inside content`,
       );
@@ -69,10 +69,7 @@ function contentPart(
   };
 }
 
-function call(
-  left: Leaving,
-  part: Extract<Known, { type: 'tool_call' }>,
-): Dict {
+function call(left: Leaving, part: Extract<Known, { type: 'toolCall' }>): Dict {
   left.without('tool.cache', part.cache);
   left.without('hosted', part.hosted);
   const { id, name, input } = part;
@@ -90,11 +87,11 @@ function call(
 function result(
   left: Leaving,
   dialect: Dialect,
-  part: Extract<Known, { type: 'tool_result' }>,
+  part: Extract<Known, { type: 'toolResult' }>,
   held?: Cache,
 ): Dict {
   left.without('hosted', part.hosted);
-  left.without('tool_result.failed', part.failed);
+  left.without('toolResult.failed', part.failed);
   const said =
     part.text ??
     part.parts.flatMap((inner) => {
@@ -138,14 +135,14 @@ function encoded(left: Leaving, message: Message, dialect: Dialect): Dict[] {
   };
   const content: Dict[] = [];
   const calls: Dict[] = [];
-  const answers: Extract<Known, { type: 'tool_result' }>[] = [];
+  const answers: Extract<Known, { type: 'toolResult' }>[] = [];
   const thoughts: Extract<Known, { type: 'reasoning' }>[] = [];
   const pictures: Dict[] = [];
   let heard: Dict | undefined;
   for (const part of message.parts ?? []) {
     const spoke = role === 'assistant';
-    if (part.type === 'tool_call') calls.push(call(left, part));
-    else if (part.type === 'tool_result') answers.push(part);
+    if (part.type === 'toolCall') calls.push(call(left, part));
+    else if (part.type === 'toolResult') answers.push(part);
     else if (part.type === 'audio' && spoke && part.id) {
       // Sound a model made is named by the id its reply gave it.
       if (dialect.sound === 'none') audio(dialect, part);

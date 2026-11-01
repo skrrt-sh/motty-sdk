@@ -63,11 +63,12 @@ function problems(issues: Issues): string {
 
 // Told by group and problem, without the value, which may be anything the host
 // held. A schema that takes its time cannot stop a mount, which returns at once:
-// its verdict is written when it comes, and each request still runs the schema.
+// its verdict is said when it comes, and each request still runs the schema.
 function settled(
   overrides: object,
   schemas: Schemas | undefined,
   name: string,
+  say: (line: string) => void,
 ) {
   const entries: [string, unknown][] = Object.entries(overrides);
   for (const [group, value] of entries) {
@@ -89,10 +90,10 @@ function settled(
     if ('then' in result) {
       Promise.resolve(result).then(
         ({ issues }) => {
-          if (issues) console.error(`motty: ${refusal(problems(issues))}`);
+          if (issues) say(`motty: ${refusal(problems(issues))}`);
         },
         (thrown: unknown) => {
-          console.error(`motty: ${refusal(toFacts(thrown).message)}`);
+          say(`motty: ${refusal(toFacts(thrown).message)}`);
         },
       );
     } else if (result.issues) {
@@ -107,22 +108,23 @@ function settled(
 export function checked(
   { description, root }: Contract,
   { auth, settings }: { auth?: unknown; settings?: object },
+  say: (line: string) => void,
 ): void {
   const { name, plugins } = description;
   if (root !== undefined) {
     if (!root.answers) {
       throw new Error(`The motty "${name}" has no route or handle`);
     }
-    if (settings !== undefined) settled(settings, schemasIn(root), name);
+    if (settings !== undefined) settled(settings, schemasIn(root), name, say);
   }
   const guarded = plugins.includes('auth');
   if (auth !== undefined && !guarded) {
-    console.error(
+    say(
       `motty: the host gave an auth adapter, and the motty "${name}" does not use auth(): requests run without a valid token unless the motty uses auth()`,
     );
   }
   if (auth === undefined && guarded) {
-    console.error(
+    say(
       `motty: the motty "${name}" uses auth(), and the host gave no auth adapter: every caller gets a 401. A host that states the caller by the third fetch argument may ignore this`,
     );
   }

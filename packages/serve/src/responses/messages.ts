@@ -72,10 +72,10 @@ function ranOf(item: Dict, type: string, named: Named): Part | undefined {
   const more = noted(without(item, ['call_id', 'arguments']));
   if (type.endsWith('_call')) {
     const name = type.slice(0, -'_call'.length);
-    return { type: 'tool_call', id, name, input, ...more };
+    return { type: 'toolCall', id, name, input, ...more };
   }
   if (!type.endsWith('_output')) return undefined;
-  return { type: 'tool_result', id, text: foundText(tools, named), ...more };
+  return { type: 'toolResult', id, text: foundText(tools, named), ...more };
 }
 
 function callOf(item: Dict, at: string, named: Named): Part {
@@ -91,14 +91,14 @@ function callOf(item: Dict, at: string, named: Named): Part {
     ...(spaced ? { name: own } : {}),
   });
   if (isCustom(item)) {
-    return { type: 'tool_call', id, name, input: text(input) ?? '', ...more };
+    return { type: 'toolCall', id, name, input: text(input) ?? '', ...more };
   }
   const given = text(source) ?? '';
   const value = parsed(given);
   // A bare string is a custom tool's input, never a function's arguments.
   return value === undefined || typeof value === 'string'
-    ? { type: 'tool_call', id, name, raw: given, ...more }
-    : { type: 'tool_call', id, name, input: value, ...more };
+    ? { type: 'toolCall', id, name, raw: given, ...more }
+    : { type: 'toolCall', id, name, input: value, ...more };
 }
 
 function resultOf(item: Dict, at: string): Part {
@@ -108,7 +108,7 @@ function resultOf(item: Dict, at: string): Part {
   }
   const more = extra(item, ['call_id', 'output']);
   if (typeof output === 'string') {
-    return { type: 'tool_result', id, text: output, ...more };
+    return { type: 'toolResult', id, text: output, ...more };
   }
   if (!Array.isArray(output)) {
     invalid(`${at} needs an output`);
@@ -116,7 +116,7 @@ function resultOf(item: Dict, at: string): Part {
   const parts = output.flatMap((part, index) =>
     partsOf(part, `${at}.output[${index}]`),
   );
-  return { type: 'tool_result', id, parts, ...more };
+  return { type: 'toolResult', id, parts, ...more };
 }
 
 // The item goes back whole, and another family's data in it is that family's
@@ -192,7 +192,7 @@ export function messagesOf(
     const { type = 'message' } = item;
     const ran = typeof type === 'string' ? ranOf(item, type, named) : undefined;
     if (ran !== undefined) {
-      const role = ran.type === 'tool_call' ? 'assistant' : 'tool';
+      const role = ran.type === 'toolCall' ? 'assistant' : 'tool';
       turn = joined(messages, turn, role);
       turn.parts.push(ran);
       continue;

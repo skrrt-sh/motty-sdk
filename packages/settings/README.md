@@ -3,7 +3,7 @@
 A plugin of the Motty SDK. `settings(groups)` defines a motty's settings in code, each group a
 schema whose every value has a default. A part that uses them reads them typed from the context,
 and a host may override any subset. A bad override fails at start, though one an async schema
-refuses is only written to stderr, as a mount returns at once.
+refuses is only written to stderr, as a mount returns at once, and on Workers at the first request.
 
 A schema is any Standard Schema validator. The example uses zod, which this package does not
 install:

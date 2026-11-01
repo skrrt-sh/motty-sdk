@@ -5,6 +5,7 @@ import type { Leaving } from '../wire/fieldless.ts';
 import { type Dict, dict, given, list } from '../wire/json.ts';
 import type { Cut, FailureReader } from '../wire/upstream-failure.ts';
 import { family, hinted } from './family.ts';
+import type { Fields } from './fields.ts';
 import { wrapped } from './think-tags.ts';
 
 /**
@@ -59,10 +60,14 @@ export type Dialect = {
    * without it.
    */
   cuts?: readonly Cut[];
+  /**
+   * Which of the options that only help the upstream takes, with `true` or the
+   * name it goes by there where that is not OpenAI's. One not listed is left out
+   * and told. Absent, the upstream takes them all, as OpenAI itself does.
+   */
+  fields?: Fields;
   /** `top_k`, which OpenAI's own API has no field for. */
   topK?: true;
-  /** The output limit, where it is not `max_completion_tokens`. */
-  limit?: 'max_tokens';
   /**
    * A file part beside OpenAI's, a PDF by bytes or by id under `file`: one of
    * any type that may be an address too, or a picture alone, by bytes or by id,
@@ -83,11 +88,6 @@ export type Dialect = {
    * lifetime.
    */
   breakpoints?: true | 'cache_control';
-  /**
-   * `prompt_cache_key`, OpenAI's own field beside the additions, which an
-   * upstream that does not name it may refuse.
-   */
-  cacheKey?: true;
   /**
    * Where a marker's lifetime goes, if not on the marker: nowhere, as an
    * upstream that keeps one five minutes alone, or in the request's
@@ -114,7 +114,7 @@ export type Dialect = {
   flat?: true;
 };
 
-export const plain: Dialect = { name: family, cacheKey: true };
+export const plain: Dialect = { name: family };
 
 // Every field that asks for reasoning, under any dialect's name.
 export const reasoningWords = [

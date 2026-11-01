@@ -293,7 +293,7 @@ test('the time limit: a caller waiting for a whole answer gets a 504, and the re
   await stopped.promise;
   expect(await reported.promise).toMatchObject({
     outcome: 'aborted',
-    error: { code: 'timed_out', status: 504 },
+    error: { code: 'timedOut', status: 504 },
     calls: [{ model: 'openai/gpt' }],
   });
   await served.close();

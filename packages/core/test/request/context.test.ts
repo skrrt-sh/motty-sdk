@@ -250,32 +250,34 @@ test('the totals sum the usage of every call, and an optional count joins once a
 });
 
 test('a call that says its first event arrived and how it failed is recorded with both, the first arrival alone timed', async () => {
+  let now = 1000;
+  const clock = spyOn(performance, 'now').mockImplementation(() => now);
+
   const made = await enter(stubHost(), async () => {
     await counted(
       'acme/small',
       async (_signal, arrived) => {
-        await Bun.sleep(5);
+        now += 5;
         arrived();
-        await Bun.sleep(5);
+        now += 5;
         arrived();
+        now += 5;
         return 'cut short';
       },
       () => ({ output: 2, code: 'overloaded' }),
     );
     return current().calls.made;
   });
+  clock.mockRestore();
 
   expect(made).toStrictEqual([
     {
       model: 'acme/small',
       output: 2,
       code: 'overloaded',
-      time: { total: expect.any(Number), firstEvent: expect.any(Number) },
+      time: { total: 15, firstEvent: 5 },
     },
   ]);
-  expect(made[0]?.time.firstEvent).toBeGreaterThanOrEqual(4);
-  expect(made[0]?.time.firstEvent).toBeLessThan(9);
-  expect(made[0]?.time.total).toBeGreaterThanOrEqual(9);
 });
 
 test('a counted call that rejects is counted with the code of its failure and rejects with what it threw', async () => {
@@ -296,7 +298,7 @@ test('a counted call that rejects is counted with the code of its failure and re
   expect(made).toStrictEqual([
     {
       model: 'typesafe/jev',
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       message: 'The decision model is down',
       time: { total: expect.any(Number) },
     },

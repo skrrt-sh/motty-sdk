@@ -527,7 +527,7 @@ describe.skipIf(key === undefined || key === '')('against Anthropic', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'invalid_request',
+          code: 'invalidRequest',
           status: 400,
           message: expect.stringContaining('thinking.type.enabled'),
         },
@@ -906,7 +906,7 @@ describe.skipIf(key === undefined || key === '')('against Anthropic', () => {
       error: { type: 'invalid_request_error', code: 'model_not_found' },
     });
     expect(reports).toMatchObject([
-      { outcome: 'failed', error: { code: 'unknown_model', status: 404 } },
+      { outcome: 'failed', error: { code: 'unknownModel', status: 404 } },
     ]);
   });
 
@@ -1292,13 +1292,13 @@ describe.skipIf(key === undefined || key === '')('against Anthropic', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'unknown_model',
+          code: 'unknownModel',
           message: 'model: no-such-model-xyz',
           retryable: false,
           provider: { anthropic: { status: 404, type: 'not_found_error' } },
         },
       },
-      { outcome: 'failed', error: { code: 'unknown_model' } },
+      { outcome: 'failed', error: { code: 'unknownModel' } },
     ]);
   });
 
@@ -1344,7 +1344,7 @@ describe.skipIf(key === undefined || key === '')('against Anthropic', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'context_too_long',
+          code: 'contextTooLong',
           message: expect.stringMatching(/^prompt is too long: \d+ tokens > /),
           retryable: false,
           provider: { anthropic: { status: 400 } },
@@ -1392,7 +1392,7 @@ describe.skipIf(key === undefined || key === '')('against Anthropic', () => {
       {
         outcome: 'failed',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           retryable: false,
           provider: { anthropic: { status: 404 } },
         },

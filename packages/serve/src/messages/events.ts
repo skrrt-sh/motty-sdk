@@ -67,7 +67,7 @@ function started(block: Dict, placed: Placed): Chunk[] | undefined {
       const unread = hosted ? { ...rest, type } : rest;
       return [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id,
           ...(typeof name === 'string' ? { name } : {}),
           arguments: full ? JSON.stringify(input) : '',
@@ -107,7 +107,7 @@ function continued(
         : undefined;
     case 'input_json_delta':
       return typeof json === 'string' && call !== undefined
-        ? { type: 'tool_call', id: call, arguments: json, ...placed }
+        ? { type: 'toolCall', id: call, arguments: json, ...placed }
         : undefined;
     case 'citations_delta': {
       const { citation } = delta;
@@ -205,7 +205,7 @@ export async function* events(
             break;
           }
           for (const chunk of chunks) {
-            if (chunk.type === 'tool_call') {
+            if (chunk.type === 'toolCall') {
               calls.set(at, chunk.id);
               if (chunk.hosted !== true) own.set(at, chunk.id);
               if (chunk.hosted !== true && custom.has(chunk.name ?? '')) {
@@ -229,11 +229,11 @@ export async function* events(
           const chunk = continued(dict(delta), placed, calls.get(at));
           if (chunk === undefined) break;
           const text = free.get(at);
-          if (chunk.type === 'tool_call' && text !== undefined) {
+          if (chunk.type === 'toolCall' && text !== undefined) {
             text.json += chunk.arguments;
             break;
           }
-          if (chunk.type === 'tool_call' && chunk.arguments !== '') {
+          if (chunk.type === 'toolCall' && chunk.arguments !== '') {
             bare.delete(at);
           }
           yield chunk;
@@ -247,7 +247,7 @@ export async function* events(
           if (text !== undefined && text.json !== '') {
             const said = unwrapped(text.json);
             yield {
-              type: 'tool_call',
+              type: 'toolCall',
               id: text.id,
               arguments: said,
               ...placed,
@@ -257,7 +257,7 @@ export async function* events(
           if (call !== undefined) {
             own.delete(at);
             ending = {
-              type: 'tool_call',
+              type: 'toolCall',
               id: call,
               arguments: '',
               ended: true,
@@ -267,7 +267,7 @@ export async function* events(
           const id = bare.get(at);
           if (id === undefined) break;
           bare.delete(at);
-          yield { type: 'tool_call', id, arguments: '{}', ...placed };
+          yield { type: 'toolCall', id, arguments: '{}', ...placed };
           break;
         }
         case 'message_delta':

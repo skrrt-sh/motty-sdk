@@ -33,21 +33,21 @@ test('a collected answer is one message with every block assembled', () => {
         { type: 'text', text: '.', block: 2 },
         { type: 'citation', block: 2, provider: { anthropic: location } },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'toolu_01',
           name: 'get_weather',
           arguments: '',
           block: 3,
         },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'toolu_01',
           arguments: '{"location":',
           block: 3,
         },
-        { type: 'tool_call', id: 'toolu_01', arguments: '"Paris"}', block: 3 },
+        { type: 'toolCall', id: 'toolu_01', arguments: '"Paris"}', block: 3 },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'toolu_02',
           name: 'get_time',
           arguments: '',
@@ -56,7 +56,7 @@ test('a collected answer is one message with every block assembled', () => {
       ],
       {
         type: 'finish',
-        reason: 'tool_calls',
+        reason: 'toolCalls',
         usage: { input: 472, output: 89, cached: 400 },
       },
       'req_1',
@@ -108,7 +108,7 @@ test('an answer with nothing in it is an empty message', () => {
 
 test('the whole reply holds the same input text the stream sends', () => {
   const call = {
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'toolu_01',
     name: 'get',
     arguments: '{"a":',
@@ -138,8 +138,8 @@ test('the whole reply holds the same input text the stream sends', () => {
 test('a call with no arguments has an empty input', () => {
   expect(
     collected(
-      [{ type: 'tool_call', id: 'toolu_01', name: 'now', arguments: '' }],
-      { type: 'finish', reason: 'tool_calls' },
+      [{ type: 'toolCall', id: 'toolu_01', name: 'now', arguments: '' }],
+      { type: 'finish', reason: 'toolCalls' },
       'req_3',
       'coder',
       false,
@@ -153,12 +153,12 @@ test('calls whose fragments take turns are one block each', () => {
   expect(
     collected(
       [
-        { type: 'tool_call', id: 'a', name: 'f', arguments: '{"x":' },
-        { type: 'tool_call', id: 'b', name: 'g', arguments: '{"y":' },
-        { type: 'tool_call', id: 'a', arguments: '1}' },
-        { type: 'tool_call', id: 'b', arguments: '2}' },
+        { type: 'toolCall', id: 'a', name: 'f', arguments: '{"x":' },
+        { type: 'toolCall', id: 'b', name: 'g', arguments: '{"y":' },
+        { type: 'toolCall', id: 'a', arguments: '1}' },
+        { type: 'toolCall', id: 'b', arguments: '2}' },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       'req_4',
       'coder',
       false,
@@ -173,13 +173,13 @@ test('text between the fragments of parallel calls leaves each call whole', () =
   expect(
     collected(
       [
-        { type: 'tool_call', id: 'a', name: 'f', arguments: '{"city":' },
-        { type: 'tool_call', id: 'b', name: 'g', arguments: '{"tz":' },
+        { type: 'toolCall', id: 'a', name: 'f', arguments: '{"city":' },
+        { type: 'toolCall', id: 'b', name: 'g', arguments: '{"tz":' },
         { type: 'text', text: 'Checking both.' },
-        { type: 'tool_call', id: 'a', arguments: '"Paris"}' },
-        { type: 'tool_call', id: 'b', arguments: '"CET"}' },
+        { type: 'toolCall', id: 'a', arguments: '"Paris"}' },
+        { type: 'toolCall', id: 'b', arguments: '"CET"}' },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       'req_5',
       'coder',
       false,
@@ -196,7 +196,7 @@ test('a collected message holds what the ending said of it, in the delta and bes
     collected(
       [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'toolu_01T1x1fJ34qAmk2tNTrN7Up6',
           name: 'get_weather',
           arguments: '{"location": "Paris"}',
@@ -205,7 +205,7 @@ test('a collected message holds what the ending said of it, in the delta and bes
       ],
       {
         type: 'finish',
-        reason: 'tool_calls',
+        reason: 'toolCalls',
         rawReason: 'tool_use',
         usage: { input: 25, output: 40 },
         provider: {

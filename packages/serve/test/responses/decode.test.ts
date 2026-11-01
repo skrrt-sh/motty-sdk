@@ -137,21 +137,44 @@ test('what another family may leave out is a hint and the rest must arrive', () 
       prompt_cache_key: 'k1',
       service_tier: 'flex',
       safety_identifier: 's1',
+      prompt_cache_options: { mode: 'implicit' },
+      prompt_cache_retention: '24h',
+      text: { verbosity: 'low' },
       truncation: 'auto',
       top_logprobs: 3,
     }).request.options,
   ).toEqual({
+    metadata: { ticket: 'T-1' },
+    serviceTier: 'flex',
+    safetyIdentifier: 's1',
+    cacheKey: 'k1',
+    cacheOptions: { mode: 'implicit' },
+    cacheRetention: '24h',
+    verbosity: 'low',
     hints: {
       'openai.responses': {
         include: ['reasoning.encrypted_content'],
-        metadata: { ticket: 'T-1' },
         client_metadata: { 'x-codex-installation-id': 'i-1' },
-        service_tier: 'flex',
-        safety_identifier: 's1',
       },
-      openai: { prompt_cache_key: 'k1' },
     },
     provider: { 'openai.responses': { truncation: 'auto', top_logprobs: 3 } },
+  });
+});
+
+test('a null or an empty object says nothing, and a value no option can hold stays a hint of this wire, in its place', () => {
+  expect(
+    decode({
+      model: 'coder',
+      input: 'Hi',
+      metadata: {},
+      service_tier: null,
+      safety_identifier: 7,
+      text: { verbosity: 5 },
+    }).request.options,
+  ).toEqual({
+    hints: {
+      'openai.responses': { safety_identifier: 7, text: { verbosity: 5 } },
+    },
   });
 });
 

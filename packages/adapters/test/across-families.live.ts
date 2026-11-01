@@ -259,11 +259,11 @@ describe.skipIf(
   ]);
 
   test.each([
-    ['anthropic/claude-no-such-model', {}, 'unknown_model'],
-    ['anthropic-keyless/claude-haiku-5-5', {}, 'upstream_refused'],
-    ['openai/gpt-no-such-model', {}, 'unknown_model'],
-    ['openai-keyless/gpt-6-luna', {}, 'upstream_refused'],
-    ['openai-chat/gpt-no-such-model', {}, 'unknown_model'],
+    ['anthropic/claude-no-such-model', {}, 'unknownModel'],
+    ['anthropic-keyless/claude-haiku-5-5', {}, 'upstreamRefused'],
+    ['openai/gpt-no-such-model', {}, 'unknownModel'],
+    ['openai-keyless/gpt-6-luna', {}, 'upstreamRefused'],
+    ['openai-chat/gpt-no-such-model', {}, 'unknownModel'],
     [
       'openai-chat/gpt-4o-mini',
       { 'openai.chat': { reasoning_effort: 'low' } },
@@ -274,8 +274,8 @@ describe.skipIf(
       { 'openai.chat': { temperature: 0.5 } },
       'unsupported',
     ],
-    ['openrouter/no-such-author/no-such-model', {}, 'unknown_model'],
-    ['openrouter-keyless/openai/gpt-6-luna', {}, 'upstream_refused'],
+    ['openrouter/no-such-author/no-such-model', {}, 'unknownModel'],
+    ['openrouter-keyless/openai/gpt-6-luna', {}, 'upstreamRefused'],
   ] as const)(
     '%s given %j fails as %s, in words that name no account of any provider',
     async (name, provider, code) => {

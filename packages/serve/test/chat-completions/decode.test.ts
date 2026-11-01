@@ -181,7 +181,7 @@ test('what changes the answer and only this wire reads is kept as its option', (
   });
 });
 
-test('bookkeeping and tuning only this wire reads are kept as hints, and the cache key both OpenAI APIs read', () => {
+test('what this wire says of an option goes to that option, under no hint', () => {
   const { request } = decode({
     model: 'coder',
     messages: [],
@@ -197,20 +197,28 @@ test('bookkeeping and tuning only this wire reads are kept as hints, and the cac
   });
 
   expect(request.options).toEqual({
-    hints: {
-      'openai.chat': {
-        metadata: { ticket: 'MOT-12' },
-        store: true,
-        service_tier: 'flex',
-        safety_identifier: 'u_9f2',
-        prompt_cache_options: { mode: 'explicit', ttl: '30m' },
-        prompt_cache_retention: '24h',
-        prediction: { type: 'content', content: 'const a = 1;' },
-        verbosity: 'low',
-      },
-      openai: { prompt_cache_key: 'manual-v3' },
-    },
+    metadata: { ticket: 'MOT-12' },
+    store: true,
+    serviceTier: 'flex',
+    safetyIdentifier: 'u_9f2',
+    cacheKey: 'manual-v3',
+    cacheOptions: { mode: 'explicit', ttl: '30m' },
+    cacheRetention: '24h',
+    prediction: { type: 'content', content: 'const a = 1;' },
+    verbosity: 'low',
   });
+});
+
+test('a value no option can hold stays a hint of this wire, sent as it was said', () => {
+  const said = {
+    metadata: null,
+    service_tier: 7,
+    store: 'yes',
+    prediction: 'const a = 1;',
+  };
+  const { request } = decode({ model: 'coder', messages: [], ...said });
+
+  expect(request.options).toEqual({ hints: { 'openai.chat': said } });
 });
 
 test('how the reply is sent is no option of the model', () => {
@@ -288,7 +296,7 @@ test('an option given as null or empty is not held for this family alone', () =>
 
   expect(request.options).toEqual({
     provider: { 'openai.chat': { top_logprobs: 0 } },
-    hints: { 'openai.chat': { metadata: {} } },
+    metadata: {},
   });
 });
 
@@ -324,10 +332,10 @@ test('a call to a custom tool the caller declared is answered as a custom call, 
   expect(
     collected(
       [
-        { type: 'tool_call', id: 'call_1', name: 'shell', arguments: 'ls -la' },
-        { type: 'tool_call', id: 'call_2', name: 'weather', arguments: '{}' },
+        { type: 'toolCall', id: 'call_1', name: 'shell', arguments: 'ls -la' },
+        { type: 'toolCall', id: 'call_2', name: 'weather', arguments: '{}' },
       ],
-      { type: 'finish', reason: 'tool_calls' },
+      { type: 'finish', reason: 'toolCalls' },
       'req_1',
     ),
   ).toMatchObject({
@@ -355,12 +363,12 @@ test('a call to a custom tool the caller declared is answered as a custom call, 
     streamed(
       (async function* () {
         yield {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_1',
           name: 'shell',
           arguments: 'ls -la',
         } as const;
-        yield { type: 'finish', reason: 'tool_calls' } as const;
+        yield { type: 'finish', reason: 'toolCalls' } as const;
       })(),
       'req_1',
     ),

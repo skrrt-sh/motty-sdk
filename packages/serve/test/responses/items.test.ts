@@ -99,13 +99,13 @@ test("the model's turn is written as the items it was made of", () => {
               provider: { 'openai.responses': { phase: 'final_answer' } },
             },
             {
-              type: 'tool_call',
+              type: 'toolCall',
               id: 'call_1',
               name: 'weather',
               input: { city: 'Oslo' },
               hints: { 'openai.responses': { id: 'fc_1' } },
             },
-            { type: 'tool_call', id: 'call_2', name: 'weather', raw: '{"ci' },
+            { type: 'toolCall', id: 'call_2', name: 'weather', raw: '{"ci' },
           ],
         },
       ],
@@ -272,7 +272,7 @@ test('a result is an item of its own, wherever its message put it', () => {
         {
           role: 'user',
           parts: [
-            { type: 'tool_result', id: 'call_1', text: '4C', failed: true },
+            { type: 'toolResult', id: 'call_1', text: '4C', failed: true },
             { type: 'text', text: 'And tomorrow?' },
           ],
         },
@@ -280,7 +280,7 @@ test('a result is an item of its own, wherever its message put it', () => {
           role: 'tool',
           parts: [
             {
-              type: 'tool_result',
+              type: 'toolResult',
               id: 'call_2',
               parts: [
                 { type: 'text', text: 'A chart' },
@@ -318,13 +318,13 @@ test('a call to a custom tool and its result are written as custom', () => {
         {
           role: 'assistant',
           parts: [
-            { type: 'tool_call', id: 'call_1', name: 'patch', input: '*** A' },
-            { type: 'tool_call', id: 'call_2', name: 'patch', raw: '*** B' },
+            { type: 'toolCall', id: 'call_1', name: 'patch', input: '*** A' },
+            { type: 'toolCall', id: 'call_2', name: 'patch', raw: '*** B' },
           ],
         },
         {
           role: 'tool',
-          parts: [{ type: 'tool_result', id: 'call_1', text: 'Done' }],
+          parts: [{ type: 'toolResult', id: 'call_1', text: 'Done' }],
         },
       ],
       new Set(['patch']),
@@ -407,7 +407,7 @@ test('what has no form on this wire fails the call', () => {
       role: 'assistant',
       parts: [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'srv_1',
           name: 'search',
           input: {},
@@ -445,14 +445,14 @@ test('a cache marker is a breakpoint on input content, of a part or of a message
           parts: [
             { type: 'text', text: 'One', cache: {} },
             { type: 'image', url: 'https://x.test/a.png' },
-            { type: 'tool_result', id: 'call_1', text: '4C' },
+            { type: 'toolResult', id: 'call_1', text: '4C' },
           ],
         },
         {
           role: 'tool',
           parts: [
             {
-              type: 'tool_result',
+              type: 'toolResult',
               id: 'call_2',
               parts: [{ type: 'text', text: 'A chart', cache: {} }],
             },
@@ -531,7 +531,7 @@ test('a cache marker with no input content to sit on is left out and reported', 
       {
         role: 'tool',
         cache: {},
-        parts: [{ type: 'tool_result', id: 'call_1', text: '4C' }],
+        parts: [{ type: 'toolResult', id: 'call_1', text: '4C' }],
       },
     ]),
   ).toEqual({
@@ -542,7 +542,7 @@ test('a cache marker with no input content to sit on is left out and reported', 
     sent([
       {
         role: 'tool',
-        parts: [{ type: 'tool_result', id: 'call_1', text: '4C', cache: {} }],
+        parts: [{ type: 'toolResult', id: 'call_1', text: '4C', cache: {} }],
       },
     ]),
   ).toEqual({
@@ -566,14 +566,14 @@ test('a cache marker on a tool result, or on a message of results, is a breakpoi
       [
         {
           role: 'tool',
-          parts: [{ type: 'tool_result', id: 'call_1', text: '4C', cache: {} }],
+          parts: [{ type: 'toolResult', id: 'call_1', text: '4C', cache: {} }],
         },
         {
           role: 'tool',
           cache: {},
           parts: [
-            { type: 'tool_result', id: 'call_2', text: '7C' },
-            { type: 'tool_result', id: 'call_3', text: 'Rain' },
+            { type: 'toolResult', id: 'call_2', text: '7C' },
+            { type: 'toolResult', id: 'call_3', text: 'Rain' },
           ],
         },
       ],
@@ -604,7 +604,7 @@ test('a marker on an empty tool result is reported, unless a key implied it', ()
         {
           role: 'tool',
           cache,
-          parts: [{ type: 'tool_result', id: 'call_1', text: '' }],
+          parts: [{ type: 'toolResult', id: 'call_1', text: '' }],
         },
       ],
       new Set(),
@@ -629,7 +629,7 @@ test('the hints of a message wait for its first message item', () => {
           role: 'user',
           hints: { 'openai.responses': { status: 'completed' } },
           parts: [
-            { type: 'tool_result', id: 'call_1', text: '4C' },
+            { type: 'toolResult', id: 'call_1', text: '4C' },
             { type: 'text', text: 'And tomorrow?' },
           ],
         },
@@ -657,7 +657,7 @@ test('the hints of a message that is only tool results are left out and reported
         {
           role: 'tool',
           hints: { 'openai.responses': { status: 'completed' } },
-          parts: [{ type: 'tool_result', id: 'call_1', text: '4C' }],
+          parts: [{ type: 'toolResult', id: 'call_1', text: '4C' }],
         },
       ],
       new Set(),
@@ -741,7 +741,7 @@ test('a million calls in one message are each an item, not a stack too deep', ()
       {
         role: 'assistant',
         parts: Array.from({ length: 1_000_000 }, () => ({
-          type: 'tool_call' as const,
+          type: 'toolCall' as const,
           id: 'call_1',
           name: 'now',
           input: {},
@@ -762,15 +762,15 @@ test('a call with free text and its result are written as custom where no tool w
         {
           role: 'assistant',
           parts: [
-            { type: 'tool_call', id: 'call_1', name: 'exec', input: '1+1\n' },
-            { type: 'tool_call', id: 'call_2', name: 'time', input: {} },
+            { type: 'toolCall', id: 'call_1', name: 'exec', input: '1+1\n' },
+            { type: 'toolCall', id: 'call_2', name: 'time', input: {} },
           ],
         },
         {
           role: 'tool',
           parts: [
-            { type: 'tool_result', id: 'call_1', text: '2' },
-            { type: 'tool_result', id: 'call_2', text: 'noon' },
+            { type: 'toolResult', id: 'call_1', text: '2' },
+            { type: 'toolResult', id: 'call_2', text: 'noon' },
           ],
         },
       ],
@@ -798,14 +798,14 @@ test('a tool call that holds only another API`s data is written as its own field
           role: 'assistant',
           parts: [
             {
-              type: 'tool_call',
+              type: 'toolCall',
               id: 'call_1',
               name: 'time',
               input: {},
               provider: { anthropic: { caller: { type: 'direct' } } },
             },
             {
-              type: 'tool_call',
+              type: 'toolCall',
               id: 'call_2',
               name: 'now',
               input: {},
@@ -840,7 +840,7 @@ test('a tool result that holds only another API`s data still fails the call', ()
           role: 'tool',
           parts: [
             {
-              type: 'tool_result',
+              type: 'toolResult',
               id: 'call_1',
               text: 'noon',
               provider: { anthropic: { type: 'web_search_tool_result' } },
@@ -871,7 +871,7 @@ test.each([
             role: 'assistant',
             parts: [
               {
-                type: 'tool_call',
+                type: 'toolCall',
                 id: 'call_1',
                 name: 'time',
                 input,

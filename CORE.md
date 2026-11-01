@@ -99,8 +99,10 @@ Each layer imports only from the layers above it in this table.
 - **The record is built only when the host passes a function to receive it.** It is delivered
   once, after the after-response work, and names any hook that failed there. The stream has ended
   by then and is never changed by it.
-- **One contract version, a whole number of its own.** Rejected: the AI SDK's type tree per spec
-  version with proxy adapters between them, and 1flowbase's version inside each capability name.
+- **One contract version, a whole number of its own.** It is 2 since part kinds, finish reasons
+  and error codes moved to camelCase, as they all cross between a bundle and its host. Rejected:
+  the AI SDK's type tree per spec version with proxy adapters between them, and 1flowbase's
+  version inside each capability name.
 - **The host is reached through one second import path of the core, `@mottyjs/core/host`.** Plugins,
   the test kit and `serve` use it; an author's motty never does. The main entry stays the one-page
   API. Through it a plugin's hook reads what the host supplied for the running request and the

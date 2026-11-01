@@ -15,11 +15,11 @@ export const formless: Formless = (chunk) => {
   switch (chunk.type) {
     case 'file':
       return answer('file', 'a file the model made');
-    case 'tool_result':
-      return answer('tool_result', 'the result of a tool the upstream ran');
-    case 'tool_call':
+    case 'toolResult':
+      return answer('toolResult', 'the result of a tool the upstream ran');
+    case 'toolCall':
       return chunk.hosted === true && !own(chunk)
-        ? answer('tool_call', 'a call to a tool another upstream ran')
+        ? answer('toolCall', 'a call to a tool another upstream ran')
         : undefined;
     case 'reasoning':
       return chunk.provider === undefined || own(chunk)

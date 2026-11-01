@@ -1,9 +1,16 @@
-import type { JsonOutput, Prompt } from '@mottyjs/core/host';
+import type {
+  Json,
+  JsonOutput,
+  Prompt,
+  ReadonlyJson,
+} from '@mottyjs/core/host';
 import type { Codec } from '../codec.ts';
+import { keyed } from '../wire/cache-key.ts';
 import { type Leaving, leaving } from '../wire/fieldless.ts';
 import { copied, type Dict, dict, given, without } from '../wire/json.ts';
 import { offered } from '../wire/offered.ts';
 import { customNames } from '../wire/openai-tools.ts';
+import { meaningful } from '../wire/provider-data.ts';
 import { effortless, reasons, sampling, unsampled } from '../wire/taken.ts';
 import { addressed, family } from './family.ts';
 import { field } from './fields.ts';
@@ -66,6 +73,10 @@ function reasoningOf(
   return sent;
 }
 
+function wired(value: ReadonlyJson | undefined): Json | undefined {
+  return value === undefined ? undefined : copied(value);
+}
+
 function kept(name: string, fields: Dict): Dict {
   return Object.keys(fields).length === 0 ? {} : { [name]: fields };
 }
@@ -92,6 +103,8 @@ export function encode(
   left.without('stop', options.stop);
   left.without('topK', options.topK);
   left.without('seed', options.seed);
+  left.without('prediction', meaningful(options.prediction));
+  left.without('store', options.store);
   left.without('reasoning.budgetTokens', options.reasoning?.budgetTokens);
   const custom = customNames(prompt.tools);
   const { hints, provider, leftOut } = addressed(options);
@@ -102,7 +115,7 @@ export function encode(
   );
   // Every tool left out as only offered leaves nothing to choose among.
   const choosing = tools.length > 0 || (prompt.tools?.length ?? 0) === 0;
-  const input = inputOf(left, prompt.messages, custom);
+  const input = inputOf(left, keyed(prompt.messages, options.cacheKey), custom);
   const reasoning = reasoningOf(
     left,
     effortless(left, takes?.(model, true), options.reasoning),
@@ -145,12 +158,19 @@ export function encode(
       parallel_tool_calls: choosing ? options.parallelToolCalls : undefined,
       max_output_tokens: options.maxTokens,
       user: options.user,
+      metadata: wired(options.metadata),
+      service_tier: options.serviceTier,
+      safety_identifier: options.safetyIdentifier,
+      prompt_cache_key: options.cacheKey,
+      prompt_cache_options: wired(options.cacheOptions),
+      prompt_cache_retention: options.cacheRetention,
     }),
     ...sampled,
     ...kept('reasoning', reasoning),
     ...kept('text', {
       ...dict(field(hints, 'text')),
       ...dict(field(provider, 'text')),
+      ...given({ verbosity: options.verbosity }),
       ...(prompt.output === undefined
         ? {}
         : { format: formatOf(prompt.output) }),
@@ -159,14 +179,14 @@ export function encode(
   // A request with a cache key is cached by it, which is what a marker this
   // API had no place for asked. A key holds no lifetime, so a ttl is still lost.
   const { prompt_cache_key: key } = body;
-  const keyed = typeof key === 'string';
+  const byKey = typeof key === 'string';
   const marks = ['cache', 'cache.outside'];
   return {
     path: '/responses',
     leftOut: [
       ...left
         .leftOut()
-        .filter(({ setting }) => !keyed || !marks.includes(setting)),
+        .filter(({ setting }) => !byKey || !marks.includes(setting)),
       ...leftOut,
     ],
     headers: {

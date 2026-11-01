@@ -65,7 +65,7 @@ export function parsed(source: string): Json | undefined {
 
 // Defined, not assigned, a key named as the prototype is a key like any
 // other. Assigned, a body's fields cost a fifth of building it from entries.
-function put(into: Dict, key: string, value: Json): void {
+export function put(into: Dict, key: string, value: Json): void {
   if (key !== '__proto__') into[key] = value;
   else {
     Object.defineProperty(into, key, {

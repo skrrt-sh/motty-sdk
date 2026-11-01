@@ -93,7 +93,7 @@ test('one turn of the model, of several items, is one message', () => {
           },
         },
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_1',
           name: 'weather',
           input: { city: 'Oslo' },
@@ -103,7 +103,7 @@ test('one turn of the model, of several items, is one message', () => {
     },
     {
       role: 'tool',
-      parts: [{ type: 'tool_result', id: 'call_1', text: '4C, rain' }],
+      parts: [{ type: 'toolResult', id: 'call_1', text: '4C, rain' }],
     },
     {
       role: 'assistant',
@@ -175,7 +175,7 @@ test('arguments that are not JSON are kept as they were written', () => {
     {
       role: 'assistant',
       parts: [
-        { type: 'tool_call', id: 'call_1', name: 'weather', raw: '{"city":' },
+        { type: 'toolCall', id: 'call_1', name: 'weather', raw: '{"city":' },
       ],
     },
   ]);
@@ -199,9 +199,9 @@ test('the results of calls made together are one message', () => {
     {
       role: 'tool',
       parts: [
-        { type: 'tool_result', id: 'call_1', text: 'one' },
+        { type: 'toolResult', id: 'call_1', text: 'one' },
         {
-          type: 'tool_result',
+          type: 'toolResult',
           id: 'call_2',
           parts: [
             { type: 'text', text: 'two' },
@@ -230,7 +230,7 @@ test('a custom tool call holds free text, and so does its result', () => {
       role: 'assistant',
       parts: [
         {
-          type: 'tool_call',
+          type: 'toolCall',
           id: 'call_1',
           name: 'patch',
           input: '*** Begin Patch',
@@ -239,7 +239,7 @@ test('a custom tool call holds free text, and so does its result', () => {
     },
     {
       role: 'tool',
-      parts: [{ type: 'tool_result', id: 'call_1', text: 'Done' }],
+      parts: [{ type: 'toolResult', id: 'call_1', text: 'Done' }],
     },
   ]);
 });
@@ -274,7 +274,7 @@ test('an item of no known kind keeps its place in the turn it came in', () => {
     {
       role: 'tool',
       parts: [
-        { type: 'tool_result', id: 'call_1', text: 'one' },
+        { type: 'toolResult', id: 'call_1', text: 'one' },
         {
           type: 'provider',
           provider: {
@@ -324,7 +324,7 @@ test('function arguments that are a bare string stay as written, never a custom 
     {
       role: 'assistant',
       parts: [
-        { type: 'tool_call', id: 'call_1', name: 'shell', raw: '"ls -la"' },
+        { type: 'toolCall', id: 'call_1', name: 'shell', raw: '"ls -la"' },
       ],
     },
   ]);

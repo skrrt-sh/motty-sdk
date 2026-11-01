@@ -6,8 +6,21 @@ import {
   replyFields,
 } from '../../src/chat-completions/finish.ts';
 
+test.each([
+  ['stop', 'stop'],
+  ['length', 'length'],
+  ['tool_calls', 'toolCalls'],
+  ['content_filter', 'contentFilter'],
+] as const)(
+  'the wire`s %s is read as %s and written back the same',
+  (word, reason) => {
+    expect(reasonRead(word)).toBe(reason);
+    expect(reasonWritten(reason)).toBe(word);
+  },
+);
+
 test('a provider`s own name for filtered content is the content-filter ending', () => {
-  expect(reasonRead('sensitive')).toBe('content_filter');
+  expect(reasonRead('sensitive')).toBe('contentFilter');
 });
 
 test('a context window that ran out is an ending by length', () => {
@@ -25,7 +38,7 @@ test('a provider that ran out of capacity failed, and did not end the reply', ()
 
 test('a provider that lost its connection failed, and may be asked again', () => {
   expect(reasonFailed('openai.chat', 'network_error')).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream lost its connection before it finished',
     retryable: true,
     provider: { 'openai.chat': { finish_reason: 'network_error' } },
@@ -39,7 +52,7 @@ test('an ending is no failure, listed by the API or not', () => {
 
 test('a dialect`s own word for an ending that failed is a failure worth another try, and the same word from another dialect is an ending read as other', () => {
   expect(reasonFailed('mistral', 'error', ['error'])).toEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     message: 'The upstream failed before it finished',
     retryable: true,
     provider: { mistral: { finish_reason: 'error' } },

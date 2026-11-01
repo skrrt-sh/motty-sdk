@@ -13,18 +13,18 @@ test('content that is the answer and has no form here ends the reply', () => {
   expect(
     formless({ type: 'file', data: 'JVBERi0=', mediaType: 'application/pdf' }),
   ).toEqual(ends('file', 'a file the model made that is not a picture'));
-  expect(formless({ type: 'tool_result', id: 'srv_1', output: [] })).toEqual(
-    ends('tool_result', 'the result of a tool the upstream ran'),
+  expect(formless({ type: 'toolResult', id: 'srv_1', output: [] })).toEqual(
+    ends('toolResult', 'the result of a tool the upstream ran'),
   );
   expect(
     formless({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'srv_1',
       name: 'web_search',
       arguments: '{}',
       hosted: true,
     }),
-  ).toEqual(ends('tool_call', 'a call to a tool the upstream ran'));
+  ).toEqual(ends('toolCall', 'a call to a tool the upstream ran'));
   expect(
     formless({
       type: 'provider',
@@ -65,7 +65,7 @@ test('what a model goes on from its reasoning with is left out and the reply goe
 test('what this API has a form for is not named', () => {
   expect(formless({ type: 'text', text: 'Hi' })).toBeUndefined();
   expect(
-    formless({ type: 'tool_call', id: 'call_1', name: 'look', arguments: '' }),
+    formless({ type: 'toolCall', id: 'call_1', name: 'look', arguments: '' }),
   ).toBeUndefined();
   expect(
     formless({ type: 'citation', url: 'https://example.com' }),

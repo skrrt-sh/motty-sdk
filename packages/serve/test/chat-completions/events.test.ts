@@ -50,11 +50,11 @@ test('tool call deltas are read as fragments that share their call`s id', async 
       ),
     ),
   ).toEqual([
-    { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
-    { type: 'tool_call', id: 'call_a', arguments: '{"city":' },
-    { type: 'tool_call', id: 'call_b', name: 'now', arguments: '{}' },
-    { type: 'tool_call', id: 'call_a', arguments: '"Oslo"}' },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'tool_calls' },
+    { type: 'toolCall', id: 'call_a', name: 'weather', arguments: '' },
+    { type: 'toolCall', id: 'call_a', arguments: '{"city":' },
+    { type: 'toolCall', id: 'call_b', name: 'now', arguments: '{}' },
+    { type: 'toolCall', id: 'call_a', arguments: '"Oslo"}' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'tool_calls' },
   ]);
 });
 
@@ -71,19 +71,19 @@ test('a custom tool call is read as a fragment marked free-form', async () => {
     ),
   ).toEqual([
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_a',
       name: 'shell',
       arguments: 'ls',
       provider: { 'openai.chat': { type: 'custom' } },
     },
     {
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_a',
       arguments: ' -la',
       provider: { 'openai.chat': { type: 'custom' } },
     },
-    { type: 'finish', reason: 'tool_calls', rawReason: 'tool_calls' },
+    { type: 'finish', reason: 'toolCalls', rawReason: 'tool_calls' },
   ]);
 });
 
@@ -193,7 +193,7 @@ test('each finish reason is read, one not listed as other with its name', async 
 
   expect(await last('function_call')).toEqual({
     type: 'finish',
-    reason: 'tool_calls',
+    reason: 'toolCalls',
     rawReason: 'function_call',
   });
   expect(await last('eos')).toEqual({
@@ -233,7 +233,7 @@ test('a stream that ends with no reason given and no done mark ends in one error
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The upstream closed the stream before it finished',
         retryable: true,
         upstream: true,
@@ -303,7 +303,7 @@ test('a frame that cannot be read ends the stream in one error', async () => {
       {
         type: 'error',
         error: {
-          code: 'upstream_failed',
+          code: 'upstreamFailed',
           message: 'The upstream sent an event that cannot be read',
           retryable: true,
           upstream: true,
@@ -326,10 +326,10 @@ test('a chunk with fields of the wrong types is read for what is sound', async (
       ),
     ),
   ).toEqual([
-    { type: 'tool_call', id: 'call_0', arguments: '{}' },
+    { type: 'toolCall', id: 'call_0', arguments: '{}' },
     {
       type: 'finish',
-      reason: 'tool_calls',
+      reason: 'toolCalls',
       rawReason: 'tool_calls',
       usage: {},
     },
@@ -382,7 +382,7 @@ test('an error frame ends the stream in that error, with the usage so far', asyn
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'The server had an error while processing your request.',
         provider: {
           'openai.chat': {
@@ -504,7 +504,7 @@ test('a chunk the dialect says holds a failure, inside a reply that began well, 
     {
       type: 'error',
       error: {
-        code: 'upstream_failed',
+        code: 'upstreamFailed',
         message: 'unknown error',
         retryable: false,
         provider: { acme: { number: 1000 } },
@@ -610,9 +610,9 @@ test('a fragment with an empty id belongs to the call its index names', async ()
       ),
     ),
   ).toMatchObject([
-    { type: 'tool_call', id: 'call_a', name: 'weather', arguments: '' },
-    { type: 'tool_call', id: 'call_a', arguments: '{"city":"Oslo"}' },
-    { type: 'finish', reason: 'tool_calls' },
+    { type: 'toolCall', id: 'call_a', name: 'weather', arguments: '' },
+    { type: 'toolCall', id: 'call_a', arguments: '{"city":"Oslo"}' },
+    { type: 'finish', reason: 'toolCalls' },
   ]);
 });
 
@@ -645,7 +645,7 @@ test('a field of a custom tool call that is not read is kept beside its mark', a
   );
 
   expect(first).toEqual({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'call_a',
     name: 'shell',
     arguments: 'ls',
@@ -670,7 +670,7 @@ test('what a call marked custom holds inside its function object is kept as the 
   );
 
   expect(first).toEqual({
-    type: 'tool_call',
+    type: 'toolCall',
     id: 'call_a',
     name: 'shell',
     arguments: 'ls',
@@ -706,7 +706,7 @@ test.each([['"function":{"name":"weather","arguments":{"a":1}}']])(
     );
 
     expect(first).toMatchObject({
-      type: 'tool_call',
+      type: 'toolCall',
       id: 'call_a',
       name: 'weather',
       arguments: '{"a":1}',

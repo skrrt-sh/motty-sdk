@@ -134,7 +134,7 @@ test('a reroute to an entry that already ran fails with RouteLoop', async () => 
     {
       type: 'error',
       error: {
-        code: 'route_loop',
+        code: 'routeLoop',
         status: 500,
         message:
           'The entry "quick" of the motty "tiers" already ran for this request',
@@ -158,7 +158,7 @@ test('a chooser result cast past the types fails with UnknownRoute', async () =>
     {
       type: 'error',
       error: {
-        code: 'unknown_route',
+        code: 'unknownRoute',
         status: 500,
         message:
           'The route of the motty "tiers" has no entry named "acme/whatever"',
@@ -178,7 +178,7 @@ test('a name every object inherits is not an entry', async () => {
     ask('toString'),
   );
 
-  expect(seen).toMatchObject([{ error: { code: 'unknown_route' } }]);
+  expect(seen).toMatchObject([{ error: { code: 'unknownRoute' } }]);
 });
 
 test('a chooser that gives a number, not a name, fails with UnknownRoute', async () => {
@@ -188,7 +188,7 @@ test('a chooser that gives a number, not a name, fails with UnknownRoute', async
     }),
   );
 
-  expect(seen).toMatchObject([{ error: { code: 'unknown_route' } }]);
+  expect(seen).toMatchObject([{ error: { code: 'unknownRoute' } }]);
 });
 
 test('a handler that gives neither an answer nor a reroute is an internal error', async () => {
@@ -606,7 +606,7 @@ test("a nested reroute to a name only the parent's table has fails with UnknownR
     {
       type: 'error',
       error: {
-        code: 'unknown_route',
+        code: 'unknownRoute',
         message: 'The route of the motty "tiers" has no entry named "standard"',
       },
     },

@@ -64,7 +64,7 @@ function callOf(fields: Dict, cache: Marker, hosted: boolean): Part {
   }
   if (!isDict(input)) invalid('A tool_use block needs an input object');
   return {
-    type: 'tool_call',
+    type: 'toolCall',
     id,
     name,
     input,
@@ -83,7 +83,7 @@ function resultOf(fields: Dict, cache: Marker): Part {
   const { tool_use_id: id, content, is_error: failed, ...rest } = fields;
   if (typeof id !== 'string') invalid('A tool_result block needs tool_use_id');
   return {
-    type: 'tool_result',
+    type: 'toolResult',
     id,
     ...(content === undefined || content === null
       ? { text: '' }

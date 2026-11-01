@@ -34,7 +34,7 @@ test('a forwarded answer is one piece made of its text chunks only', async () =>
     'acme/small': [
       { type: 'reasoning', text: 'The lock order differs' },
       { type: 'text', text: '1. Find ' },
-      { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
+      { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
       { type: 'citation', url: 'https://example.com' },
       { type: 'text', text: 'the lock order' },
       {
@@ -203,7 +203,7 @@ test('a forwarded answer that fails ends its piece quietly', async () => {
       { type: 'text', text: 'Partial' },
       {
         type: 'error',
-        error: { code: 'rate_limited', status: 429, message: 'Slow down' },
+        error: { code: 'rateLimited', status: 429, message: 'Slow down' },
       },
     ],
   });
@@ -288,8 +288,8 @@ test('a forwarded answer with no text takes its piece number and sends nothing',
   const host = stubHost({
     'acme/small': [
       { type: 'reasoning', text: 'The lock order differs' },
-      { type: 'tool_call', id: 'call_1', name: 'search', arguments: '{}' },
-      { type: 'finish', reason: 'tool_calls', usage: { input: 3, output: 4 } },
+      { type: 'toolCall', id: 'call_1', name: 'search', arguments: '{}' },
+      { type: 'finish', reason: 'toolCalls', usage: { input: 3, output: 4 } },
     ],
   });
 

@@ -23,25 +23,25 @@ function typeTo({ code, status = 500 }: ErrorFacts): string {
       return 'authentication_error';
     case 'forbidden':
       return 'permission_error';
-    case 'unknown_model':
+    case 'unknownModel':
       return 'not_found_error';
-    case 'rate_limited':
+    case 'rateLimited':
       return 'rate_limit_error';
-    case 'quota_exceeded':
+    case 'quotaExceeded':
       return 'billing_error';
     case 'overloaded':
       return 'overloaded_error';
-    case 'timed_out':
+    case 'timedOut':
       return 'timeout_error';
-    case 'context_too_long':
+    case 'contextTooLong':
     case 'blocked':
       return 'invalid_request_error';
     case 'unsupported':
-    case 'invalid_request':
+    case 'invalidRequest':
       if (status === 404) return 'not_found_error';
       return status === 413 ? 'request_too_large' : 'invalid_request_error';
-    case 'upstream_refused':
-    case 'upstream_failed':
+    case 'upstreamRefused':
+    case 'upstreamFailed':
       return 'api_error';
     default:
       if (status === 413) return 'request_too_large';
@@ -59,7 +59,7 @@ export function problem(facts: ErrorFacts): Dict {
 // its clients read: the kind's usual ones are the OpenAI APIs' numbers.
 function statusTo(facts: ErrorFacts): number {
   switch (facts.code) {
-    case 'quota_exceeded':
+    case 'quotaExceeded':
       return 402;
     case 'overloaded':
       return 529;
@@ -92,28 +92,28 @@ function named(
       return 'overloaded';
     case 'rate_limit_error':
       return limit === 'enforced_spend_limit_reached'
-        ? 'quota_exceeded'
-        : 'rate_limited';
+        ? 'quotaExceeded'
+        : 'rateLimited';
     case 'billing_error':
-      return 'quota_exceeded';
+      return 'quotaExceeded';
     // The host's own key was turned down: the caller's is not at fault.
     case 'authentication_error':
     case 'permission_error':
-      return 'upstream_refused';
+      return 'upstreamRefused';
     // An unknown model is named; an address this API does not have is not.
     case 'not_found_error':
-      return message.startsWith('model:') ? 'unknown_model' : 'upstream_failed';
+      return message.startsWith('model:') ? 'unknownModel' : 'upstreamFailed';
     case 'timeout_error':
-      return 'timed_out';
+      return 'timedOut';
     // Too many bytes, turned down before any model counted a token.
     case 'request_too_large':
     case 'invalid_request_error':
-      if (spent.test(message)) return 'quota_exceeded';
+      if (spent.test(message)) return 'quotaExceeded';
       return /prompt is too long|context window|too many tokens/i.test(message)
-        ? 'context_too_long'
-        : 'invalid_request';
+        ? 'contextTooLong'
+        : 'invalidRequest';
     case 'api_error':
-      return 'upstream_failed';
+      return 'upstreamFailed';
     default:
       return undefined;
   }
@@ -164,7 +164,7 @@ export function failed(
         },
       },
       // A wrong address is the host's setup, and wrong on every try.
-      ...(type === 'not_found_error' && code === 'upstream_failed'
+      ...(type === 'not_found_error' && code === 'upstreamFailed'
         ? { retryable: false }
         : {}),
       error: raised,

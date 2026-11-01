@@ -5,7 +5,7 @@ const INSTRUCTION =
   "Summarise this support conversation: what was asked, what was established, what is still open.";
 
 const holdsToolResult = ({ parts }: Message) =>
-  parts?.some((part) => part.type === "tool_result") ?? false;
+  parts?.some((part) => part.type === "toolResult") ?? false;
 
 // A tail that starts at the customer's own words never separates a tool result from its call
 const tailStart = (messages: readonly Message[], keptMessages: number) =>

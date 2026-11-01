@@ -156,7 +156,7 @@ test('a failed request is recorded with the whole error as facts and the part th
     entries: ['deep'],
   });
   expect(error).toStrictEqual({
-    code: 'upstream_failed',
+    code: 'upstreamFailed',
     status: 502,
     message: 'The tier store is down',
     retryable: true,
@@ -165,7 +165,7 @@ test('a failed request is recorded with the whole error as facts and the part th
     seen.map((event) => (event.type === 'error' ? event.error : undefined)),
   ).toEqual([
     {
-      code: 'upstream_failed',
+      code: 'upstreamFailed',
       status: 502,
       message: 'The tier store is down',
       retryable: true,

@@ -15,7 +15,7 @@ import {
 export const mark = Symbol.for('@mottyjs/core');
 
 /** The version of the contract between a motty and a host. */
-export const version = 1;
+export const version = 2;
 
 /**
  * What a model call streams, with exactly one terminal event, finish or error,
