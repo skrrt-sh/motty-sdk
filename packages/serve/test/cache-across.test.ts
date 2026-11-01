@@ -178,6 +178,7 @@ test.each([
     const { body, leftOut } = chatCompletionsIn({
       name: 'router',
       breakpoints,
+      cacheKey: true,
     }).encode('model-x', request);
 
     expect(body).toMatchObject({
@@ -226,19 +227,57 @@ test('to a Responses upstream that takes markers, the key`s marker sits on the c
   expect(leftOut).toEqual([]);
 });
 
-test('to a Chat Completions upstream with no field for the key it is sent as said, and the upstream`s refusal is its own', () => {
+test('to a Chat Completions upstream not said to take the key, a hint of it under either name is left out and told, the marker stays, and an option goes as said', () => {
   const { request } = responses.decode(
     { model: 'relay', input: 'Fix it.', prompt_cache_key: 'session-1' },
     new Headers(),
   );
+  const { encode } = chatCompletionsIn({
+    name: 'acme',
+    breakpoints: 'cache_control',
+  });
+  const told = [
+    {
+      setting: 'openai.prompt_cache_key',
+      detail: 'acme has no field for prompt_cache_key',
+    },
+  ];
+  const addressed = encode('model-x', {
+    messages: [{ role: 'user', text: 'Fix it.' }],
+    options: { hints: { 'openai.chat': { prompt_cache_key: 'session-1' } } },
+  });
+  const unsaid = encode('model-x', {
+    messages: [{ role: 'user', text: 'Fix it.' }],
+    options: { hints: { openai: { prompt_cache_key: null } } },
+  });
+  const stated = encode('model-x', {
+    messages: [{ role: 'user', text: 'Fix it.' }],
+    options: { provider: { openai: { prompt_cache_key: 'session-1' } } },
+  });
 
-  const { body, leftOut } = chatCompletionsIn({
-    name: 'groq',
-    tagged: true,
-  }).encode('model-x', request);
+  const { body, leftOut } = encode('model-x', request);
 
-  expect(body).toMatchObject({ prompt_cache_key: 'session-1' });
-  expect(leftOut).toEqual([]);
+  expect(body).not.toHaveProperty('prompt_cache_key');
+  expect(body).toMatchObject({
+    messages: [
+      {
+        content: [
+          {
+            type: 'text',
+            text: 'Fix it.',
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+      },
+    ],
+  });
+  expect(leftOut).toEqual(told);
+  expect(addressed.body).not.toHaveProperty('prompt_cache_key');
+  expect(addressed.leftOut).toEqual(told);
+  expect(unsaid.body).not.toHaveProperty('prompt_cache_key');
+  expect(unsaid.leftOut).toEqual([]);
+  expect(stated.body).toMatchObject({ prompt_cache_key: 'session-1' });
+  expect(stated.leftOut).toEqual([]);
 });
 
 test('a Chat Completions caller that keys its cache asks for a marker on the last message, which an Anthropic upstream is sent in place of the key', () => {
@@ -288,6 +327,7 @@ test('a Chat Completions caller`s key alone puts a marker on the last part sent 
   const { body, leftOut } = chatCompletionsIn({
     name: 'router',
     breakpoints: 'cache_control',
+    cacheKey: true,
   }).encode('anthropic/model-x', request);
 
   expect(body).toMatchObject({

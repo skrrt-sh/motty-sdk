@@ -144,6 +144,7 @@ test('a request read and sent on again reaches the upstream unchanged', () => {
   const { body } = chatCompletionsIn({
     name: 'openai.chat',
     breakpoints: true,
+    cacheKey: true,
   }).encode('gpt-x', request);
 
   expect(body).toEqual({

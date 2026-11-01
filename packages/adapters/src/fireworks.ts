@@ -11,6 +11,7 @@ const shared: Parameters<typeof chatCompletionsIn>[0] = {
   name: 'fireworks',
   thought: 'reasoning_content',
   topK: true,
+  cacheKey: true,
   failures,
 };
 
@@ -30,10 +31,20 @@ const bound = chatCompletionsIn({
 // text, yet it goes back in the field alone.
 const read = chatCompletionsIn({ ...shared, tagged: true });
 
+/** Connects to Fireworks over Chat Completions. */
 export function fireworks(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is
+     * `https://api.fireworks.ai/inference/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `fireworks/some-model`, taken off
+     * before the call. The default is `fireworks`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {

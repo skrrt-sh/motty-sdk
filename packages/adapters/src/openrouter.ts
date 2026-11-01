@@ -109,10 +109,24 @@ const failures: FailureReader = (status, _headers, error) => {
     : undefined;
 };
 
+/**
+ * Connects to OpenRouter, where a model is named as `openrouter/maker/name` and
+ * is held to the rule of what it takes where the adapter knows its maker's. A
+ * `body` field may steer the router, such as its `provider` preferences.
+ */
 export function openrouter(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is
+     * `https://openrouter.ai/api/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `openrouter/some-model`, taken off
+     * before the call. The default is `openrouter`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {
@@ -145,6 +159,7 @@ export function openrouter(
       native: true,
       topK: true,
       breakpoints: 'cache_control',
+      cacheKey: true,
       carried: ['x-anthropic-beta'],
       failures,
       cuts: openrouterCuts,

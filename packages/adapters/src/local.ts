@@ -4,16 +4,29 @@ import { type Connection, chat } from './chat.ts';
 
 type Dialect = Parameters<typeof chatCompletionsIn>[0];
 
-// How a server the host runs speaks depends on how it was started, so the
-// host says it in the dialect's own words. Its one switch is its template's
-// argument, and reasoning comes in a field or between tags, never both.
+/**
+ * Connects to a server the host runs itself, over Chat Completions. How it
+ * speaks depends on how it was started, so the host says it in the words of
+ * the dialect, and reasoning comes in `thought`'s field or between `tagged`
+ * think tags, never both. It is sent a cache key only where `cacheKey` says.
+ */
 export function local(
   options: {
+    /** The base address of the server, which this adapter requires. */
     address: string;
+    /** An API key, for a server that asks for one. */
     key?: string | undefined;
+    /**
+     * The first word of a model name, as in `local/some-model`, taken off
+     * before the call. The default is `local`.
+     */
     prefix?: string;
+    /**
+     * The one switch for reasoning a server takes, which is its template's
+     * argument.
+     */
     asks?: Extract<Dialect['asks'], 'chat_template_kwargs'>;
-  } & Pick<Dialect, 'efforts' | 'limit' | 'topK'> &
+  } & Pick<Dialect, 'efforts' | 'limit' | 'topK' | 'cacheKey'> &
     (
       | (Pick<Dialect, 'thought'> & { tagged?: never })
       | (Pick<Dialect, 'tagged'> & { thought?: never })

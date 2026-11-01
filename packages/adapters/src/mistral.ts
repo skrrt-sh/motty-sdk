@@ -31,6 +31,7 @@ const codec = chatCompletionsIn({
   limit: 'max_tokens',
   endings: { model_length: 'length' },
   broken: ['error'],
+  cacheKey: true,
   failures,
 });
 
@@ -70,10 +71,22 @@ function raised(body: string): string {
   return object === 'error' ? JSON.stringify({ error: told }) : body;
 }
 
+/**
+ * Connects to Mistral over Chat Completions. It has no field for an end user,
+ * so `options.user` is left out with a warning.
+ */
 export function mistral(
   options: {
+    /** The API key. A missing or blank one throws when the adapter is made. */
     key: string | undefined;
+    /**
+     * The base address of the API. The default is `https://api.mistral.ai/v1`.
+     */
     address?: string;
+    /**
+     * The first word of a model name, as in `mistral/some-model`, taken off
+     * before the call. The default is `mistral`.
+     */
     prefix?: string;
   } & Connection,
 ): ModelAdapter {
