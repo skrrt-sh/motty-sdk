@@ -1219,8 +1219,10 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **With no `report`, a mount writes failed records to stderr, one line a failure.** That is what the
   host should see: a failure on its side, a 5xx, an upstream's refusal and a name no adapter serves,
   which may be its own wiring. A 4xx the motty itself gave writes nothing, or anyone with a bad token could fill the log, and a
-  caller leaving is no failure. Credentials and the host's setting overrides are masked, and a line
-  is cut at 1,000 characters. A throw at the edge that is no SDK error and that no record holds
+  caller leaving is no failure. A line is one line, cut at 1,000 characters, and nothing in it is
+  masked. Rejected: masking by shape and by the environment's values, as whoever reads the host's
+  log already runs its code, and a value such as a region or a host name was blanked out of the
+  lines it is needed in. An upstream's echo of a key is still cut before anyone reads it. A throw at the edge that is no SDK error and that no record holds
   is written whatever the report.
 - **`report` may return a promise, and the SDK's part in a record ends when that promise
   settles.** Settling says the host's report has finished with the record, not that it

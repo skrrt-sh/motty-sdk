@@ -58,14 +58,11 @@ and every time of the edge is checked when the host is made. Every reply to a re
 let in carries the id of its report, in `x-request-id` on the two OpenAI APIs and in `request-id`
 on Messages.
 
-With no `report`, the failed records are written to stderr, with credentials masked. That covers a
+With no `report`, the failed records are written to stderr as they are said. That covers a
 failure on the host's side, a 5xx, an upstream's refusal and a name no adapter serves. A 4xx the
 motty itself gave and a caller leaving write nothing. A `report` that throws or rejects is written too, with the failures of the
-record it lost. Masking learns a secret of no known shape from its value in the environment, if
-that value has at least 8 characters. On Workers that holds under any compatibility date and either
-Node flag when the bundler resolves the `workerd` export condition, as Wrangler does. The
-`disallow_importable_env` flag hides the environment from the SDK, so with it the options get none
-and masking knows only the shapes of credentials.
+record it lost. Nothing is masked in a line, so what a failure says is what the log holds: a host
+whose code may throw a secret gives a `report` of its own. A line is cut at 1,000 characters.
 
 A host also refuses at start a motty with no route or handle, a bad settings override and a settings
 group the motty does not have. An async schema's verdict is only written to stderr, as a mount
@@ -82,8 +79,10 @@ a request in flight is cut off, so a deployed host runs the serve file plainly.
 ## Hosting with mount
 
 `mount` takes the same options as the serve file above, a function of the environment. On
-Workers the environment holds the Worker's secrets and text variables, and no other binding. A JSON
-variable is there as text only where `process.env` is filled.
+Workers the environment holds the Worker's secrets and text variables, and no other binding, under
+any compatibility date and Node flag when the bundler resolves the `workerd` export condition, as
+Wrangler does. A JSON variable is there as text only where `process.env` is filled. The
+`disallow_importable_env` flag hides the environment from the SDK, so with it the options get none.
 
 On Cloudflare Workers a mount is the module's default export. The third argument of `fetch` has
 the shape of a Workers execution context, so every record is waited for through

@@ -4,11 +4,8 @@ import {
   type Report,
   toFacts,
 } from '@mottyjs/core/host';
-import { held as inEnvironment } from '#environment';
 
 type Send = NonNullable<HostOptions['report']>;
-
-const mask = '[held]';
 
 // What a Worker writes at global scope, where a mount runs, reaches no log, so
 // there it is held for the mount's first request. Elsewhere it goes at once, for
@@ -20,65 +17,14 @@ export function heldAtStart(): string[] | undefined {
     : undefined;
 }
 
-// What reads as a credential whatever it belongs to, a long run of a token's
-// alphabet last: the host's keys are in no list the edge can read.
-const credentials =
-  /bearer\s+\S+|\bsk-[\w-]+|\/\/[^\s/:@]*:[^\s/@]+@|\b[\w-]*(?:key|token|secret|password)=[^\s&]+|[\w.~+=-]{32,}/gi;
-
-function escaped(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// A message may be as long as a body and hold anything: one line of it is all
+// that is written.
+export function plain(message: string): string {
+  return message.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').slice(0, 1000);
 }
 
-function leaves(value: unknown): string[] {
-  if (typeof value === 'string' || typeof value === 'number') {
-    return [String(value)];
-  }
-  return typeof value === 'object' && value !== null
-    ? Object.values(value).flatMap(leaves)
-    : [];
-}
-
-// A key held in the environment has no shape to know it by. A short value
-// there may be anything and says little, so only a long one is looked for.
-function heldInEnvironment(): string[] {
-  return inEnvironment().flatMap((value) =>
-    value !== undefined && value.length >= 8 ? [value] : [],
-  );
-}
-
-function oneLine(text: string): string {
-  return text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ');
-}
-
-// A short value is taken only as a word of its own, or a threshold of 2 would
-// take the bound out of "at most 20". The longest first, so a value that holds
-// another goes whole.
-function unheld(message: string, held: unknown): string {
-  let said = message;
-  for (const value of [...leaves(held), ...heldInEnvironment()]
-    .map(oneLine)
-    .sort((left, right) => right.length - left.length)) {
-    if (value.length >= 8) said = said.replaceAll(value, mask);
-    else if (value !== '') {
-      said = said.replace(
-        new RegExp(`(?<![\\w.])${escaped(value)}(?![\\w.])`, 'g'),
-        mask,
-      );
-    }
-  }
-  return said;
-}
-
-// A message may hold whatever its thrower read, and be as long as a body: one
-// line of it, with nothing a host held in it, is all that is written.
-export function plain(message: string, held?: unknown): string {
-  return unheld(oneLine(message), held)
-    .replace(credentials, mask)
-    .slice(0, 1000);
-}
-
-function line(id: string, service: string, message: string, held?: unknown) {
-  console.error(`motty: request ${id}: ${service}: ${plain(message, held)}`);
+function line(id: string, service: string, message: string) {
+  console.error(`motty: request ${id}: ${service}: ${plain(message)}`);
 }
 
 // The words the host's failed services are told to the motty in: what they
@@ -86,7 +32,7 @@ function line(id: string, service: string, message: string, held?: unknown) {
 const sealed = /^The (?:host's \w+|model call to .+) failed$/;
 
 function recordError(report: Report, error: ErrorFacts): void {
-  const { id, part, settings, failed } = report;
+  const { id, part, failed } = report;
   // A caller who left is no failure, whatever else stopped the request is. Nor
   // is one the motty refused, or anyone with a bad token could fill the host's
   // log. An upstream's refusal and a name no adapter serves stay, as the host
@@ -110,7 +56,6 @@ function recordError(report: Report, error: ErrorFacts): void {
       id,
       'models',
       `${error.message}: no adapter of this host serves that name`,
-      settings,
     );
     return;
   }
@@ -118,20 +63,19 @@ function recordError(report: Report, error: ErrorFacts): void {
     id,
     error.upstream === true ? 'models' : (part ?? 'motty'),
     error.message,
-    settings,
   );
 }
 
 function written(report: Report): void {
-  const { id, error, settings, failed, afterResponse } = report;
+  const { id, error, failed, afterResponse } = report;
   if (error !== undefined) recordError(report, error);
   if (failed !== undefined) {
     for (const { service, error: told } of failed) {
-      line(id, service, told.message, settings);
+      line(id, service, told.message);
     }
   }
   for (const { part, error: told } of afterResponse.failed) {
-    line(id, part, told.message, settings);
+    line(id, part, told.message);
   }
 }
 
@@ -140,7 +84,6 @@ function lost(report: Report, thrown: unknown): void {
     report.id,
     'report',
     `The host's report failed, so it lost this record: ${toFacts(thrown).message}`,
-    report.settings,
   );
   written(report);
 }

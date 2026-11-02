@@ -80,7 +80,7 @@ function settled(
       throw new Error(`The motty "${name}" has no settings group "${group}"`);
     }
     const refusal = (said: string) =>
-      `The host's settings for the group "${group}" are not valid: ${plain(said, overrides)}`;
+      `The host's settings for the group "${group}" are not valid: ${plain(said)}`;
     let result: ReturnType<StandardSchema['~standard']['validate']>;
     try {
       result = schema['~standard'].validate(value);
