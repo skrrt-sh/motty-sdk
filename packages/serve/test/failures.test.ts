@@ -459,6 +459,26 @@ test('a value the host holds in its environment is not written', async () => {
   }
 });
 
+test('a value of several lines the host holds in its environment is not written', async () => {
+  Object.assign(process.env, { MOTTY_TEST_KEY: 'first-line\nsecond-line' });
+  try {
+    const { fetch, close } = mount(
+      motty({ name: 'coder' }).handle(() => {
+        throw new Error('Refused first-line\nsecond-line');
+      }),
+      () => ({}),
+    );
+
+    await fetch(ask());
+    await close();
+
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toContain('Refused [held]');
+  } finally {
+    Reflect.deleteProperty(process.env, 'MOTTY_TEST_KEY');
+  }
+});
+
 test('a value the host gave as a setting is not written', async () => {
   const { fetch, close } = mount(
     motty({ name: 'coder' })

@@ -46,14 +46,18 @@ function heldInEnvironment(): string[] {
   );
 }
 
+function oneLine(text: string): string {
+  return text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ');
+}
+
 // A short value is taken only as a word of its own, or a threshold of 2 would
 // take the bound out of "at most 20". The longest first, so a value that holds
 // another goes whole.
 function unheld(message: string, held: unknown): string {
   let said = message;
-  for (const value of [...leaves(held), ...heldInEnvironment()].sort(
-    (left, right) => right.length - left.length,
-  )) {
+  for (const value of [...leaves(held), ...heldInEnvironment()]
+    .map(oneLine)
+    .sort((left, right) => right.length - left.length)) {
     if (value.length >= 8) said = said.replaceAll(value, mask);
     else if (value !== '') {
       said = said.replace(
@@ -68,7 +72,7 @@ function unheld(message: string, held: unknown): string {
 // A message may hold whatever its thrower read, and be as long as a body: one
 // line of it, with nothing a host held in it, is all that is written.
 export function plain(message: string, held?: unknown): string {
-  return unheld(message.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' '), held)
+  return unheld(oneLine(message), held)
     .replace(credentials, mask)
     .slice(0, 1000);
 }

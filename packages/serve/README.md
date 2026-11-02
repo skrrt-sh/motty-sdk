@@ -94,7 +94,8 @@ and leave `node:*` and `cloudflare:*` imports external.
 The core needs `AsyncLocalStorage`, as that is what keeps overlapping requests apart. A
 compatibility date of 2026-08-04 or later has it with no flag. An older date needs `nodejs_compat`,
 and without a flag the Worker is refused with `No such module "node:async_hooks"`. The smaller
-`nodejs_als` is enough for a host that does not use the `jwt` adapter, which needs `node:crypto`.
+`nodejs_als` is enough for a host that does not import `@mottyjs/adapters/jwt`, which holds `jwt` and
+`bearer` and needs `node:crypto`.
 
 ```ts
 export default mount(coder, options);
