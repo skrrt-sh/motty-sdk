@@ -47,7 +47,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, REDIS_URL, JWKS_URL })
   storage: redis({ url: REDIS_URL }),
   auth: jwt({ jwks: JWKS_URL }),
   limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
-  report: (record) => console.log(JSON.stringify(record)),
+  report: ({ settings, ...record }) => console.log(JSON.stringify(record)),
 }));
 ```
 
@@ -58,12 +58,16 @@ and every time of the edge is checked when the host is made. Every reply to a re
 let in carries the id of its report, in `x-request-id` on the two OpenAI APIs and in `request-id`
 on Messages.
 
-With no `report`, the failed records are written to stderr, with credentials masked. That covers a
+With no `report`, the failed records are written to stderr as they are said. That covers a
 failure on the host's side, a 5xx, an upstream's refusal and a name no adapter serves. A 4xx the
-motty itself gave and a caller leaving write nothing. A `report` that throws or rejects is written too, with the failures of the
-record it lost. Masking learns a secret of no known shape from its value in `process.env`, if that
-value has at least 8 characters, so on Workers it relies on `nodejs_compat` with a compatibility
-date of 2025-04-01 or later, which is what fills `process.env`.
+motty itself gave and a caller leaving write nothing. Three more are written whatever the `report`:
+an async schema's refusal of a settings override, a throw at the edge that is no SDK error and that
+no record holds, and a `report` that throws or rejects, with the failures of the record it lost.
+
+Nothing is masked in a line, so a line holds what the failure says, cut at 1,000 characters. A log
+may be sent on to other systems, so a host keeps secrets out of what its code throws and out of
+what it hands its log. A record given to `report` holds settings overrides, failure messages and
+stacks as they are, which is why the example above leaves the overrides out.
 
 A host also refuses at start a motty with no route or handle, a bad settings override and a settings
 group the motty does not have. An async schema's verdict is only written to stderr, as a mount
@@ -80,14 +84,22 @@ a request in flight is cut off, so a deployed host runs the serve file plainly.
 ## Hosting with mount
 
 `mount` takes the same options as the serve file above, a function of the environment. On
-Workers the environment holds the Worker's bindings once `nodejs_compat` is on and the
-compatibility date is 2025-04-01 or later; with an older date it is empty.
+Workers the environment holds the Worker's secrets and text variables, and no other binding, under
+any compatibility date and Node flag when the bundler resolves the `workerd` export condition, as
+Wrangler does. A JSON variable is there as text only where `process.env` is filled. The
+`disallow_importable_env` flag hides the environment from the SDK, so with it the options get none.
 
 On Cloudflare Workers a mount is the module's default export. The third argument of `fetch` has
 the shape of a Workers execution context, so every record is waited for through
-`ctx.waitUntil` with no code of the host's. Turn on the `nodejs_compat` and
-`enable_request_signal` flags, the second so that a caller who leaves is noticed. A bundler other
-than Wrangler must leave `node:*` imports external.
+`ctx.waitUntil` with no code of the host's. Turn on the `enable_request_signal` flag so that a
+caller who leaves is noticed. A bundler other than Wrangler must resolve the `workerd` condition
+and leave `node:*` and `cloudflare:*` imports external.
+
+The core needs `AsyncLocalStorage`, as that is what keeps overlapping requests apart. A
+compatibility date of 2026-08-04 or later has it with no flag. An older date needs `nodejs_compat`,
+and without a flag the Worker is refused with `No such module "node:async_hooks"`. The smaller
+`nodejs_als` is enough for a host that does not import `@mottyjs/adapters/jwt`, which holds `jwt` and
+`bearer` and needs `node:crypto`.
 
 ```ts
 export default mount(coder, options);

@@ -227,45 +227,56 @@ test('on Bun, the packed packages serve a motty, read as their sources', async (
 }, 30_000);
 
 // As a Workers bundler builds: the platform's conditions, and Node's modules
-// left to the runtime's compatibility layer.
-test('bundled for Workers, the packed packages answer in workerd', async () => {
-  const { outputs } = await Bun.build({
-    entrypoints: [join(project, 'worker.ts')],
-    target: 'browser',
-    conditions: ['workerd', 'worker'],
-    external: ['node:*'],
-  });
-  const bundle = (await outputs[0]?.text()) ?? '';
-  const { address, stop } = await workerd({
-    modules: { 'worker.js': bundle },
-    flags: ['nodejs_compat'],
-    bindings: {},
-  });
-  try {
-    const replies = await Promise.all(
-      [false, true].map(async (stream) => {
-        const reply = await fetch(`${address}/v1/chat/completions`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: 'echo',
-            stream,
-            messages: [{ role: 'user', content: 'Which lock?' }],
-          }),
-        });
-        return `${reply.status} ${(await reply.text()).includes('Use a mutex.')}`;
-      }),
-    );
+// left to the runtime's compatibility layer. A current date fills `process.env`
+// too, so only a Worker with no process proves the Workers file read the binding.
+test.each([
+  ['a current date and no flag', {}],
+  [
+    'nodejs_als alone, with no process',
+    { date: '2026-02-24', flags: ['nodejs_als'] },
+  ],
+])(
+  'bundled for Workers, the packed packages answer in workerd from a text binding the options read, on %s',
+  async (_name, flags) => {
+    const { outputs } = await Bun.build({
+      entrypoints: [join(project, 'worker.ts')],
+      target: 'browser',
+      conditions: ['workerd', 'worker'],
+      external: ['node:*', 'cloudflare:*'],
+    });
+    const bundle = (await outputs[0]?.text()) ?? '';
+    const { address, stop } = await workerd({
+      ...flags,
+      modules: { 'worker.js': bundle },
+      bindings: { LOCK: 'mutex' },
+    });
+    try {
+      const replies = await Promise.all(
+        [false, true].map(async (stream) => {
+          const reply = await fetch(`${address}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: 'echo',
+              stream,
+              messages: [{ role: 'user', content: 'Which lock?' }],
+            }),
+          });
+          return `${reply.status} ${(await reply.text()).includes('Use a mutex.')}`;
+        }),
+      );
 
-    expect([
-      bundle.includes('@mottyjs/core/dist/'),
-      bundle.includes('@mottyjs/core/src/'),
-      replies,
-    ]).toEqual([true, false, ['200 true', '200 true']]);
-  } finally {
-    await stop();
-  }
-}, 30_000);
+      expect([
+        bundle.includes('@mottyjs/core/dist/'),
+        bundle.includes('@mottyjs/core/src/'),
+        replies,
+      ]).toEqual([true, false, ['200 true', '200 true']]);
+    } finally {
+      await stop();
+    }
+  },
+  30_000,
+);
 
 // Redis is Bun's own client, so that one entry is exported to Bun alone. The
 // Durable Object adapter imports the runtime's own module, left to workerd.
@@ -293,7 +304,6 @@ test('bundled for Workers, every entry of the packed packages but the Redis adap
   });
   const { address, stop } = await workerd({
     modules: { 'worker.js': (await outputs[0]?.text()) ?? '' },
-    flags: ['nodejs_compat'],
     bindings: {},
   });
   try {

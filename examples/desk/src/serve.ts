@@ -29,6 +29,6 @@ export default serve(
       triage: { abuseProbability: 0.9 },
       conversation: { remembered: 7 * 24 * 60 * 60 * 1000 },
     },
-    report: (record) => console.log(JSON.stringify(record)),
+    report: ({ settings, ...record }) => console.log(JSON.stringify(record)),
   }),
 );

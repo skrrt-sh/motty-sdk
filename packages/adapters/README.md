@@ -64,8 +64,8 @@ The binding and its migration in `wrangler.jsonc`:
 ```jsonc
 {
   "main": "src/index.ts",
-  "compatibility_date": "2026-02-24",
-  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+  "compatibility_date": "2026-10-25",
+  "compatibility_flags": ["enable_request_signal"],
   "durable_objects": {
     "bindings": [{ "name": "STORAGE", "class_name": "MottyStorage" }]
   },
@@ -76,8 +76,9 @@ The binding and its migration in `wrangler.jsonc`:
 The type of `env.STORAGE` comes from the file `wrangler types` generates, so run it once the entry
 that `main` names exists.
 
-The `nodejs_compat` flag is required, and without it a deploy fails with
-`No such module "node:async_hooks"`.
+A compatibility date before 2026-08-04 also needs the `nodejs_compat` flag, and without a flag a
+deploy fails with `No such module "node:async_hooks"`. The smaller `nodejs_als` is enough for a host
+that does not import `@mottyjs/adapters/jwt`, which holds `jwt` and `bearer` and needs `node:crypto`.
 
 A first deploy has to bring its secrets along. `mount` runs at global scope, which runs as the
 Worker is uploaded, so a key that does not exist yet stops the deploy with

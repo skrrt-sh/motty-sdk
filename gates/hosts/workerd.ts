@@ -31,12 +31,21 @@ async function forwarded(errors: ReadableStream<Uint8Array<ArrayBuffer>>) {
 export async function workerd(worker: {
   // The first is the main module.
   modules: { readonly [name: string]: string };
-  flags: readonly string[];
+  flags?: readonly string[];
+  // A date from 2026-08-04 on has the Node modules with no flag.
+  date?: string;
+  // Has workerd log what a worker throws and nobody catches.
+  verbose?: boolean;
   bindings: { readonly [name: string]: string };
   // A binding to the Durable Object class of that name, kept in SQLite on
   // disk, since workerd keeps no SQLite in memory.
   objects?: { readonly [name: string]: string };
-}): Promise<{ address: string; stop: () => Promise<void> }> {
+}): Promise<{
+  address: string;
+  stop: () => Promise<void>;
+  // All that workerd wrote, whole, once it has stopped.
+  written: Promise<string>;
+}> {
   const folder = await mkdtemp(join(tmpdir(), 'workerd-'));
   const { objects = {} } = worker;
   await mkdir(join(folder, 'objects'));
@@ -65,8 +74,8 @@ const worker :Workerd.Worker = (
         `(name = ${JSON.stringify(name)}, esModule = embed ${JSON.stringify(`modules/${name}`)})`,
     )
     .join(', ')}],
-  compatibilityDate = "2026-01-01",
-  compatibilityFlags = ${JSON.stringify(worker.flags)},
+  compatibilityDate = "${worker.date ?? '2026-10-25'}",
+  compatibilityFlags = ${JSON.stringify(worker.flags ?? [])},
   bindings = [${[
     ...Object.entries(worker.bindings).map(
       ([name, text]) =>
@@ -92,6 +101,7 @@ const worker :Workerd.Worker = (
     [
       `${import.meta.dir}/../../node_modules/.bin/workerd`,
       'serve',
+      ...(worker.verbose ? ['--verbose'] : []),
       '--control-fd=3',
       join(folder, 'config.capnp'),
     ],
@@ -108,5 +118,5 @@ const worker :Workerd.Worker = (
     await stop();
     throw new Error(`workerd did not start: ${(await written).trim()}`);
   }
-  return { address: `http://127.0.0.1:${port}`, stop };
+  return { address: `http://127.0.0.1:${port}`, stop, written };
 }

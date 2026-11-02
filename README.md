@@ -103,7 +103,7 @@ export default {
       anthropic({ key: ANTHROPIC_KEY }),
     ],
     limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
-    report: (record) => console.log(JSON.stringify(record)),
+    report: ({ settings, ...record }) => console.log(JSON.stringify(record)),
   })),
   hostname: "127.0.0.1",
 };

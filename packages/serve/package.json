@@ -72,6 +72,18 @@
       "default": "./dist/wire/retry-after.js"
     }
   },
+  "imports": {
+    "#environment": {
+      "workerd": {
+        "@mottyjs/source": "./src/environment.workers.ts",
+        "default": "./dist/environment.workers.js"
+      },
+      "@mottyjs/source": "./src/environment.ts",
+      "types": "./dist/environment.d.ts",
+      "bun": "./src/environment.ts",
+      "default": "./dist/environment.js"
+    }
+  },
   "scripts": {
     "prepack": "bun run --cwd ../.. build && rm -rf dist && cp -R ../../dist/serve/src dist"
   },
