@@ -61,9 +61,9 @@ function problems(issues: Issues): string {
     .join('; ');
 }
 
-// Told by group and problem, without the value, which may be anything the host
-// held. A schema that takes its time cannot stop a mount, which returns at once:
-// its verdict is said when it comes, and each request still runs the schema.
+// Told by group and the schema's own words, which may quote the value. A schema
+// that takes its time cannot stop a mount, which returns at once: its verdict
+// is said when it comes, and each request still runs the schema.
 function settled(
   overrides: object,
   schemas: Schemas | undefined,

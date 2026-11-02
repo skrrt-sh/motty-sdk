@@ -47,7 +47,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, REDIS_URL, JWKS_URL })
   storage: redis({ url: REDIS_URL }),
   auth: jwt({ jwks: JWKS_URL }),
   limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
-  report: (record) => console.log(JSON.stringify(record)),
+  report: ({ settings, ...record }) => console.log(JSON.stringify(record)),
 }));
 ```
 
@@ -60,9 +60,14 @@ on Messages.
 
 With no `report`, the failed records are written to stderr as they are said. That covers a
 failure on the host's side, a 5xx, an upstream's refusal and a name no adapter serves. A 4xx the
-motty itself gave and a caller leaving write nothing. A `report` that throws or rejects is written too, with the failures of the
-record it lost. Nothing is masked in a line, so what a failure says is what the log holds: a host
-whose code may throw a secret gives a `report` of its own. A line is cut at 1,000 characters.
+motty itself gave and a caller leaving write nothing. Three more are written whatever the `report`:
+an async schema's refusal of a settings override, a throw at the edge that is no SDK error and that
+no record holds, and a `report` that throws or rejects, with the failures of the record it lost.
+
+Nothing is masked in a line, so a line holds what the failure says, cut at 1,000 characters. A log
+may be sent on to other systems, so a host keeps secrets out of what its code throws and out of
+what it hands its log. A record given to `report` holds settings overrides, failure messages and
+stacks as they are, which is why the example above leaves the overrides out.
 
 A host also refuses at start a motty with no route or handle, a bad settings override and a settings
 group the motty does not have. An async schema's verdict is only written to stderr, as a mount
