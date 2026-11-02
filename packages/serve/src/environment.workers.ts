@@ -6,7 +6,10 @@ import { env } from 'cloudflare:workers';
 export function environment(): { [name: string]: string | undefined } {
   return {
     ...Object.fromEntries(
-      Object.entries(env).filter(([, value]) => typeof value === 'string'),
+      Object.entries(env).filter(
+        (entry: [string, unknown]): entry is [string, string] =>
+          typeof entry[1] === 'string',
+      ),
     ),
     ...(typeof process === 'undefined' ? {} : process.env),
   };
