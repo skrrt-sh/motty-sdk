@@ -121,8 +121,9 @@ test('two thousand overlapping requests each get their own answer and their own 
   expect(records.every(({ outcome }) => outcome === 'completed')).toBe(true);
 }, 30_000);
 
-// Last, as it writes an error of its own, marked so that any other is told from
-// it: the whole log is judged here, the first case's included.
+// Last, as it writes an error of its own, told from any other by its mark and
+// workerd's own words, which a plain throw lacks: the whole log is judged here,
+// the first case's included.
 test('the log shows a reply one request opened and another read, and nothing else of the kind', async () => {
   expect(await (await fetch(`${worker.address}/shared`)).text()).toBe('kept');
   const read = await fetch(`${worker.address}/shared`);
@@ -131,6 +132,13 @@ test('the log shows a reply one request opened and another read, and nothing els
   await worker.stop();
   const said = await worker.written;
   const lines = said.split('\n').filter((line) => crossed.test(line));
-  expect(lines.some((line) => line.includes('control:'))).toBe(true);
-  expect(lines.filter((line) => !line.includes('control:'))).toEqual([]);
+  expect(lines).not.toEqual([]);
+  expect(
+    lines.filter(
+      (line) =>
+        !/control: Error: Cannot perform I\/O on behalf of a different request/.test(
+          line,
+        ),
+    ),
+  ).toEqual([]);
 }, 30_000);
