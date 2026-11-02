@@ -76,8 +76,9 @@ The binding and its migration in `wrangler.jsonc`:
 The type of `env.STORAGE` comes from the file `wrangler types` generates, so run it once the entry
 that `main` names exists.
 
-A compatibility date before 2026-08-04 also needs the `nodejs_compat` or `nodejs_als` flag, and
-without one a deploy fails with `No such module "node:async_hooks"`.
+A compatibility date before 2026-08-04 also needs the `nodejs_compat` flag, and without a flag a
+deploy fails with `No such module "node:async_hooks"`. The smaller `nodejs_als` is enough for a host
+that does not use `jwt`.
 
 A first deploy has to bring its secrets along. `mount` runs at global scope, which runs as the
 Worker is uploaded, so a key that does not exist yet stops the deploy with

@@ -82,7 +82,8 @@ a request in flight is cut off, so a deployed host runs the serve file plainly.
 ## Hosting with mount
 
 `mount` takes the same options as the serve file above, a function of the environment. On
-Workers the environment holds the Worker's secrets and variables as text, and no other binding.
+Workers the environment holds the Worker's secrets and text variables, and no other binding. A JSON
+variable is there as text only where `process.env` is filled.
 
 On Cloudflare Workers a mount is the module's default export. The third argument of `fetch` has
 the shape of a Workers execution context, so every record is waited for through
@@ -91,9 +92,9 @@ caller who leaves is noticed. A bundler other than Wrangler must resolve the `wo
 and leave `node:*` and `cloudflare:*` imports external.
 
 The core needs `AsyncLocalStorage`, as that is what keeps overlapping requests apart. A
-compatibility date of 2026-08-04 or later has it with no flag. An older date needs `nodejs_compat`
-or the smaller `nodejs_als`, and without either the Worker is refused with
-`No such module "node:async_hooks"`.
+compatibility date of 2026-08-04 or later has it with no flag. An older date needs `nodejs_compat`,
+and without a flag the Worker is refused with `No such module "node:async_hooks"`. The smaller
+`nodejs_als` is enough for a host that does not use the `jwt` adapter, which needs `node:crypto`.
 
 ```ts
 export default mount(coder, options);

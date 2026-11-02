@@ -259,8 +259,10 @@ test('bundled for Workers, the packed packages answer in workerd', async () => {
     expect([
       bundle.includes('@mottyjs/core/dist/'),
       bundle.includes('@mottyjs/core/src/'),
+      // The Worker's own environment, which no other file of the SDK imports.
+      bundle.includes('cloudflare:workers'),
       replies,
-    ]).toEqual([true, false, ['200 true', '200 true']]);
+    ]).toEqual([true, false, true, ['200 true', '200 true']]);
   } finally {
     await stop();
   }
