@@ -2,10 +2,8 @@ import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { auth } from '@mottyjs/auth';
 import { answer, model, motty } from '@mottyjs/core';
 import type { ModelAdapter } from '@mottyjs/core/host';
-import { settings } from '@mottyjs/settings';
 import { store } from '@mottyjs/store';
 import { fake, on } from '@mottyjs/test';
-import { z } from 'zod';
 import { mount } from '../src/index.ts';
 
 const gpt = model('openai/gpt');
@@ -415,67 +413,6 @@ test('an upstream that refuses what the adapter sent is written, as the host may
   expect(reply.status).toBe(400);
   expect(lines()).toHaveLength(1);
   expect(lines()[0]).toContain('is unsupported');
-});
-
-test.each([
-  ['a key', 'The upstream refused sk-proj-canary7'],
-  ['a bearer token', 'Sent authorization: Bearer canary-7 and was refused'],
-  ['a password in an address', 'No route to redis://ada:canary7@db:6379'],
-  ['a key in a query', 'Refused https://up.test/v1?key=canary-7&alt=sse'],
-  ['a long token of no known shape', `Refused ${'canary7'.repeat(8)}`],
-] as const)('%s in what was thrown is not written', async (_, thrown) => {
-  const { fetch, close } = mount(
-    motty({ name: 'coder' }).handle(() => {
-      throw new Error(thrown);
-    }),
-    () => ({}),
-  );
-
-  await fetch(ask());
-  await close();
-
-  expect(lines()).toHaveLength(1);
-  expect(lines()[0]).not.toContain('canary');
-});
-
-test('a value the host holds in its environment is not written', async () => {
-  Object.assign(process.env, { MOTTY_TEST_KEY: 'gsk-held-in-env' });
-  try {
-    const { fetch, close } = mount(
-      motty({ name: 'coder' }).handle(() => {
-        throw new Error('Refused gsk-held-in-env');
-      }),
-      () => ({}),
-    );
-
-    await fetch(ask());
-    await close();
-
-    expect(lines()).toHaveLength(1);
-    expect(lines()[0]).toContain('Refused');
-    expect(lines()[0]).not.toContain('gsk-held-in-env');
-  } finally {
-    Reflect.deleteProperty(process.env, 'MOTTY_TEST_KEY');
-  }
-});
-
-test('a value the host gave as a setting is not written', async () => {
-  const { fetch, close } = mount(
-    motty({ name: 'coder' })
-      .use(settings({ keys: z.object({ name: z.string().default('none') }) }))
-      .handle(({ settings: { keys } }) => {
-        throw new Error(`Refused ${keys.name} and 7`);
-      }),
-    () => ({ settings: { keys: { name: 'tenant-canary' } } }),
-  );
-
-  await fetch(ask());
-  await close();
-
-  expect(lines()).toHaveLength(1);
-  expect(lines()[0]).toContain('Refused');
-  expect(lines()[0]).toContain('and 7');
-  expect(lines()[0]).not.toContain('tenant-canary');
 });
 
 test('a message of many lines stays one line, whoever chose its words', async () => {

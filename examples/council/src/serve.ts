@@ -24,6 +24,6 @@ export default serve(
     // Two rounds of three seats with their races and fallbacks, a verdict and a merge
     limits: { duration: 180_000, calls: 24, afterResponse: 10_000 },
     price,
-    report: (record) => console.log(JSON.stringify(record)),
+    report: ({ settings, ...record }) => console.log(JSON.stringify(record)),
   }),
 );

@@ -1,6 +1,6 @@
 {
   "name": "@mottyjs/serve",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The host side of a motty: serves it as a model over the Chat Completions, Responses and Messages APIs, on Bun or Cloudflare Workers.",
   "keywords": [
     "motty",
@@ -70,6 +70,18 @@
       "types": "./dist/wire/retry-after.d.ts",
       "bun": "./src/wire/retry-after.ts",
       "default": "./dist/wire/retry-after.js"
+    }
+  },
+  "imports": {
+    "#environment": {
+      "workerd": {
+        "@mottyjs/source": "./src/environment.workers.ts",
+        "default": "./dist/environment.workers.js"
+      },
+      "@mottyjs/source": "./src/environment.ts",
+      "types": "./dist/environment.d.ts",
+      "bun": "./src/environment.ts",
+      "default": "./dist/environment.js"
     }
   },
   "scripts": {

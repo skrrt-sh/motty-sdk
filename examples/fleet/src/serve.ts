@@ -15,5 +15,5 @@ export default serve(fleet, ({ ANTHROPIC_KEY, OPENAI_KEY, SCOUTS, BUDGET }) => (
   },
   limits: { duration: 300_000, calls: 2 },
   price,
-  report: (record) => console.log(JSON.stringify(record)),
+  report: ({ settings, ...record }) => console.log(JSON.stringify(record)),
 }));

@@ -881,7 +881,7 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
   storage: redis({ url: REDIS_URL }),
   auth: jwt({ jwks: JWKS_URL }),
   limits: { duration: 120_000, calls: 10, afterResponse: 30_000 },
-  report: (record) => console.log(JSON.stringify(record)),
+  report: ({ settings, ...record }) => console.log(JSON.stringify(record)),
 }));
 ```
 
@@ -1219,9 +1219,13 @@ export default serve(coder, ({ OPENAI_KEY, ANTHROPIC_KEY, TYPESAFE_KEY, REDIS_UR
 - **With no `report`, a mount writes failed records to stderr, one line a failure.** That is what the
   host should see: a failure on its side, a 5xx, an upstream's refusal and a name no adapter serves,
   which may be its own wiring. A 4xx the motty itself gave writes nothing, or anyone with a bad token could fill the log, and a
-  caller leaving is no failure. Credentials and the host's setting overrides are masked, and a line
-  is cut at 1,000 characters. A throw at the edge that is no SDK error and that no record holds
-  is written whatever the report.
+  caller leaving is no failure. A line is one line, cut at 1,000 characters, and nothing in it is
+  masked. Rejected: masking by shape and by the environment's values, as frameworks such as Hono
+  write the failure as it is, such matching blanked regions, host names and request ids out of the
+  lines that need them, and masking free text is no guarantee. An upstream's echo of a key is still
+  cut before anyone reads it. Whatever the report, an async schema's refusal of a settings override,
+  a throw at the edge that is no SDK error and that no record holds, and a report that fails are
+  written to stderr.
 - **`report` may return a promise, and the SDK's part in a record ends when that promise
   settles.** Settling says the host's report has finished with the record, not that it
   succeeded, which only the host's own code can know and tell. A report that throws or rejects

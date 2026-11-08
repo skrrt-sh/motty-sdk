@@ -104,37 +104,7 @@ test('an override its schema refuses fails at mount and at serve, naming the gro
   ).toThrow('"routing"');
 });
 
-// A schema that says the value back, as some libraries do.
-const echoing: StandardSchema<{ key?: string }> = {
-  '~standard': {
-    version: 1,
-    vendor: 'test',
-    validate: (value) =>
-      JSON.stringify(value) === '{}'
-        ? { value: {} }
-        : { issues: [{ message: `Refused ${JSON.stringify(value)}` }] },
-  },
-};
-
-test('what a schema says of a refused value does not bring the value along', () => {
-  const served = motty({ name: 'coder' })
-    .use(settings({ keys: echoing }))
-    .handle(() => answer('Hi'));
-
-  let thrown: unknown;
-  try {
-    mount(served, () => ({ settings: { keys: { key: 'held-by-host' } } }));
-  } catch (caught) {
-    thrown = caught;
-  }
-
-  expect(thrown).toBeInstanceOf(Error);
-  expect(String(thrown)).toContain('"keys"');
-  expect(String(thrown)).toContain('Refused');
-  expect(String(thrown)).not.toContain('held-by-host');
-});
-
-test('a schema that throws on a value fails at mount with the same care', () => {
+test('a schema that throws on a value fails at mount', () => {
   const served = motty({ name: 'coder' })
     .use(
       settings({
@@ -163,7 +133,6 @@ test('a schema that throws on a value fails at mount with the same care', () => 
   }
 
   expect(String(thrown)).toContain('"keys"');
-  expect(String(thrown)).not.toContain('held-by-host');
 });
 
 test('a group the motty does not declare fails at mount, held as any names or under the name of what every object inherits', () => {
@@ -254,7 +223,6 @@ test.each([
 
     expect(lines()).toHaveLength(1);
     expect(lines()[0]).toContain('"keys"');
-    expect(lines()[0]).not.toContain('held-by-host');
 
     const reply = await fetch(ask());
     await close();
@@ -370,7 +338,6 @@ describe('on Workers, where a mount made at global scope writes to no log', () =
     await fetch(ask());
     const written = lines().filter((line) => line.includes('"soon"'));
     expect(written).toHaveLength(1);
-    expect(written[0]).not.toContain('by-host');
     expect(lines().filter((line) => line.includes('"late"'))).toEqual([]);
 
     refuse();

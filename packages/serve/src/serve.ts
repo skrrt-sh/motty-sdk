@@ -14,6 +14,7 @@ import {
   mark,
   type Overrides,
 } from '@mottyjs/core/host';
+import { environment } from '#environment';
 import { chat, type FromHost, toldBy } from './chat.ts';
 import { checked } from './checked.ts';
 import type { Codec } from './codec.ts';
@@ -113,8 +114,7 @@ export function mount<
   let started: Date | undefined;
   let held = heldAtStart();
   const { begin, landed, stopAll } = flights();
-  // A Worker without `nodejs_compat` has no environment to read.
-  const given = options(typeof process === 'undefined' ? {} : process.env);
+  const given = options(environment());
   // Made first: it refuses a limit that is no number, the body's among them,
   // and a motty of a contract whose chain could not be read.
   const admit = hosting<Served>(motty, {
