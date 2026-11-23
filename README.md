@@ -12,6 +12,10 @@
 </p>
 
 <p align="center">
+  <a href="https://motty.sh"><strong>motty.sh</strong></a>: call a motty with one key, or publish yours and earn on every call
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <a href="https://www.npmjs.com/package/@mottyjs/core"><img src="https://img.shields.io/npm/v/%40mottyjs%2Fcore?label=npm&color=cb3837" alt="@mottyjs/core on npm"></a>
   <img src="https://img.shields.io/badge/runtime-Bun%20%7C%20Workers-f472b6" alt="Runtime: Bun, Workers">
@@ -178,7 +182,19 @@ and go as low as a provider's own options on one call, or your own adapter, auth
   `fetch` handler inside your own HTTP server.
 - **Your keys stay with the host.** A motty is one file, built apart from whatever runs it. The
   caller's token is removed before it runs, and upstream calls use the keys the host supplies.
-  The same file runs self-hosted and on the Hub, a service that hosts motties.
+  The same file runs self-hosted and on [the Hub](https://motty.sh), a service that hosts
+  motties.
+
+## Publish it on the Hub
+
+[Motty](https://motty.sh) is the Hub, a marketplace where a motty is called like a model.
+
+- **Earn on every call.** You set a markup over the cost of the base models, and a share of every
+  request to your motty is yours. Paying earnings out is not open yet.
+- **No server to run.** You deploy a build, never your source. The Hub runs it, calls the base
+  models with its own keys, counts the tokens and bills the caller.
+- **One key for callers.** A caller tops up one balance and calls any motty as `author/name`
+  from an OpenAI- or Anthropic-compatible client, paying for the tokens used.
 
 ## What it is not
 
