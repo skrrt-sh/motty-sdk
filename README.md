@@ -195,6 +195,8 @@ and go as low as a provider's own options on one call, or your own adapter, auth
   models with its own keys, counts the tokens and bills the caller.
 - **One key for callers.** A caller tops up one balance and calls any motty as `author/name`
   from an OpenAI- or Anthropic-compatible client, paying for the tokens used.
+- **Your build runs as it is.** Both `examples/coder` and `examples/fleet` run on the Hub from their
+  own `bun run build` output, unchanged.
 
 ## What it is not
 

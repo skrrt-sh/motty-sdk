@@ -36,7 +36,8 @@ flowchart TD
   Codex was started with. Nothing is decided by the tools a request declares, since Codex does not
   always declare them where a motty would see them.
 - An agent started under the motty's own name asked for no model, so the lead model of its family
-  answers. That is `gpt-6.1-sol` for Codex and `claude-opus-5-5` for Claude Code.
+  answers. That is `gpt-6.1-sol` for Codex and `claude-opus-5-5` for Claude Code. On a host that
+  publishes motties under a handle, `handle/fleet` is the motty's own name too.
 - A subagent past the budget is not cut off. The small model writes its report from what the
   subagent has read, so the lead still gets an answer and can finish. The lead is never stopped.
 - The closing request keeps the tools the subagent declared and forbids their use. Anthropic
