@@ -26,6 +26,18 @@ test.each([
   expect(await answer.text()).toBe("orders.ts lists orders");
 });
 
+test("a lead that asks for the motty by a host's handle gets its family's lead model", async () => {
+  const models = fake(on(anthropic.lead, "orders.ts lists orders"));
+
+  const { answer } = await run(
+    fleet,
+    { text: "Read orders.ts", model: "acme/fleet", headers: { "x-claude-code-session-id": "s1" } },
+    { models: [models] },
+  );
+
+  expect(await answer.text()).toBe("orders.ts lists orders");
+});
+
 test.each([
   [
     "a Claude Code subagent",
